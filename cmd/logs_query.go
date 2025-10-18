@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"nudgebee.com/nbctl/pkg/client"
+	"nudgebee.com/nbctl/pkg/format"
 )
 
 var logsQueryCmd = &cobra.Command{
@@ -89,79 +90,16 @@ var logsQueryCmd = &cobra.Command{
 			return err
 		}
 
-		// Define a struct for display purposes
-		type LogEntryDisplay struct {
-			Timestamp string `json:"timestamp"`
-			Severity  string `json:"severity"`
-			Message   string `json:"message"`
-			App       string `json:"app"`
-			Namespace string `json:"namespace"`
-			Instance  string `json:"instance"`
-			Labels    string `json:"labels"` // Labels will be a concise summary
+		table := format.TabularData{
+			Data: respData.LogsList,
+			Fields: []format.TableField{
+				{Header: "Timestamp", Field: "Timestamp"},
+				{Header: "Severity", Field: "Severity"},
+				{Header: "Message", Field: "Message"},
+				{Header: "Labels", Field: "Labels"},
+			},
 		}
-
-		var displayLogs []LogEntryDisplay
-		for _, logEntry := range respData.LogsList {
-			var labelsMap map[string]interface{}
-			app := ""
-			namespace := ""
-			instance := ""
-			labelsSummary := ""
-
-			if len(logEntry.Labels) > 0 {
-				if err := json.Unmarshal(logEntry.Labels, &labelsMap); err == nil {
-					if val, ok := labelsMap["app"].(string); ok {
-						app = val
-					}
-					if val, ok := labelsMap["namespace"].(string); ok {
-						namespace = val
-					}
-					if val, ok := labelsMap["instance"].(string); ok {
-						instance = val
-					}
-					labelsSummary = fmt.Sprintf("app:%s, ns:%s, inst:%s", app, namespace, instance)
-				} else {
-					labelsSummary = string(logEntry.Labels) // Fallback to raw if unmarshal fails
-				}
-			}
-
-			displayLogs = append(displayLogs, LogEntryDisplay{
-				Timestamp: logEntry.Timestamp,
-				Severity:  logEntry.Severity,
-				Message:   logEntry.Message,
-				App:       app,
-				Namespace: namespace,
-				Instance:  instance,
-				Labels:    labelsSummary,
-			})
-		}
-		onlyMessage, _ := cmd.Flags().GetBool("only-message")
-
-		if onlyMessage {
-
-			for _, logEntry := range displayLogs {
-
-				fmt.Println(logEntry.Message)
-
-			}
-
-		} else {
-
-			for _, logEntry := range displayLogs {
-
-				fmt.Printf("Timestamp: %s\n", logEntry.Timestamp)
-
-				fmt.Printf("Severity: %s\n", logEntry.Severity)
-
-				fmt.Printf("Labels: %s\n", logEntry.Labels)
-
-				fmt.Printf("Message: %s\n", logEntry.Message)
-
-				fmt.Println() // Add a blank line between log entries
-
-			}
-
-		}
+		format.GetFormat().Print(table)
 
 		return nil
 	}}

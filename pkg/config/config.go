@@ -22,6 +22,11 @@ func InitConfig() {
 		return
 	}
 	inited = true
+
+	if os.Getenv("NBCTL_TESTING") == "true" {
+		return
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error finding home directory:", err)

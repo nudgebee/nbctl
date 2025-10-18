@@ -8,7 +8,7 @@ import (
 
 func TestLogsListLabelValues_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"fetchLogLabelValues": []map[string]any{
+		"logs_list_label_values": []map[string]any{
 			{
 				"value":      "value1",
 				"attributes": "{}",

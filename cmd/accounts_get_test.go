@@ -11,7 +11,7 @@ import (
 func TestAccountsGet_Unit(t *testing.T) {
 	mockData := map[string]any{
 		"cloud_accounts_by_pk": map[string]any{
-			"id":              "1",
+			"id":              "00000000-0000-0000-0000-000000000001",
 			"account_name":    "ac1",
 			"account_type":    "cloud",
 			"cloud_provider":  "aws",
@@ -25,7 +25,7 @@ func TestAccountsGet_Unit(t *testing.T) {
 		},
 	}
 
-	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"accounts", "get", "1"})
+	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"accounts", "get", "00000000-0000-0000-0000-000000000001"})
 	if err != nil {
 		t.Fatalf("accountsGetCmd.RunE failed: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestAccountsGet_Unit(t *testing.T) {
 func TestAccountsGet_Unit_K8s(t *testing.T) {
 	mockData := map[string]any{
 		"cloud_accounts_by_pk": map[string]any{
-			"id":           "1",
+			"id":           "00000000-0000-0000-0000-000000000001",
 			"account_name": "k8s-1",
 			"account_type": "kubernetes",
 			"status":       "active",
@@ -62,7 +62,7 @@ func TestAccountsGet_Unit_K8s(t *testing.T) {
 		},
 	}
 
-	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"accounts", "get", "1"})
+	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"accounts", "get", "00000000-0000-0000-0000-000000000001"})
 	if err != nil {
 		t.Fatalf("accountsGetCmd.RunE failed: %v", err)
 	}
