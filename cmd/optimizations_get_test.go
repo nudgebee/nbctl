@@ -8,17 +8,21 @@ import (
 
 func TestOptimizationsGet_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"monitoring_recommendations": []map[string]any{
-			{
-				"workload_name":        "test-workload",
-				"namespace":            "test-namespace",
-				"account_id":           "1",
-				"recommendation_count": 1,
+		"recommendations_v2": map[string]any{
+			"rows": []map[string]any{
+				{
+					"id":                   "00000000-0000-0000-0000-000000000001",
+					"workload_name":        "test-workload",
+					"namespace":            "test-namespace",
+					"account_id":           "1",
+					"recommendation_count": 1,
+					"recommendation":       "{}",
+				},
 			},
 		},
 	}
 
-	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"optimizations", "get", "--workload-name", "test-workload", "--namespace", "test-namespace"})
+	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"optimizations", "get", "00000000-0000-0000-0000-000000000001"})
 	if err != nil {
 		t.Fatalf("optimizationsGetCmd.RunE failed: %v", err)
 	}

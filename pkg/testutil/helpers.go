@@ -57,6 +57,9 @@ func RunCommandCaptureOutput(command *cobra.Command, args []string) (string, err
 		command = &cobra.Command{}
 	}
 	rootCmd := command.Root()
+	if rootCmd == nil {
+		rootCmd = command
+	}
 	rootCmd.SetOut(&buf)
 	format.GetFormat().SetOutput(&buf)
 	// ensure viper/config is initialized so tests pick up env vars
@@ -93,6 +96,8 @@ func RunWithMockServer(handler http.HandlerFunc, viperOverrides map[string]any, 
 // the GraphQL response payload under the "data" field. It's suitable for the
 // common case where tests only need to mock returned data.
 func RunWithSimpleGraphQL(mockData any, cmd *cobra.Command, args []string) (string, error) {
+	_ = os.Setenv("NBCTL_TESTING", "true")
+	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/auth/token":

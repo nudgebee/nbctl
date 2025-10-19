@@ -8,12 +8,14 @@ import (
 
 func TestOptimizationsList_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"monitoring_recommendations": []map[string]any{
-			{
-				"workload_name":        "test-workload",
-				"namespace":            "test-namespace",
-				"account_id":           "1",
-				"recommendation_count": 1,
+		"recommendation": map[string]any{
+			"rows": []map[string]any{
+				{
+					"workload_name":        "test-workload",
+					"namespace":            "test-namespace",
+					"account_id":           "1",
+					"recommendation_count": 1,
+				},
 			},
 		},
 	}

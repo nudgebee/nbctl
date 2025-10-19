@@ -8,7 +8,7 @@ import (
 
 func TestMetricsListLabels_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"fetchMetricLabels": []map[string]any{
+		"metrics_list_labels": []map[string]any{
 			{
 				"label":      "label1",
 				"attributes": "{}",
