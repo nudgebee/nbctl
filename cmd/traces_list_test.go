@@ -8,7 +8,7 @@ import (
 
 func TestTracesList_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"traces": []map[string]any{
+		"traces_v3": []map[string]any{
 			{
 				"trace_id":       "1",
 				"service_name":   "test-service",

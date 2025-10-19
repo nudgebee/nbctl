@@ -19,8 +19,8 @@ lint:
 validate: lint test
 
 build: validate
-	go build -o nbctl .
+	go build -o dist/nbctl .
 
 install: build
 	mkdir -p ~/go/bin
-	cp nbctl ~/go/bin/nbctl
+	cp dist/nbctl ~/go/bin/nbctl

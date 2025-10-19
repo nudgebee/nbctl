@@ -47,6 +47,20 @@ func InitConfig() {
 	}
 
 	// Load profile-specific configuration
+	profile := viper.GetString("profile")
+	if profile != "" {
+		profiles := viper.GetStringMapString("profiles")
+		if _, ok := profiles[profile]; !ok {
+			fmt.Fprintf(os.Stderr, "Error: profile '%s' not found\n", profile)
+			os.Exit(1)
+		}
+		profileSettings := viper.GetStringMapString(fmt.Sprintf("profiles.%s", profile))
+		for key, value := range profileSettings {
+			viper.Set(key, value)
+		}
+		return
+	}
+
 	currentProfile := viper.GetString("current-profile")
 	profiles := viper.GetStringMapString("profiles")
 

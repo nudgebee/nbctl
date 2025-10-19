@@ -108,10 +108,13 @@ func init() {
 	// Add a persistent flag for the output format.
 	var formatVar string
 	rootCmd.PersistentFlags().StringVar(&formatVar, "format", "text", "Output format (json)")
+	rootCmd.PersistentFlags().String("profile", "", "Use a specific profile from your config file")
+	_ = viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile"))
 
 	// Initialize a logger that writes to the command's stderr. Using PersistentPreRunE
 	// ensures cmd.ErrOrStderr() is available during execution and in tests.
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		config.InitConfig()
 		Logger = log.New(cmd.ErrOrStderr(), "", log.LstdFlags)
 
 		// Set the format from the flag.
