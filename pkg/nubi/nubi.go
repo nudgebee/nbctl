@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/machinebox/graphql"
@@ -30,18 +31,20 @@ func New(client *graphql.Client, accountID, username, sessionID, endpoint string
 }
 
 type ConversationMessage struct {
-	Role     string `json:"role"`
-	Response string `json:"response"`
-	Message  string `json:"message"`
+	Role        string `json:"role"`
+	Response    string `json:"response"`
+	Message     string `json:"message"`
+	MessageType string `json:"message_type"`
 }
 
 func (c *NubiClient) GetConversationMessages(conversationID string) ([]ConversationMessage, error) {
 	req := graphql.NewRequest(`
 		query GetLlmConversationMessages($conversationId: uuid!) {
-		  llm_conversation_messages(where: {conversation_id: {_eq: $conversationId}}, order_by: {created_at: asc}) {
+		  llm_conversation_messages(where: {conversation_id: {_eq: $conversationId}, message_type: {_in: ["generation", "followup"]}}, order_by: {created_at: asc}) {
 			role
 			response
 			message
+			message_type
 		  }
 		}
 	`)
@@ -164,19 +167,25 @@ func (c *NubiClient) TriggerInvestigation(ctx context.Context, query string) err
 	req.Var("query", query)
 	req.Var("sessionId", c.SessionID)
 
-	var respData interface{}
+	var respData any
 	return c.Client.Run(ctx, req, &respData)
 }
 
-func (c *NubiClient) GetConversation(ctx context.Context) (string, string, string, error) {
+func (c *NubiClient) GetConversation(ctx context.Context) (string, string, string, string, string, string, error) {
 	req := graphql.NewRequest(`
 		query GetLlmConversation($sessionId: String!) {
 		  llm_conversations(where: {session_id: {_eq: $sessionId}}, order_by: {created_at: desc}, limit: 1) {
 			id
 			status
 			llm_conversation_messages(where: {message_type: {_in: ["generation", "followup"]}}, order_by: {created_at: asc}) {
+			  id
+			  status
 			  response
+			  message_type
+			  message_config
+			  parent_agent_id
 			  llm_conversation_agents(order_by: {created_at: asc}) {
+			    id
 				response
 				agent_name
 				status
@@ -197,8 +206,14 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 			ID                      string `json:"id"`
 			Status                  string `json:"status"`
 			LlmConversationMessages []struct {
+				ID                    string `json:"id"`
+				Status                string `json:"status"`
 				Response              string `json:"response"`
+				MessageType           string `json:"message_type"`
+				MessageConfig         string `json:"message_config"`
+				ParentAgentID         string `json:"parent_agent_id"`
 				LlmConversationAgents []struct {
+					ID                       string `json:"id"`
 					AgentName                string `json:"agent_name"`
 					Status                   string `json:"status"`
 					Response                 string `json:"response"`
@@ -212,45 +227,100 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	}
 
 	if err := c.Client.Run(ctx, req, &respData); err != nil {
-		return "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 
 	if len(respData.LlmConversations) == 0 {
-		return "", "IN_PROGRESS", "", nil // Not ready yet
+		return "", "IN_PROGRESS", "", "", "", "", nil // Not ready yet
 	}
 
 	c.ConversationID = respData.LlmConversations[0].ID
 
 	if len(respData.LlmConversations[0].LlmConversationMessages) == 0 {
-		return "", respData.LlmConversations[0].Status, "", nil
+		return "", respData.LlmConversations[0].Status, "", "", "", "", nil
 	}
 
 	// Find the latest agent and tool call
 	var latestAgentName, latestToolName, latestToolParams string
+	var waitingMessageID, waitingAgentID string
 	messages := respData.LlmConversations[0].LlmConversationMessages
 	finalResponse := ""
 	if len(messages) > 0 {
-		lastMessage := messages[len(messages)-1]
-		finalResponse = lastMessage.Response
-		agents := lastMessage.LlmConversationAgents
-		if len(agents) > 0 {
-			latestAgent := agents[len(agents)-1]
-			latestAgentName = latestAgent.AgentName
-			if finalResponse == "" {
-				finalResponse = latestAgent.Response
+		// Find the latest "generation" message for finalResponse
+		for i := len(messages) - 1; i >= 0; i-- {
+			msg := messages[i]
+			if msg.MessageType == "generation" {
+				finalResponse = msg.Response
+				if msg.Status == "WAITING" {
+					waitingMessageID = msg.ID
+					for _, a := range msg.LlmConversationAgents {
+						if strings.EqualFold(a.Status, "waiting") {
+							waitingAgentID = a.ID
+						}
+					}
+				}
+				break
 			}
-			toolCalls := latestAgent.LlmConversationToolCalls
-			if len(toolCalls) > 0 {
-				latestTool := toolCalls[len(toolCalls)-1]
-				latestToolName = latestTool.ToolName
-				latestToolParams = latestTool.Parameters
+		}
+
+		// If finalResponse is still empty, try to get it from the last agent's response
+		// This ensures we don't miss a response if it's not explicitly a "generation" message
+		// but is part of the agent's final output.
+		// This part should only execute if no generation message was found.
+		if finalResponse == "" {
+			lastMessage := messages[len(messages)-1] // Get the actual last message for agent info
+			agents := lastMessage.LlmConversationAgents
+			if len(agents) > 0 {
+				latestAgent := agents[len(agents)-1]
+				latestAgentName = latestAgent.AgentName
+				if finalResponse == "" { // Only set if still empty
+					finalResponse = latestAgent.Response
+				}
+				toolCalls := latestAgent.LlmConversationToolCalls
+				if len(toolCalls) > 0 {
+					latestTool := toolCalls[len(toolCalls)-1]
+					latestToolName = latestTool.ToolName
+					latestToolParams = latestTool.Parameters
+				}
+			}
+		}
+	}
+
+	var followupMessageConfig string
+	if waitingAgentID != "" {
+		for _, msg := range messages {
+			if msg.MessageType == "followup" && msg.ParentAgentID == waitingAgentID {
+				followupMessageConfig = msg.MessageConfig
+				break
 			}
 		}
 	}
 
 	statusText := fmt.Sprintf("Agent: %s, Tool: %s, Action: %s", latestAgentName, latestToolName, latestToolParams)
 
-	return finalResponse, respData.LlmConversations[0].Status, statusText, nil
+	return finalResponse, respData.LlmConversations[0].Status, statusText, followupMessageConfig, waitingMessageID, waitingAgentID, nil
+}
+
+func (c *NubiClient) SendFollowupResponse(ctx context.Context, query, agentID, messageID string) error {
+	req := graphql.NewRequest(`
+		mutation AiFollowupResponse($accountId: String!, $query: String!, $userId: String!, $conversationId: String!, $agentId: String!, $messageId: String!) {
+		  ai_followup_response(request: {account_id: $accountId, query: $query, user_id: $userId, conversation_id: $conversationId, agent_id: $agentId, message_id: $messageId, async: true}) {
+			data {
+			  response
+			}
+		  }
+		}
+	`)
+
+	req.Var("accountId", c.AccountID)
+	req.Var("query", query)
+	req.Var("userId", "")
+	req.Var("conversationId", c.ConversationID)
+	req.Var("agentId", agentID)
+	req.Var("messageId", messageID)
+
+	var respData any
+	return c.Client.Run(ctx, req, &respData)
 }
 
 func (c *NubiClient) StopConversation() {

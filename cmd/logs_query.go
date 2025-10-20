@@ -58,7 +58,7 @@ var logsQueryCmd = &cobra.Command{
 
 		req := graphql.NewRequest(`
 			mutation FetchLogs($request: FetchLogRequest!) {
-				logs_list(request: $request) {
+				logs_query(request: $request) {
 					timestamp
 					severity
 					message
@@ -67,7 +67,7 @@ var logsQueryCmd = &cobra.Command{
 			}
 		`)
 
-		requestVars := map[string]interface{}{
+		requestVars := map[string]any{
 			"account_id": accountId,
 			"end_time":   endTimeMs,
 			"start_time": startTimeMs,

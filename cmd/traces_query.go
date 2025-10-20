@@ -24,9 +24,9 @@ var (
 	httpStatusCode []string
 )
 
-var tracesListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List traces",
+var tracesQueryCmd = &cobra.Command{
+	Use:   "query",
+	Short: "Query traces",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := client.NewClient()
 
@@ -105,25 +105,25 @@ var tracesListCmd = &cobra.Command{
 
 		var respData struct {
 			TracesV3 []struct {
-				TraceID                      string                 `json:"trace_id"`
-				SpanID                       string                 `json:"span_id"`
-				ParentSpanID                 string                 `json:"parent_span_id"`
-				WorkloadNamespace            string                 `json:"workload_namespace"`
-				WorkloadName                 string                 `json:"workload_name"`
-				Timestamp                    string                 `json:"timestamp"`
-				StatusCode                   string                 `json:"status_code"`
-				SpanName                     string                 `json:"span_name"`
-				Resource                     string                 `json:"resource"`
-				DurationNs                   int                    `json:"duration_ns"`
-				DestinationWorkloadName      string                 `json:"destination_workload_name"`
-				DestinationWorkloadNamespace string                 `json:"destination_workload_namespace"`
-				DestinationName              string                 `json:"destination_name"`
-				Headers                      interface{}            `json:"headers"`
-				HTTPStatusCode               string                 `json:"http_status_code"`
-				RequestPayload               interface{}            `json:"request_payload"`
-				HTTPResponse                 interface{}            `json:"http_response"`
-				TraceSource                  string                 `json:"trace_source"`
-				SpanAttributes               map[string]interface{} `json:"span_attributes"`
+				TraceID                      string         `json:"trace_id"`
+				SpanID                       string         `json:"span_id"`
+				ParentSpanID                 string         `json:"parent_span_id"`
+				WorkloadNamespace            string         `json:"workload_namespace"`
+				WorkloadName                 string         `json:"workload_name"`
+				Timestamp                    string         `json:"timestamp"`
+				StatusCode                   string         `json:"status_code"`
+				SpanName                     string         `json:"span_name"`
+				Resource                     string         `json:"resource"`
+				DurationNs                   int            `json:"duration_ns"`
+				DestinationWorkloadName      string         `json:"destination_workload_name"`
+				DestinationWorkloadNamespace string         `json:"destination_workload_namespace"`
+				DestinationName              string         `json:"destination_name"`
+				Headers                      any            `json:"headers"`
+				HTTPStatusCode               string         `json:"http_status_code"`
+				RequestPayload               any            `json:"request_payload"`
+				HTTPResponse                 any            `json:"http_response"`
+				TraceSource                  string         `json:"trace_source"`
+				SpanAttributes               map[string]any `json:"span_attributes"`
 			} `json:"traces_v3"`
 		}
 
@@ -150,13 +150,13 @@ var tracesListCmd = &cobra.Command{
 }
 
 func init() {
-	tracesCmd.AddCommand(tracesListCmd)
-	tracesListCmd.Flags().StringSliceVar(&workloadName, "workload-name", []string{}, "Filter by workload name")
-	tracesListCmd.Flags().StringSliceVar(&spanName, "span-name", []string{}, "Filter by span name")
-	tracesListCmd.Flags().StringSliceVar(&traceId, "trace-id", []string{}, "Filter by trace id")
-	tracesListCmd.Flags().StringVar(&startTime, "start-time", "", "Start time in RFC3339 format")
-	tracesListCmd.Flags().StringVar(&endTime, "end-time", "", "End time in RFC3339 format")
-	tracesListCmd.Flags().StringVar(&resource, "resource", "", "Filter by resource")
-	tracesListCmd.Flags().StringVar(&statusCode, "status-code", "", "Filter by status code")
-	tracesListCmd.Flags().StringSliceVar(&httpStatusCode, "http-status-code", []string{}, "Filter by http status code")
+	tracesCmd.AddCommand(tracesQueryCmd)
+	tracesQueryCmd.Flags().StringSliceVar(&workloadName, "workload-name", []string{}, "Filter by workload name")
+	tracesQueryCmd.Flags().StringSliceVar(&spanName, "span-name", []string{}, "Filter by span name")
+	tracesQueryCmd.Flags().StringSliceVar(&traceId, "trace-id", []string{}, "Filter by trace id")
+	tracesQueryCmd.Flags().StringVar(&startTime, "start-time", "", "Start time in RFC3339 format")
+	tracesQueryCmd.Flags().StringVar(&endTime, "end-time", "", "End time in RFC3339 format")
+	tracesQueryCmd.Flags().StringVar(&resource, "resource", "", "Filter by resource")
+	tracesQueryCmd.Flags().StringVar(&statusCode, "status-code", "", "Filter by status code")
+	tracesQueryCmd.Flags().StringSliceVar(&httpStatusCode, "http-status-code", []string{}, "Filter by http status code")
 }

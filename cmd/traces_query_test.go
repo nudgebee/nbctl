@@ -6,7 +6,7 @@ import (
 	"nudgebee.com/nbctl/pkg/testutil"
 )
 
-func TestTracesList_Unit(t *testing.T) {
+func TestTracesQuery_Unit(t *testing.T) {
 	mockData := map[string]any{
 		"traces_v3": []map[string]any{
 			{
@@ -20,21 +20,21 @@ func TestTracesList_Unit(t *testing.T) {
 		},
 	}
 
-	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"traces", "list"})
+	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{"traces", "query"})
 	if err != nil {
-		t.Fatalf("tracesListCmd.RunE failed: %v", err)
+		t.Fatalf("tracesQueryCmd.RunE failed: %v", err)
 	}
 	if got == "" {
 		t.Fatalf("expected output, got empty string")
 	}
 }
 
-func TestTracesList_Integration(t *testing.T) {
+func TestTracesQuery_Integration(t *testing.T) {
 	testutil.RequireIntegration(t)
 
-	got, err := testutil.RunCommandCaptureOutput(rootCmd, []string{"traces", "list"})
+	got, err := testutil.RunCommandCaptureOutput(rootCmd, []string{"traces", "query"})
 	if err != nil {
-		t.Fatalf("integration tracesListCmd failed: %v", err)
+		t.Fatalf("integration tracesQueryCmd failed: %v", err)
 	}
 	if got == "" {
 		t.Fatalf("expected non-empty output from integration run")

@@ -49,15 +49,15 @@ var accountsListCmd = &cobra.Command{
 			}
 		`)
 
-		where := make(map[string]interface{})
+		where := make(map[string]any)
 		if listStatus != "" {
-			where["status"] = map[string]interface{}{"_eq": listStatus}
+			where["status"] = map[string]any{"_eq": listStatus}
 		}
 		if listCloudProvider != "" {
-			where["cloud_provider"] = map[string]interface{}{"_eq": listCloudProvider}
+			where["cloud_provider"] = map[string]any{"_eq": listCloudProvider}
 		}
 		if listName != "" {
-			where["account_name"] = map[string]interface{}{"_like": fmt.Sprintf("%%%s%%", listName)}
+			where["account_name"] = map[string]any{"_like": fmt.Sprintf("%%%s%%", listName)}
 		}
 
 		req.Var("where", where)

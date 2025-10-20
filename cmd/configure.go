@@ -71,7 +71,7 @@ var configureAddCmd = &cobra.Command{
 		// Get existing profiles or create a new map
 		profilesMap := viper.GetStringMap("profiles")
 		if profilesMap == nil {
-			profilesMap = make(map[string]interface{})
+			profilesMap = make(map[string]any)
 		}
 
 		// Create a map for the current profile's settings

@@ -4,15 +4,38 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/machinebox/graphql"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
 	"nudgebee.com/nbctl/pkg/client"
 	"nudgebee.com/nbctl/pkg/format"
 )
+
+type MetricsQueryResponse struct {
+	MetricsQuery struct {
+		Results []MetricsResponse `json:"results"`
+	} `json:"metrics_query"`
+}
+
+type MetricsResponse struct {
+	QueryKey string          `json:"query_key"`
+	Payload  []MetricsResult `json:"payload"`
+}
+
+type MetricsResult struct {
+	Metric     map[string]string `json:"metric"`
+	Timestamps []float64         `json:"timestamps"`
+	Values     []float64         `json:"values"`
+}
+
+type DisplayMetricsResult struct {
+	Metric     string
+	Timestamps string
+	Values     string
+}
 
 var metricsQueryCmd = &cobra.Command{
 	Use:   "query",
@@ -28,11 +51,18 @@ var metricsQueryCmd = &cobra.Command{
 			return fmt.Errorf("account-id is required")
 		}
 
+		queriesStr, _ := cmd.Flags().GetString("query")
+		if queriesStr == "" {
+			return fmt.Errorf("query is required")
+		}
+
+		queries := map[string]any{
+			"query": queriesStr,
+		}
+
 		startTimeStr, _ := cmd.Flags().GetString("start-time")
 		endTimeStr, _ := cmd.Flags().GetString("end-time")
-		queryStr, _ := cmd.Flags().GetString("query")
-		metricProvider, _ := cmd.Flags().GetString("metric-provider")
-		onlyMetric, _ := cmd.Flags().GetBool("only-metric")
+		instant, _ := cmd.Flags().GetBool("instant")
 
 		if startTimeStr == "" {
 			startTimeStr = time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
@@ -55,92 +85,85 @@ var metricsQueryCmd = &cobra.Command{
 		endTimeMs := float64(endTime.UnixNano() / int64(time.Millisecond))
 
 		req := graphql.NewRequest(`
-			mutation FetchMetrics($request: FetchMetricsListRequest!) {
-				metrics_list(request: $request) {
-					metric
-					attributes
+			query MetricsQuery(
+				$account_id: String!
+				$queries: jsonb!
+				$instant: Boolean!
+				$start_time: Float!
+				$end_time: Float!
+			) {
+				metrics_query(
+					request: {
+						account_id: $account_id
+						queries: $queries
+						instant: $instant
+						end_time: $end_time
+						start_time: $start_time
+					}
+				) {
+					results
 				}
 			}
 		`)
 
-		requestVars := map[string]interface{}{
-			"account_id": accountId,
-			"start_time": startTimeMs,
-			"end_time":   endTimeMs,
-			"request":    json.RawMessage(fmt.Sprintf("{\"query\":%s}", strconv.Quote(queryStr))),
-		}
+		req.Var("account_id", accountId)
+		req.Var("queries", queries)
+		req.Var("instant", instant)
+		req.Var("start_time", startTimeMs)
+		req.Var("end_time", endTimeMs)
 
-		if metricProvider != "" {
-			requestVars["metric_provider"] = metricProvider
-		}
-
-		req.Var("request", requestVars)
-
-		var respData struct {
-			MetricsList []struct {
-				Metric     string          `json:"metric"`
-				Attributes json.RawMessage `json:"attributes"`
-			} `json:"metrics_list"`
-		}
-
+		var respData MetricsQueryResponse
 		if err := client.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
-		// Define a struct for display purposes
-		type MetricEntryDisplay struct {
-			Metric     string `json:"metric"`
-			Attributes string `json:"attributes"` // Attributes will be pretty-printed string
+		if len(respData.MetricsQuery.Results) == 0 {
+			format.GetFormat().Print("No Data")
+			return nil
 		}
 
-		var displayMetrics []MetricEntryDisplay
-		for _, metricEntry := range respData.MetricsList {
-			var attributesData interface{}
-			prettyAttributes := ""
-			if len(metricEntry.Attributes) > 0 {
-				if err := json.Unmarshal(metricEntry.Attributes, &attributesData); err != nil {
-					prettyAttributes = string(metricEntry.Attributes) // Fallback to raw if unmarshal fails
-				} else {
-					prettyBytes, err := json.MarshalIndent(attributesData, "", "  ")
-					if err != nil {
-						prettyAttributes = string(metricEntry.Attributes) // Fallback to raw if marshal fails
-					} else {
-						prettyAttributes = string(prettyBytes)
-					}
-				}
+		var displayPayload []DisplayMetricsResult
+		for _, r := range respData.MetricsQuery.Results[0].Payload {
+			metricJSON, err := json.Marshal(r.Metric)
+			if err != nil {
+				return fmt.Errorf("failed to marshal metric to JSON: %w", err)
 			}
 
-			displayMetrics = append(displayMetrics, MetricEntryDisplay{
-				Metric:     metricEntry.Metric,
-				Attributes: prettyAttributes,
+			timestampsJSON, err := json.Marshal(r.Timestamps)
+			if err != nil {
+				return fmt.Errorf("failed to marshal timestamps to JSON: %w", err)
+			}
+
+			valuesJSON, err := json.Marshal(r.Values)
+			if err != nil {
+				return fmt.Errorf("failed to marshal values to JSON: %w", err)
+			}
+
+			displayPayload = append(displayPayload, DisplayMetricsResult{
+				Metric:     string(metricJSON),
+				Timestamps: string(timestampsJSON),
+				Values:     string(valuesJSON),
 			})
 		}
 
-		if onlyMetric {
-			for _, metricEntry := range displayMetrics {
-				fmt.Println(metricEntry.Metric)
-			}
-		} else {
-			table := format.TabularData{
-				Data: displayMetrics,
-				Fields: []format.TableField{
-					{Header: "Metric", Field: "Metric"},
-					{Header: "Attributes", Field: "Attributes"},
-				},
-			}
-			format.GetFormat().Print(table)
+		table := format.TabularData{
+			Data: displayPayload,
+			Fields: []format.TableField{
+				{Header: "Metric", Field: "Metric"},
+				{Header: "Timestamps", Field: "Timestamps"},
+				{Header: "Values", Field: "Values"},
+			},
 		}
-
+		format.GetFormat().Print(table)
 		return nil
 	},
 }
 
 func init() {
 	metricsCmd.AddCommand(metricsQueryCmd)
-	metricsQueryCmd.Flags().String("query", "", "Metric query")
+	metricsQueryCmd.Flags().String("query", "", "Metrics Query")
 	metricsQueryCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	metricsQueryCmd.Flags().String("end-time", "", "End time (RFC3339)")
 	metricsQueryCmd.Flags().String("account-id", "", "Account ID")
-	metricsQueryCmd.Flags().String("metric-provider", "", "Metric Provider")
-	metricsQueryCmd.Flags().Bool("only-metric", false, "Show only metric names")
+	metricsQueryCmd.Flags().Bool("instant", false, "Instant query")
 }

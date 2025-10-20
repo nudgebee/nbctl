@@ -53,25 +53,25 @@ var eventsListCmd = &cobra.Command{
 			}
 		}
 
-		where := map[string]interface{}{
-			"account_id": map[string]interface{}{"_eq": accountId},
-			"_and": []map[string]interface{}{
-				{"created_at": map[string]interface{}{"_gte": startTime.Format(time.RFC3339)}},
-				{"created_at": map[string]interface{}{"_lte": endTime.Format(time.RFC3339)}},
+		where := map[string]any{
+			"account_id": map[string]any{"_eq": accountId},
+			"_and": []map[string]any{
+				{"created_at": map[string]any{"_gte": startTime.Format(time.RFC3339)}},
+				{"created_at": map[string]any{"_lte": endTime.Format(time.RFC3339)}},
 			},
 		}
 
 		if subject, _ := cmd.Flags().GetString("subject"); subject != "" {
-			where["subject_name"] = map[string]interface{}{"_ilike": "%" + subject + "%"}
+			where["subject_name"] = map[string]any{"_ilike": "%" + subject + "%"}
 		}
 		if status, _ := cmd.Flags().GetString("status"); status != "" {
-			where["status"] = map[string]interface{}{"_eq": status}
+			where["status"] = map[string]any{"_eq": status}
 		}
 		if title, _ := cmd.Flags().GetString("title"); title != "" {
-			where["title"] = map[string]interface{}{"_ilike": "%" + title + "%"}
+			where["title"] = map[string]any{"_ilike": "%" + title + "%"}
 		}
 		if priority, _ := cmd.Flags().GetString("priority"); priority != "" {
-			where["priority"] = map[string]interface{}{"_eq": priority}
+			where["priority"] = map[string]any{"_eq": priority}
 		}
 
 		req := graphql.NewRequest(`

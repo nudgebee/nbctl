@@ -32,18 +32,18 @@ var optimizationsListCmd = &cobra.Command{
 		limit, _ := cmd.Flags().GetInt("limit")
 		offset, _ := cmd.Flags().GetInt("offset")
 
-		where := map[string]interface{}{
-			"account_id": map[string]interface{}{"_eq": accountId},
+		where := map[string]any{
+			"account_id": map[string]any{"_eq": accountId},
 		}
 
 		if category != "" {
-			where["category"] = map[string]interface{}{"_eq": category}
+			where["category"] = map[string]any{"_eq": category}
 		}
 		if ruleName != "" {
-			where["rule_name"] = map[string]interface{}{"_eq": ruleName}
+			where["rule_name"] = map[string]any{"_eq": ruleName}
 		}
 		if status != "" {
-			where["status"] = map[string]interface{}{"_in": []string{status}}
+			where["status"] = map[string]any{"_in": []string{status}}
 		}
 
 		req := graphql.NewRequest(`
