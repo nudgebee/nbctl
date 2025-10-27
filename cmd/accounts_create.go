@@ -45,7 +45,7 @@ var accountsCreateCmd = &cobra.Command{
 			return fmt.Errorf("--cloud-provider is required unless --account-type is 'kubernetes'")
 		}
 
-		object := map[string]interface{}{
+		object := map[string]any{
 			"account_name":   accountName,
 			"cloud_provider": cloudProvider,
 			"account_type":   accountType,

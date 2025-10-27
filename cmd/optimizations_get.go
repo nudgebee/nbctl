@@ -106,7 +106,7 @@ var optimizationsGetCmd = &cobra.Command{
 		rec := respData.RecommendationsV2.Rows[0]
 
 		// Unmarshal and pretty-print the Evidence field
-		var evidenceData interface{}
+		var evidenceData any
 		if err := json.Unmarshal([]byte(rec.Evidence), &evidenceData); err != nil {
 			return fmt.Errorf("failed to unmarshal evidence JSON: %w", err)
 		}

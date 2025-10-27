@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -101,7 +102,27 @@ func (f *Format) printTabularData(tabularData TabularData) {
 			fieldVal := val.Index(i).FieldByName(field.Field)
 			if fieldVal.IsValid() {
 				if fieldVal.Type() == reflect.TypeOf(json.RawMessage{}) {
-					row[j] = string(fieldVal.Interface().(json.RawMessage))
+					var recommendationContent struct {
+						VulnerabilityID string `json:"VulnerabilityID"`
+						PrimaryURL      string `json:"PrimaryURL"`
+					}
+					rawJSON := fieldVal.Interface().(json.RawMessage)
+					// Unquote the raw JSON string if it's a string literal
+					unquotedJSON, err := strconv.Unquote(string(rawJSON))
+					if err != nil {
+						// If unquoting fails, assume it's already a direct JSON object
+						unquotedJSON = string(rawJSON)
+					}
+
+					if err := json.Unmarshal([]byte(unquotedJSON), &recommendationContent); err == nil {
+						if recommendationContent.PrimaryURL != "" {
+							row[j] = fmt.Sprintf("%s (%s)", recommendationContent.VulnerabilityID, recommendationContent.PrimaryURL)
+						} else {
+							row[j] = recommendationContent.VulnerabilityID
+						}
+					} else {
+						row[j] = "Error parsing CVE" // Fallback in case of parsing error
+					}
 				} else {
 					row[j] = fmt.Sprintf("%v", fieldVal.Interface())
 				}
@@ -176,7 +197,7 @@ func (f *Format) printStruct(val reflect.Value) {
 		}
 
 		if fieldValue.Type() == reflect.TypeOf(json.RawMessage{}) {
-			var data map[string]interface{}
+			var data map[string]any
 			if err := json.Unmarshal(fieldValue.Interface().(json.RawMessage), &data); err == nil {
 				_, _ = fmt.Fprintf(w, "%s:\n", fieldName)
 				for k, v := range data {
@@ -231,8 +252,8 @@ func (f *Format) printEvidences(w *tabwriter.Writer, fieldName string, evidences
 		switch ev.Type {
 		case "table":
 			var tableData struct {
-				Headers []string        `json:"headers"`
-				Rows    [][]interface{} `json:"rows"`
+				Headers []string `json:"headers"`
+				Rows    [][]any  `json:"rows"`
 			}
 			if err := json.Unmarshal(ev.Data, &tableData); err == nil {
 				// print table
@@ -246,7 +267,7 @@ func (f *Format) printEvidences(w *tabwriter.Writer, fieldName string, evidences
 				}
 			}
 		case "json":
-			var jsonData map[string]interface{}
+			var jsonData map[string]any
 			if err := json.Unmarshal(ev.Data, &jsonData); err == nil {
 				for k, v := range jsonData {
 					_, _ = fmt.Fprintf(w, "\t%s\t%v\n", k, v)

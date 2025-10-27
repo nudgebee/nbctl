@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -151,19 +152,27 @@ var nubiCmd = &cobra.Command{
 }
 
 type nubiShell struct {
-	nubiClient  *nubi.NubiClient
-	spinner     *spinner.Spinner
-	cancel      context.CancelFunc
-	historyFile string
-	history     []string
+	nubiClient       *nubi.NubiClient
+	spinner          *spinner.Spinner
+	cancel           context.CancelFunc
+	historyFile      string
+	history          []string
+	waitingMessageID string
+	waitingAgentID   string
+}
+
+type MessageConfig struct {
+	FollowupOptions []string `json:"followupOptions"`
+
+	FollowupType string `json:"followupType"`
+
+	Question string `json:"question"`
 }
 
 func (s *nubiShell) executor(in string) {
 
 	if strings.TrimSpace(in) == "" {
-
 		return
-
 	}
 	s.history = append(s.history, in)
 	go func() {
@@ -173,77 +182,76 @@ func (s *nubiShell) executor(in string) {
 	}()
 
 	if strings.HasPrefix(in, "/") {
-
 		s.handleSlashCommand(in)
-
 		return
-
-	}
-
-	// Check if a conversation is already in progress
-
-	if s.nubiClient.ConversationID != "" {
-
-		_, status, _, err := s.nubiClient.GetConversation(context.Background())
-
-		if err != nil {
-
-			fmt.Printf("Error checking conversation status: %v\n", err)
-
-			// Even if there's an error checking status, we should probably reset to allow a new conversation
-
-			s.nubiClient.ConversationID = ""
-
-			s.nubiClient.SessionID = uuid.New().String() // Generate a new session ID
-
-			fmt.Println("Could not check previous conversation status. Starting a new conversation.")
-
-		} else if status == "IN_PROGRESS" || status == "WAITING" {
-
-			fmt.Println("Previous conversation was still in progress. Starting a new conversation for your query.")
-
-			s.nubiClient.ConversationID = ""
-
-			s.nubiClient.SessionID = uuid.New().String() // Generate a new session ID
-
-		}
-
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
 	s.cancel = cancel
 
 	s.spinner.Start()
-
 	startTime := time.Now()
-	response, err := s.triggerAndPoll(ctx, in)
-	duration := time.Since(startTime)
+	var response string
+	var status string
+	var err error
 
+	// Check if a conversation is already in progress
+	if s.nubiClient.ConversationID != "" {
+		_, currentStatus, _, _, waitingMessageID, waitingAgentID, getErr := s.nubiClient.GetConversation(context.Background())
+		if getErr != nil {
+			fmt.Printf("Error checking conversation status: %v\n", getErr)
+			// Even if there's an error checking status, we should probably reset to allow a new conversation
+			s.nubiClient.ConversationID = ""
+			s.nubiClient.SessionID = uuid.New().String() // Generate a new session ID
+			fmt.Println("Could not check previous conversation status. Starting a new conversation.")
+			response, status, err = s.triggerAndPoll(ctx, in)
+		} else {
+			s.waitingMessageID = waitingMessageID
+			s.waitingAgentID = waitingAgentID
+			switch currentStatus {
+			case "IN_PROGRESS":
+				fmt.Println("Previous conversation was still in progress. Starting a new conversation for your query.")
+				s.nubiClient.ConversationID = ""
+				s.nubiClient.SessionID = uuid.New().String() // Generate a new session ID
+				response, status, err = s.triggerAndPoll(ctx, in)
+			case "WAITING":
+				err = s.nubiClient.SendFollowupResponse(context.Background(), in, s.waitingAgentID, s.waitingMessageID)
+				if err == nil {
+					response, status, err = s.poll(ctx)
+				}
+			default:
+				// For other statuses like COMPLETED, FAILED, etc., start a new conversation
+				s.nubiClient.ConversationID = ""
+				s.nubiClient.SessionID = uuid.New().String()
+				response, status, err = s.triggerAndPoll(ctx, in)
+			}
+		}
+	} else {
+		response, status, err = s.triggerAndPoll(ctx, in)
+	}
+	duration := time.Since(startTime)
 	s.spinner.Stop()
 
 	if err != nil {
-
 		if err == context.Canceled {
-
 			fmt.Println("Request canceled.")
-
 		} else {
-
 			fmt.Printf("Error: %v\n", err)
-
 		}
-
 		return
 	}
 
-	rendered, err := renderMarkdown(response)
-	if err != nil {
-		fmt.Printf("Error rendering markdown: %v\n", err)
-		fmt.Println(response) // fallback to raw
+	if status == "WAITING" {
+		fmt.Println(response)
 	} else {
-		borderStyle := lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1)
-		fmt.Println(borderStyle.Render(rendered))
+		rendered, err := renderMarkdown(response)
+		if err != nil {
+			fmt.Printf("Error rendering markdown: %v\n", err)
+			fmt.Println(response) // fallback to raw
+		} else {
+			borderStyle := lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1)
+			fmt.Println(borderStyle.Render(rendered))
+		}
 	}
 
 	metrics, err := s.nubiClient.GetUsageMetrics(context.Background()) // use a new context
@@ -287,6 +295,27 @@ func (s *nubiShell) handleSlashCommand(in string) {
 					if err != nil {
 						fmt.Printf("Error rendering markdown: %v\n", err)
 						fmt.Println(markdown) // fallback to raw
+					} else {
+						borderStyle := lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1)
+						fmt.Println(borderStyle.Render(rendered))
+					}
+				}
+			}
+			// Now, check the status and show followup
+			_, status, _, followupJSON, _, _, err := s.nubiClient.GetConversation(context.Background())
+			if err == nil && status == "WAITING" && followupJSON != "" {
+				var msgConfig MessageConfig
+				if err := json.Unmarshal([]byte(followupJSON), &msgConfig); err == nil {
+					var builder strings.Builder
+					builder.WriteString(msgConfig.Question)
+					builder.WriteString("\n\n")
+					builder.WriteString("Options:\n")
+					for _, opt := range msgConfig.FollowupOptions {
+						builder.WriteString(fmt.Sprintf("- %s\n", opt))
+					}
+					rendered, err := renderMarkdown(builder.String())
+					if err != nil {
+						fmt.Println(builder.String())
 					} else {
 						borderStyle := lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1)
 						fmt.Println(borderStyle.Render(rendered))
@@ -445,21 +474,18 @@ func (s *nubiShell) handleBookmarkCommand(parts []string) {
 	}
 }
 
-func (s *nubiShell) triggerAndPoll(ctx context.Context, query string) (string, error) {
-	if err := s.nubiClient.TriggerInvestigation(ctx, query); err != nil {
-		return "", err
-	}
-
-	// Poll for the result
+func (s *nubiShell) poll(ctx context.Context) (string, string, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return "", "", ctx.Err()
 		case <-time.After(2 * time.Second):
-			resp, status, statusText, err := s.nubiClient.GetConversation(ctx)
+			resp, status, statusText, followupJSON, waitingMessageID, waitingAgentID, err := s.nubiClient.GetConversation(ctx)
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
+			s.waitingMessageID = waitingMessageID
+			s.waitingAgentID = waitingAgentID
 
 			if s.spinner != nil {
 				cyan := "\033[36m"
@@ -467,11 +493,32 @@ func (s *nubiShell) triggerAndPoll(ctx context.Context, query string) (string, e
 				s.spinner.Suffix = " " + cyan + statusText + reset
 			}
 
+			if status == "WAITING" && followupJSON != "" {
+				var msgConfig MessageConfig
+				if err := json.Unmarshal([]byte(followupJSON), &msgConfig); err == nil {
+					var builder strings.Builder
+					builder.WriteString(msgConfig.Question)
+					builder.WriteString("\n\n")
+					builder.WriteString("Options:\n")
+					for _, opt := range msgConfig.FollowupOptions {
+						builder.WriteString(fmt.Sprintf("- %s\n", opt))
+					}
+					return builder.String(), status, nil
+				}
+			}
+
 			if status != "IN_PROGRESS" && status != "WAITING" {
-				return resp, nil
+				return resp, status, nil
 			}
 		}
 	}
+}
+
+func (s *nubiShell) triggerAndPoll(ctx context.Context, query string) (string, string, error) {
+	if err := s.nubiClient.TriggerInvestigation(ctx, query); err != nil {
+		return "", "", err
+	}
+	return s.poll(ctx)
 }
 
 func renderMarkdown(in string) (string, error) {
