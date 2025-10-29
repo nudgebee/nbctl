@@ -69,9 +69,75 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return resp, err
 }
 
+type clientOptions struct {
+	endpoint string
+	apiKey   string
+	username string
+}
+
+type ClientOption interface {
+	apply(opts *clientOptions)
+}
+
+type clientUsernameOption struct {
+	username string
+}
+
+func (o clientUsernameOption) apply(opts *clientOptions) {
+	if o.username != "" {
+		opts.username = o.username
+	}
+}
+
+func WithUsername(username string) ClientOption {
+	return clientUsernameOption{
+		username: username,
+	}
+}
+
+type clientApiKeyOption struct {
+	apiKey string
+}
+
+func (o clientApiKeyOption) apply(opts *clientOptions) {
+	if o.apiKey != "" {
+		opts.apiKey = o.apiKey
+	}
+}
+
+func WithApiKey(apiKey string) ClientOption {
+	return clientApiKeyOption{
+		apiKey: apiKey,
+	}
+}
+
+type clientEndpointOption struct {
+	endpoint string
+}
+
+func (o clientEndpointOption) apply(opts *clientOptions) {
+	if o.endpoint != "" {
+		opts.endpoint = o.endpoint
+	}
+}
+
+func WithEndpoint(endpoint string) ClientOption {
+	return clientEndpointOption{
+		endpoint: endpoint,
+	}
+}
+
 // NewClient creates a new GraphQL client.
-func NewClient() *graphql.Client {
-	endpoint := viper.GetString("endpoint")
+func NewClient(opts ...ClientOption) *graphql.Client {
+	config := clientOptions{}
+	for _, o := range opts {
+		o.apply(&config)
+	}
+
+	endpoint := config.endpoint
+	if endpoint == "" {
+		endpoint = viper.GetString("endpoint")
+	}
 	if endpoint == "" {
 		endpoint = "https://app.nudgebee.com"
 	}
@@ -79,8 +145,16 @@ func NewClient() *graphql.Client {
 		endpoint = endpoint[:len(endpoint)-1]
 	}
 	graphqlEndpoint := endpoint + "/api/graphql"
-	apiKey := viper.GetString("api-key")
-	username := viper.GetString("username")
+
+	apiKey := config.apiKey
+	if apiKey == "" {
+		apiKey = viper.GetString("api-key")
+	}
+
+	username := config.username
+	if username == "" {
+		username = viper.GetString("username")
+	}
 	tokenEndpoint := endpoint + "/api/auth/token"
 
 	// create a new http client with the auth header

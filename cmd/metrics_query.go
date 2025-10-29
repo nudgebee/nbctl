@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/guptarohit/asciigraph"
 	"github.com/machinebox/graphql"
 	"github.com/spf13/cobra"
-	"github.com/guptarohit/asciigraph"
 	"github.com/spf13/viper"
 
 	"nudgebee.com/nbctl/pkg/client"
@@ -21,13 +21,11 @@ func renderChart(payload []MetricsResult) {
 		return
 	}
 
-	var plots [][]float64
 	for _, p := range payload {
-		plots = append(plots, p.Values)
+		graph := asciigraph.Plot(p.Values, asciigraph.Caption(fmt.Sprintf("%v", p.Metric)))
+		format.GetFormat().Print(graph)
+		fmt.Println()
 	}
-
-	graph := asciigraph.PlotMany(plots)
-	format.GetFormat().Print(graph)
 }
 
 type MetricsQueryResponse struct {

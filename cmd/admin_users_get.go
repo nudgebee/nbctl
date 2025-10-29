@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"nudgebee.com/nbctl/pkg/client"
 	"nudgebee.com/nbctl/pkg/format"
 )
 
 var (
-	userId      string
-	userName    string
-	getTenantId string
+	userId   string
+	userName string
 )
 
 var adminUsersGetCmd = &cobra.Command{
@@ -28,14 +28,14 @@ var adminUsersGetCmd = &cobra.Command{
 		client := client.NewClient()
 
 		req := graphql.NewRequest(`
-			query GetUsersByTenant($offset: Int, $limit: Int, $tenantId: uuid, $where: users_bool_exp) {
+			query GetUsersByTenant($offset: Int, $limit: Int, $where: users_bool_exp) {
 				users(limit: $limit, offset: $offset, order_by: {display_name:asc}, where: $where) {
 					display_name
 					id
 					status
 					username
 					created_at
-					user_roles(where: {entity_id: {_eq: $tenantId}}) {
+					user_roles(where: {}) {
 						id
 						role
 						entity_type
@@ -44,7 +44,7 @@ var adminUsersGetCmd = &cobra.Command{
 							display_name
 						}
 					}
-					tenants:tenantUsersByUser(where: {tenant: {_eq: $tenantId}}) {
+					tenants:tenantUsersByUser(where: {}) {
 						id:tenant
 						created_at
 					}
@@ -57,7 +57,7 @@ var adminUsersGetCmd = &cobra.Command{
 							}
 						}
 					}
-					user_auths(limit: 1, order_by: {accessed_at: desc},where: {tenant_id: {_eq: $tenantId}}) {
+					user_auths(limit: 1, order_by: {accessed_at: desc},where: {}) {
 						accessed_at
 						tenant_id
 					}
@@ -75,7 +75,6 @@ var adminUsersGetCmd = &cobra.Command{
 
 		req.Var("where", where)
 		req.Var("limit", 1)
-		req.Var("tenantId", getTenantId)
 
 		var respData struct {
 			Users []struct {
@@ -151,8 +150,8 @@ var adminUsersGetCmd = &cobra.Command{
 			DisplayName: user.DisplayName,
 			Username:    user.Username,
 			Status:      user.Status,
-			Roles:       strings.Join(roles, ","),
-			Groups:      strings.Join(groups, ","),
+			Roles:       strings.Join(lo.Uniq(roles), ","),
+			Groups:      strings.Join(lo.Uniq(groups), ","),
 			LastLogin:   lastLogin,
 		}
 
@@ -166,5 +165,4 @@ func init() {
 	adminUsersCmd.AddCommand(adminUsersGetCmd)
 	adminUsersGetCmd.Flags().StringVar(&userId, "id", "", "User ID")
 	adminUsersGetCmd.Flags().StringVar(&userName, "username", "", "Username")
-	adminUsersGetCmd.Flags().StringVar(&getTenantId, "tenant-id", "", "Tenant ID")
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"nudgebee.com/nbctl/pkg/client"
 	"nudgebee.com/nbctl/pkg/format"
@@ -14,7 +15,6 @@ import (
 var (
 	offset   int
 	limit    int
-	tenantId string
 	name     string
 	username string
 	status   string
@@ -28,14 +28,14 @@ var adminUsersListCmd = &cobra.Command{
 		client := client.NewClient()
 
 		req := graphql.NewRequest(`
-			query GetUsersByTenant($offset: Int, $limit: Int, $tenantId: uuid, $where: users_bool_exp) {
+			query GetUsersByTenant($offset: Int, $limit: Int, $where: users_bool_exp) {
 				users(limit: $limit, offset: $offset, order_by: {display_name:asc}, where: $where) {
 					display_name
 					id
 					status
 					username
 					created_at
-					user_roles(where: {entity_id: {_eq: $tenantId}}) {
+					user_roles(where: {}) {
 						id
 						role
 						entity_type
@@ -44,7 +44,7 @@ var adminUsersListCmd = &cobra.Command{
 							display_name
 						}
 					}
-					tenants:tenantUsersByUser(where: {tenant: {_eq: $tenantId}}) {
+					tenants:tenantUsersByUser(where: {}) {
 						id:tenant
 						created_at
 					}
@@ -57,7 +57,7 @@ var adminUsersListCmd = &cobra.Command{
 							}
 						}
 					}
-					user_auths(limit: 1, order_by: {accessed_at: desc},where: {tenant_id: {_eq: $tenantId}}) {
+					user_auths(limit: 1, order_by: {accessed_at: desc},where: {}) {
 						accessed_at
 						tenant_id
 					}
@@ -72,7 +72,6 @@ var adminUsersListCmd = &cobra.Command{
 
 		req.Var("offset", offset)
 		req.Var("limit", limit)
-		req.Var("tenantId", tenantId)
 
 		where := make(map[string]any)
 		if name != "" {
@@ -172,8 +171,8 @@ var adminUsersListCmd = &cobra.Command{
 				DisplayName: user.DisplayName,
 				Username:    user.Username,
 				Status:      user.Status,
-				Roles:       strings.Join(roles, ","),
-				Groups:      strings.Join(groups, ","),
+				Roles:       strings.Join(lo.Uniq(roles), ","),
+				Groups:      strings.Join(lo.Uniq(groups), ","),
 				LastLogin:   lastLogin,
 			})
 		}
@@ -202,7 +201,6 @@ func init() {
 	adminUsersCmd.AddCommand(adminUsersListCmd)
 	adminUsersListCmd.Flags().IntVar(&offset, "offset", 0, "Offset for pagination")
 	adminUsersListCmd.Flags().IntVar(&limit, "limit", 20, "Limit for pagination")
-	adminUsersListCmd.Flags().StringVar(&tenantId, "tenant-id", "", "Tenant ID to filter by")
 	adminUsersListCmd.Flags().StringVar(&name, "name", "", "Filter by name (ilike)")
 	adminUsersListCmd.Flags().StringVar(&username, "username", "", "Filter by username (ilike)")
 	adminUsersListCmd.Flags().StringVar(&status, "status", "", "Filter by status (eq)")

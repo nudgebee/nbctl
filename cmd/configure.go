@@ -101,6 +101,28 @@ var configureAddCmd = &cobra.Command{
 		}
 		profileSettings["account-id"] = defaultAccount
 
+		// Validate the configuration by making a simple API call
+		fmt.Println("Validating configuration...")
+		client := client.NewClient(client.WithApiKey(apiKey), client.WithEndpoint(endpoint), client.WithUsername(username))
+		req := graphql.NewRequest(`
+			query {
+				cloud_accounts(limit: 1) {
+					id
+					tenant
+				}
+			}`)
+		var respData struct {
+			CloudAccounts []struct {
+				ID     string `json:"id"`
+				Tenant string `json:"tenant"`
+			} `json:"cloud_accounts"`
+		}
+		if err := client.Run(context.Background(), req, &respData); err != nil {
+			fmt.Println("Configuration validation failed. Please check your credentials and re-run 'nbctl configure add'.")
+			return err
+		}
+		fmt.Println("Configuration validated successfully.")
+
 		// Add/update the profile settings in the profiles map
 		profilesMap[profileName] = profileSettings
 		viper.Set("profiles", profilesMap) // Update the global viper instance with the modified profiles map
@@ -127,25 +149,6 @@ var configureAddCmd = &cobra.Command{
 				return fmt.Errorf("setting current profile: %w", err)
 			}
 		}
-		// Validate the configuration by making a simple API call
-		fmt.Println("Validating configuration...")
-		client := client.NewClient()
-		req := graphql.NewRequest(`
-			query {
-				cloud_accounts(limit: 1) {
-					id
-				}
-			}`)
-		var respData struct {
-			CloudAccounts []struct {
-				ID string `json:"id"`
-			} `json:"cloud_accounts"`
-		}
-		if err := client.Run(context.Background(), req, &respData); err != nil {
-			fmt.Println("Configuration validation failed. Please check your credentials and re-run 'nbctl configure add'.")
-			return err
-		}
-		fmt.Println("Configuration validated successfully.")
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Profile '", profileName, "' saved to", configFile); err != nil {
 			_ = err
 		}
