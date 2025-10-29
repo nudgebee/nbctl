@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/guptarohit/asciigraph"
 	"github.com/machinebox/graphql"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -13,6 +14,19 @@ import (
 	"nudgebee.com/nbctl/pkg/client"
 	"nudgebee.com/nbctl/pkg/format"
 )
+
+func renderChart(payload []MetricsResult) {
+	if len(payload) == 0 {
+		format.GetFormat().Print("No data to plot")
+		return
+	}
+
+	for _, p := range payload {
+		graph := asciigraph.Plot(p.Values, asciigraph.Caption(fmt.Sprintf("%v", p.Metric)))
+		format.GetFormat().Print(graph)
+		fmt.Println()
+	}
+}
 
 type MetricsQueryResponse struct {
 	MetricsQuery struct {
@@ -63,6 +77,7 @@ var metricsQueryCmd = &cobra.Command{
 		startTimeStr, _ := cmd.Flags().GetString("start-time")
 		endTimeStr, _ := cmd.Flags().GetString("end-time")
 		instant, _ := cmd.Flags().GetBool("instant")
+		chart, _ := cmd.Flags().GetBool("chart")
 
 		if startTimeStr == "" {
 			startTimeStr = time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
@@ -154,7 +169,11 @@ var metricsQueryCmd = &cobra.Command{
 				{Header: "Values", Field: "Values"},
 			},
 		}
-		format.GetFormat().Print(table)
+		if chart {
+			renderChart(respData.MetricsQuery.Results[0].Payload)
+		} else {
+			format.GetFormat().Print(table)
+		}
 		return nil
 	},
 }
@@ -166,4 +185,5 @@ func init() {
 	metricsQueryCmd.Flags().String("end-time", "", "End time (RFC3339)")
 	metricsQueryCmd.Flags().String("account-id", "", "Account ID")
 	metricsQueryCmd.Flags().Bool("instant", false, "Instant query")
+	metricsQueryCmd.Flags().Bool("chart", false, "Display data as a chart")
 }
