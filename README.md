@@ -21,6 +21,28 @@ go install github.com/nudgebee/nbctl@latest
 
 This will download, compile, and install the `nbctl` executable in your Go binary path (usually `$GOPATH/bin` or `$HOME/go/bin`). Make sure this directory is in your system's `PATH` to run `nbctl` from any location.
 
+### Download Binary
+
+You can also download the pre-compiled binary directly from the [GitHub Releases page](https://github.com/nudgebee/nbctl/releases/latest).
+
+**Linux (64-bit):**
+
+```bash
+curl -LO https://github.com/nudgebee/nbctl/releases/latest/download/nbctl-linux-amd64
+chmod +x nbctl-linux-amd64
+sudo mv nbctl-linux-amd64 /usr/local/bin/nbctl
+```
+
+**macOS (Apple Silicon):**
+
+```bash
+curl -LO https://github.com/nudgebee/nbctl/releases/latest/download/nbctl-darwin-arm64
+chmod +x nbctl-darwin-arm64
+sudo mv nbctl-darwin-arm64 /usr/local/bin/nbctl
+```
+
+After downloading, make sure the binary is executable and moved to a directory included in your system's `PATH` (e.g., `/usr/local/bin`).
+
 ## Configuration
 
 Before using most `nbctl` commands, you need to configure your Nudgebee API credentials. `nbctl` supports managing multiple configuration profiles, allowing you to easily switch between different Nudgebee environments or user accounts.
