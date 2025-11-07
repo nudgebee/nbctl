@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/machinebox/graphql"
+	"github.com/prelude-org/nbctl/pkg/nubi/tools"
 )
 
 type NubiClient struct {
@@ -18,6 +19,7 @@ type NubiClient struct {
 	SessionID      string
 	ConversationID string
 	Endpoint       string
+	ToolRegistry   map[string]tools.Tool
 }
 
 func New(client *graphql.Client, accountID, username, sessionID, endpoint string) *NubiClient {
@@ -27,7 +29,22 @@ func New(client *graphql.Client, accountID, username, sessionID, endpoint string
 		Username:  username,
 		SessionID: sessionID,
 		Endpoint:  endpoint,
+		ToolRegistry: map[string]tools.Tool{
+			"shell":         &tools.ShellTool{},
+			"grep":          &tools.GrepTool{},
+			"readfile":      &tools.ReadFileTool{},
+			"readmanyfiles": &tools.ReadManyFilesTool{},
+			"search":        &tools.SearchTool{},
+		},
 	}
+}
+
+func (c *NubiClient) ExecuteTool(ctx context.Context, name string, args any) (string, error) {
+	tool, ok := c.ToolRegistry[name]
+	if !ok {
+		return "", fmt.Errorf("tool not found: %s", name)
+	}
+	return tool.Run(ctx, args)
 }
 
 type ConversationMessage struct {
