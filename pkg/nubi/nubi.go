@@ -19,28 +19,22 @@ type NubiClient struct {
 	SessionID      string
 	ConversationID string
 	Endpoint       string
-	ToolRegistry   map[string]tools.Tool
+	ToolRegistry   *tools.Registry
 }
 
 func New(client *graphql.Client, accountID, username, sessionID, endpoint string) *NubiClient {
 	return &NubiClient{
-		Client:    client,
-		AccountID: accountID,
-		Username:  username,
-		SessionID: sessionID,
-		Endpoint:  endpoint,
-		ToolRegistry: map[string]tools.Tool{
-			"shell":         &tools.ShellTool{},
-			"grep":          &tools.GrepTool{},
-			"readfile":      &tools.ReadFileTool{},
-			"readmanyfiles": &tools.ReadManyFilesTool{},
-			"search":        &tools.SearchTool{},
-		},
+		Client:       client,
+		AccountID:    accountID,
+		Username:     username,
+		SessionID:    sessionID,
+		Endpoint:     endpoint,
+		ToolRegistry: tools.NewRegistry(),
 	}
 }
 
 func (c *NubiClient) ExecuteTool(ctx context.Context, name string, args any) (string, error) {
-	tool, ok := c.ToolRegistry[name]
+	tool, ok := c.ToolRegistry.GetTool(name)
 	if !ok {
 		return "", fmt.Errorf("tool not found: %s", name)
 	}
