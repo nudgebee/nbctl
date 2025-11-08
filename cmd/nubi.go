@@ -29,7 +29,7 @@ import (
 var suggestions = []prompt.Suggest{
 	{Text: "/help", Description: "Show this help message"},
 	{Text: "/bookmarks", Description: "Manage your bookmarks"},
-	{Text: "/conversation", Description: "Switch to a different conversation"},
+	{Text: "/conversation", Description: "Start a new conversation or switch to another one"},
 	{Text: "/history", Description: "Show the last n conversations (default: 10)"},
 	{Text: "/account", Description: "Switch to a different account"},
 	{Text: "/agents", Description: "List available agents"},
@@ -220,9 +220,7 @@ func (s *nubiShell) executor(in string) {
 					response, status, err = s.poll(ctx)
 				}
 			default:
-				// For other statuses like COMPLETED, FAILED, etc., start a new conversation
-				s.nubiClient.ConversationID = ""
-				s.nubiClient.SessionID = uuid.New().String()
+				// For other statuses like COMPLETED, FAILED, etc., continue the conversation
 				response, status, err = s.triggerAndPoll(ctx, in)
 			}
 		}
@@ -276,7 +274,9 @@ func (s *nubiShell) handleSlashCommand(in string) {
 	switch command {
 	case "/conversation":
 		if len(parts) < 2 {
-			fmt.Println("Usage: /conversation <id>")
+			s.nubiClient.ConversationID = ""
+			s.nubiClient.SessionID = uuid.New().String()
+			fmt.Println("Started a new conversation.")
 			return
 		}
 		conversationID := parts[1]
@@ -360,7 +360,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 		fmt.Println("Available commands:")
 		fmt.Println("  /help: Show this help message")
 		fmt.Println("  /bookmarks [add|remove|list]: Manage your bookmarks")
-		fmt.Println("  /conversation <id>: Switch to a different conversation")
+		fmt.Println("  /conversation [id]: Start a new conversation or switch to a different one")
 		fmt.Println("  /history [n]: Show the last n conversations (default: 10)")
 		fmt.Println("  /account <id>: Switch to a different account")
 		fmt.Println("  /agents: List available agents")
