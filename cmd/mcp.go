@@ -36,6 +36,8 @@ This command listens for JSON-RPC 2.0 messages on stdin and sends responses to s
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := log.New(os.Stderr, "[mcp-server] ", log.LstdFlags)
 
+		oneShot, _ := cmd.Flags().GetBool("one-shot")
+
 		accountID := viper.GetString("account-id")
 		if accountID == "" {
 			return fmt.Errorf("account-id is required, please provide it as an argument or set it in your config file")
@@ -94,7 +96,19 @@ This command listens for JSON-RPC 2.0 messages on stdin and sends responses to s
 						if status != "IN_PROGRESS" && status != "WAITING" {
 							var result any
 							if err := json.Unmarshal([]byte(resp), &result); err == nil {
+								if oneShot {
+									// Give the server a moment to write the response before exiting.
+									time.AfterFunc(100*time.Millisecond, func() {
+										os.Exit(0)
+									})
+								}
 								return nil, NubiToolOutput{Response: result}, nil
+							}
+
+							if oneShot {
+								time.AfterFunc(100*time.Millisecond, func() {
+									os.Exit(0)
+								})
 							}
 							return nil, NubiToolOutput{Response: resp}, nil
 						}
@@ -121,4 +135,5 @@ This command listens for JSON-RPC 2.0 messages on stdin and sends responses to s
 
 func init() {
 	rootCmd.AddCommand(mcpCmd)
+	mcpCmd.Flags().Bool("one-shot", false, "Terminate the server after the first successful response")
 }
