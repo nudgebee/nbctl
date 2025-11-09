@@ -29,15 +29,13 @@ type NubiToolOutput struct {
 
 var mcpCmd = &cobra.Command{
 
-	Use:   "mcp",
+	Use: "mcp",
 
 	Short: "Run the Model-Context-Protocol (MCP) server",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		logger := log.New(os.Stderr, "[mcp-server] ", log.LstdFlags)
-
-
 
 		accountID := viper.GetString("account-id")
 
@@ -47,8 +45,6 @@ var mcpCmd = &cobra.Command{
 
 		}
 
-
-
 		username := viper.GetString("username")
 
 		if username == "" {
@@ -56,8 +52,6 @@ var mcpCmd = &cobra.Command{
 			return fmt.Errorf("username is required, please set it in your config file")
 
 		}
-
-
 
 		nubiClient := nubi.New(
 
@@ -70,14 +64,9 @@ var mcpCmd = &cobra.Command{
 			"", // SessionID will be set per-request
 
 			viper.GetString("endpoint"),
-
 		)
 
-
-
 		server := mcp.NewServer(&mcp.Implementation{Name: "nubi-mcp-server", Version: "v1.0.0"}, nil)
-
-
 
 		agents, err := nubiClient.ListAgents()
 
@@ -103,29 +92,21 @@ var mcpCmd = &cobra.Command{
 
 					logger.Printf("Invoking agent %q with query: %s", agent.Name, input.Query)
 
-
-
 					// Create a new session for each request
 
 					sessionID := uuid.New().String()
 
 					nubiClient.SessionID = sessionID
 
-
-
 					// The query to Nubi should include the agent name
 
 					fullQuery := fmt.Sprintf("@%s %s", agent.Name, input.Query)
-
-
 
 					if err := nubiClient.TriggerInvestigation(ctx, fullQuery); err != nil {
 
 						return nil, NubiToolOutput{}, fmt.Errorf("failed to trigger investigation: %w", err)
 
 					}
-
-
 
 					// Poll for the result
 
@@ -147,8 +128,6 @@ var mcpCmd = &cobra.Command{
 
 							}
 
-
-
 							if status != "IN_PROGRESS" && status != "WAITING" {
 
 								var result any
@@ -169,18 +148,15 @@ var mcpCmd = &cobra.Command{
 
 				}
 
-
-
 				// The tool name should not have the "@" prefix
 
 				toolName := strings.TrimPrefix(agent.Name, "@")
 
 				mcp.AddTool(server, &mcp.Tool{
 
-					Name:        toolName,
+					Name: toolName,
 
 					Description: agent.Description,
-
 				}, handler)
 
 				logger.Printf("Registered tool: %s", toolName)
@@ -188,8 +164,6 @@ var mcpCmd = &cobra.Command{
 			}
 
 		}
-
-
 
 		logger.Println("MCP server started, waiting for requests...")
 
@@ -202,10 +176,7 @@ var mcpCmd = &cobra.Command{
 		return nil
 
 	},
-
 }
-
-
 
 func init() {
 
