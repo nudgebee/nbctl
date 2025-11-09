@@ -134,7 +134,13 @@ func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger
 
 func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context, *mcp.CallToolRequest, GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
-		// Create a temporary buffer to capture the command's output
+		originalOut := cmd.OutOrStdout()
+		originalErr := cmd.ErrOrStderr()
+		defer func() {
+			cmd.SetOut(originalOut)
+			cmd.SetErr(originalErr)
+		}()
+
 		var outBuf, errBuf bytes.Buffer
 		cmd.SetOut(&outBuf)
 		cmd.SetErr(&errBuf)
