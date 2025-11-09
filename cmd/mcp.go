@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -47,56 +45,44 @@ var mcpCmd = &cobra.Command{
 			"", // SessionID will be set per-request
 			viper.GetString("endpoint"),
 		)
+
 		server := mcp.NewServer(&mcp.Implementation{Name: "nubi-mcp-server", Version: "v1.0.0"}, nil)
-		agents, err := nubiClient.ListAgents()
-		if err != nil {
-			logger.Printf("failed to list nubi agents: %v", err)
-			// Continue without real agents if the API call fails
-		} else {
-			for _, agent := range agents {
-				// Capture the agent for the closure
-				agent := agent
-				handler := func(ctx context.Context, req *mcp.CallToolRequest, input NubiToolInput) (
-					*mcp.CallToolResult, NubiToolOutput, error,
-				) {
-					logger.Printf("Invoking agent %q with query: %s", agent.Name, input.Query)
-					// Create a new session for each request
-					sessionID := uuid.New().String()
-					nubiClient.SessionID = sessionID
-					// The query to Nubi should include the agent name
-					fullQuery := fmt.Sprintf("@%s %s", agent.Name, input.Query)
-					if err := nubiClient.TriggerInvestigation(ctx, fullQuery); err != nil {
-						return nil, NubiToolOutput{}, fmt.Errorf("failed to trigger investigation: %w", err)
-					}
-					// Poll for the result
-					for {
-						select {
-						case <-ctx.Done():
-							return nil, NubiToolOutput{}, ctx.Err()
-						case <-time.After(2 * time.Second):
-							resp, status, _, _, _, _, err := nubiClient.GetConversation(ctx)
-							if err != nil {
-								return nil, NubiToolOutput{}, err
-							}
-							if status != "IN_PROGRESS" && status != "WAITING" {
-								var result any
-								if err := json.Unmarshal([]byte(resp), &result); err == nil {
-									return nil, NubiToolOutput{Response: result}, nil
-								}
-								return nil, NubiToolOutput{Response: resp}, nil
-							}
-						}
-					}
-				}
-				// The tool name should not have the "@" prefix
-				toolName := strings.TrimPrefix(agent.Name, "@")
-				mcp.AddTool(server, &mcp.Tool{
-					Name:        toolName,
-					Description: agent.Description,
-				}, handler)
-				logger.Printf("Registered tool: %s", toolName)
+
+		handler := func(ctx context.Context, req *mcp.CallToolRequest, input NubiToolInput) (
+			*mcp.CallToolResult, NubiToolOutput, error,
+		) {
+			logger.Printf("Invoking nubi with query: %s", input.Query)
+
+			// Create a new session for each request
+			sessionID := uuid.New().String()
+			nubiClient.SessionID = sessionID
+
+			if err := nubiClient.TriggerInvestigation(ctx, input.Query); err != nil {
+				return nil, NubiToolOutput{}, fmt.Errorf("failed to trigger investigation: %w", err)
 			}
+
+			// Get the conversation once
+			resp, status, _, _, _, _, err := nubiClient.GetConversation(ctx)
+			if err != nil {
+				return nil, NubiToolOutput{}, err
+			}
+
+			if status != "IN_PROGRESS" && status != "WAITING" {
+				var result any
+				if err := json.Unmarshal([]byte(resp), &result); err == nil {
+					return nil, NubiToolOutput{Response: result}, nil
+				}
+				return nil, NubiToolOutput{Response: resp}, nil
+			}
+			return nil, NubiToolOutput{Response: "Nubi is still processing the request."}, nil
 		}
+
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "nubi",
+			Description: "Interact with the Nubi agent to get insights and perform actions.",
+		}, handler)
+		logger.Printf("Registered tool: nubi")
+
 		logger.Println("MCP server started, waiting for requests...")
 		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 			return fmt.Errorf("MCP server exited with error: %w", err)
