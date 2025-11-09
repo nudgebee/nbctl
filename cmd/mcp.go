@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time" // Re-add time import
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,20 +62,26 @@ var mcpCmd = &cobra.Command{
 				return nil, NubiToolOutput{}, fmt.Errorf("failed to trigger investigation: %w", err)
 			}
 
-			// Get the conversation once
-			resp, status, _, _, _, _, err := nubiClient.GetConversation(ctx)
-			if err != nil {
-				return nil, NubiToolOutput{}, err
-			}
+			// Poll for the result
+			for {
+				select {
+				case <-ctx.Done():
+					return nil, NubiToolOutput{}, ctx.Err()
+				case <-time.After(2 * time.Second):
+					resp, status, _, _, _, _, err := nubiClient.GetConversation(ctx)
+					if err != nil {
+						return nil, NubiToolOutput{}, err
+					}
 
-			if status != "IN_PROGRESS" && status != "WAITING" {
-				var result any
-				if err := json.Unmarshal([]byte(resp), &result); err == nil {
-					return nil, NubiToolOutput{Response: result}, nil
+					if status != "IN_PROGRESS" && status != "WAITING" {
+						var result any
+						if err := json.Unmarshal([]byte(resp), &result); err == nil {
+							return nil, NubiToolOutput{Response: result}, nil
+						}
+						return nil, NubiToolOutput{Response: resp}, nil
+					}
 				}
-				return nil, NubiToolOutput{Response: resp}, nil
 			}
-			return nil, NubiToolOutput{Response: "Nubi is still processing the request."}, nil
 		}
 
 		mcp.AddTool(server, &mcp.Tool{
