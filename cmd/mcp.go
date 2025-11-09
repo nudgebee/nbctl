@@ -79,7 +79,7 @@ var mcpCmd = &cobra.Command{
 
 		mcp.AddTool(server, &mcp.Tool{
 			Name:        "nubi",
-			Description: "Interact with the Nubi agent to get insights and perform actions.",
+			Description: "Interact with the Nudgebee to troubleshoot Cluster, get optimizations & Recent issues.",
 		}, handler)
 		logger.Printf("Registered tool: nubi")
 
