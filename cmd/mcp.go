@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"time" // Re-add time import
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -24,6 +26,18 @@ type NubiToolInput struct {
 // NubiToolOutput represents the output from the Nubi tool.
 type NubiToolOutput struct {
 	Response any `json:"response" jsonschema:"The response from the Nubi agent, formatted as Markdown."`
+}
+
+// GenericToolInput represents the input for a generic nbctl command tool.
+type GenericToolInput struct {
+	Flags map[string]interface{} `json:"flags"`
+	Args  []string               `json:"args"`
+}
+
+// GenericToolOutput represents the output from a generic nbctl command tool.
+type GenericToolOutput struct {
+	Output string `json:"output"`
+	Error  string `json:"error,omitempty"`
 }
 
 var mcpCmd = &cobra.Command{
@@ -86,12 +100,61 @@ var mcpCmd = &cobra.Command{
 		}, handler)
 		logger.Printf("Registered tool: nubi")
 
+		registerCommands(rootCmd, server, logger)
+
 		logger.Println("MCP server started, waiting for requests...")
 		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 			return fmt.Errorf("MCP server exited with error: %w", err)
 		}
 		return nil
 	},
+}
+
+func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger) {
+	for _, c := range cmd.Commands() {
+		if c.Name() == "mcp" || c.Name() == "nubi" {
+			continue
+		}
+
+		toolName := strings.ReplaceAll(c.CommandPath(), "nbctl ", "")
+		toolName = strings.ReplaceAll(toolName, " ", "_")
+
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        toolName,
+			Description: c.Short,
+		}, createHandler(c, logger))
+
+		logger.Printf("Registered tool: %s", toolName)
+
+		if c.HasSubCommands() {
+			registerCommands(c, server, logger)
+		}
+	}
+}
+
+func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context, *mcp.CallToolRequest, GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
+		// Create a temporary buffer to capture the command's output
+		var outBuf, errBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&errBuf)
+
+		// Set flags
+		for k, v := range input.Flags {
+			cmd.Flags().Set(k, fmt.Sprintf("%v", v))
+		}
+
+		// Execute the command
+		err := cmd.RunE(cmd, input.Args)
+		if err != nil {
+			errBuf.WriteString(err.Error())
+		}
+
+		return nil, GenericToolOutput{
+			Output: outBuf.String(),
+			Error:  errBuf.String(),
+		}, nil
+	}
 }
 
 func init() {
