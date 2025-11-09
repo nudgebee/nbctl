@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/config"
 	"nudgebee.com/nbctl/pkg/format"
 )
 
@@ -63,7 +62,6 @@ func RunCommandCaptureOutput(command *cobra.Command, args []string) (string, err
 	rootCmd.SetOut(&buf)
 	format.GetFormat().SetOutput(&buf)
 	// ensure viper/config is initialized so tests pick up env vars
-	config.InitConfig()
 	rootCmd.SetArgs(args)
 	err := rootCmd.Execute()
 	return buf.String(), err
@@ -137,9 +135,6 @@ func RequireIntegration(t testing.TB) {
 	if !IntegrationEnabled() {
 		t.Skip("integration tests disabled; set NUDGEBEE_INTEGRATION=1 to enable")
 	}
-
-	// initialize config so viper reads environment variables and any config file
-	config.InitConfig()
 
 	// quick check for required env vars
 	if os.Getenv("NUDGEBEE_ENDPOINT") == "" || os.Getenv("NUDGEBEE_API_KEY") == "" {

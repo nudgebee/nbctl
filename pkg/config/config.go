@@ -4,11 +4,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
 
 var inited bool
+
+// Reset is for testing purposes only to reset the init guard and viper.
+func Reset() {
+	inited = false
+	viper.Reset()
+}
 
 func IsConfigured() bool {
 	return viper.GetString("endpoint") != "" &&
@@ -38,6 +45,7 @@ func InitConfig() {
 	viper.SetConfigType("yaml")
 
 	viper.SetEnvPrefix("NUDGEBEE")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {

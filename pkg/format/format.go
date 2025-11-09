@@ -223,14 +223,14 @@ func (f *Format) printStruct(val reflect.Value) {
 	}
 
 	if evidenceField.IsValid() {
-		_, _ = fmt.Fprintf(w, "\n%s:\n", evidenceFieldName)
-		f.printEvidences(w, evidenceFieldName, evidenceField.Interface().(json.RawMessage))
+		_, _ = fmt.Fprintf(f.writer, "\n%s:\n", evidenceFieldName)
+		f.printEvidences(evidenceFieldName, evidenceField.Interface().(json.RawMessage))
 	}
 
 	_ = w.Flush()
 }
 
-func (f *Format) printEvidences(w *tabwriter.Writer, fieldName string, evidences json.RawMessage) {
+func (f *Format) printEvidences(fieldName string, evidences json.RawMessage) {
 	var evidenceData []struct {
 		Data           json.RawMessage `json:"data"`
 		Type           string          `json:"type"`
@@ -241,14 +241,14 @@ func (f *Format) printEvidences(w *tabwriter.Writer, fieldName string, evidences
 
 	if err := json.Unmarshal(evidences, &evidenceData); err != nil {
 		// if unmarshal fails, print as string
-		_, _ = fmt.Fprintf(w, "%s\t%s\n", fieldName, string(evidences))
+		_, _ = fmt.Fprintf(f.writer, "%s\t%s\n", fieldName, string(evidences))
 		return
 	}
 
 	bold := lipgloss.NewStyle().Bold(true)
 
 	for _, ev := range evidenceData {
-		_, _ = fmt.Fprintf(w, "\n%s:\n", bold.Render(ev.AdditionalInfo.Title))
+		_, _ = fmt.Fprintf(f.writer, "\n%s:\n", bold.Render(ev.AdditionalInfo.Title))
 		switch ev.Type {
 		case "table":
 			var tableData struct {
@@ -257,26 +257,26 @@ func (f *Format) printEvidences(w *tabwriter.Writer, fieldName string, evidences
 			}
 			if err := json.Unmarshal(ev.Data, &tableData); err == nil {
 				// print table
-				_, _ = fmt.Fprintln(w, strings.Join(tableData.Headers, "\t"))
+				_, _ = fmt.Fprintln(f.writer, strings.Join(tableData.Headers, "\t"))
 				for _, row := range tableData.Rows {
 					var rowStr []string
 					for _, cell := range row {
 						rowStr = append(rowStr, fmt.Sprintf("%v", cell))
 					}
-					_, _ = fmt.Fprintln(w, strings.Join(rowStr, "\t"))
+					_, _ = fmt.Fprintln(f.writer, strings.Join(rowStr, "\t"))
 				}
 			}
 		case "json":
 			var jsonData map[string]any
 			if err := json.Unmarshal(ev.Data, &jsonData); err == nil {
 				for k, v := range jsonData {
-					_, _ = fmt.Fprintf(w, "\t%s\t%v\n", k, v)
+					_, _ = fmt.Fprintf(f.writer, "\t%s\t%v\n", k, v)
 				}
 			}
 		case "gz":
-			_, _ = fmt.Fprintf(w, "\t[gzipped data]\n")
+			_, _ = fmt.Fprintf(f.writer, "\t[gzipped data]\n")
 		default:
-			_, _ = fmt.Fprintf(w, "\t%s\n", string(ev.Data))
+			_, _ = fmt.Fprintf(f.writer, "\t%s\n", string(ev.Data))
 		}
 	}
 }
