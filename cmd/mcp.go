@@ -17,12 +17,12 @@ import (
 
 // NubiToolInput represents the input for the Nubi tool.
 type NubiToolInput struct {
-	Query string `json:"query" jsonschema:"the query to send to the agent"`
+	Query string `json:"query" jsonschema:"The user's question or request in human-readable form."`
 }
 
 // NubiToolOutput represents the output from the Nubi tool.
 type NubiToolOutput struct {
-	Response any `json:"response" jsonschema:"the response from the agent"`
+	Response any `json:"response" jsonschema:"The response from the Nubi agent, formatted as Markdown."`
 }
 
 var mcpCmd = &cobra.Command{
