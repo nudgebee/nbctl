@@ -43,7 +43,7 @@ var mcpCmd = &cobra.Command{
 			client.NewClient(),
 			accountID,
 			username,
-			"", // SessionID will be set per-request
+			uuid.New().String(), // Initialize SessionID once
 			viper.GetString("endpoint"),
 		)
 
@@ -52,11 +52,7 @@ var mcpCmd = &cobra.Command{
 		handler := func(ctx context.Context, req *mcp.CallToolRequest, input NubiToolInput) (
 			*mcp.CallToolResult, NubiToolOutput, error,
 		) {
-			logger.Printf("Invoking nubi with query: %s", input.Query)
-
-			// Create a new session for each request
-			sessionID := uuid.New().String()
-			nubiClient.SessionID = sessionID
+			logger.Printf("Invoking nubi with query: %s (SessionID: %s)", input.Query, nubiClient.SessionID)
 
 			if err := nubiClient.TriggerInvestigation(ctx, input.Query); err != nil {
 				return nil, NubiToolOutput{}, fmt.Errorf("failed to trigger investigation: %w", err)
