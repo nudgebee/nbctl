@@ -43,6 +43,10 @@ func TestInitConfig(t *testing.T) {
 	})
 
 	t.Run("loads config from environment variables", func(t *testing.T) {
+		// Point home to a temp dir to prevent loading the user's config
+		tmpdir := t.TempDir()
+		t.Setenv("HOME", tmpdir)
+
 		// Set environment variables
 		t.Setenv("NUDGEBEE_ENDPOINT", "http://env.com")
 		t.Setenv("NUDGEBEE_API_KEY", "env-key")

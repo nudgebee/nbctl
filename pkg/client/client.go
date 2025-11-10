@@ -378,6 +378,10 @@ func (e GraphQLErrors) Error() string {
 	return buf.String()
 }
 
+// var DefaultClientFactory = func() *graphql.Client {
+// 	return NewClient()
+// }
+
 // Run executes a GraphQL request.
 func Run(ctx context.Context, req *graphql.Request, resp any) error {
 	config.InitConfig()
