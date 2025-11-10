@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"nudgebee.com/nbctl/pkg/testutil"
 )
 
@@ -21,9 +22,9 @@ func TestInitConfig(t *testing.T) {
 		// Create a temporary config file
 		tmpdir := t.TempDir()
 		configPath := filepath.Join(tmpdir, ".nudgebee")
-		os.MkdirAll(configPath, 0755)
+		require.NoError(t, os.MkdirAll(configPath, 0755))
 		configFilePath := filepath.Join(configPath, "config.yaml")
-		os.WriteFile(configFilePath, []byte("endpoint: http://test.com\napi-key: test-key\nusername: test-user\naccount-id: test-account"), 0644)
+		require.NoError(t, os.WriteFile(configFilePath, []byte("endpoint: http://test.com\napi-key: test-key\nusername: test-user\naccount-id: test-account"), 0644))
 
 		// Point home to our temp dir
 		t.Setenv("HOME", tmpdir)
@@ -65,9 +66,9 @@ func TestInitConfig(t *testing.T) {
 		// Create a temporary config file with profiles
 		tmpdir := t.TempDir()
 		configPath := filepath.Join(tmpdir, ".nudgebee")
-		os.MkdirAll(configPath, 0755)
+		require.NoError(t, os.MkdirAll(configPath, 0755))
 		configFilePath := filepath.Join(configPath, "config.yaml")
-		os.WriteFile(configFilePath, []byte(`
+		require.NoError(t, os.WriteFile(configFilePath, []byte(`
 profiles:
   prof1:
     endpoint: http://prof1.com
@@ -75,7 +76,7 @@ profiles:
     username: prof1-user
     account-id: prof1-account
 current-profile: prof1
-`), 0644)
+`), 0644))
 
 		// Point home to our temp dir
 		t.Setenv("HOME", tmpdir)

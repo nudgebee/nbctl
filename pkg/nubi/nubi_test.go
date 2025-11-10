@@ -10,6 +10,7 @@ import (
 
 	"github.com/machinebox/graphql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestNubiClient(handler http.HandlerFunc) (*NubiClient, func()) {
@@ -29,7 +30,7 @@ func TestNubiClient_GetConversationMessages(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
 	client, teardown := newTestNubiClient(handler)
@@ -54,7 +55,7 @@ func TestNubiClient_ShowHistory(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
 	client, teardown := newTestNubiClient(handler)
@@ -78,7 +79,7 @@ func TestNubiClient_TriggerInvestigation(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
 	client, teardown := newTestNubiClient(handler)

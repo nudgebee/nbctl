@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestErrorf(t *testing.T) {
@@ -21,10 +22,11 @@ func TestErrorf(t *testing.T) {
 	Errorf("test error %s", "message")
 
 	// Close the write end of the pipe
-	w.Close()
+	require.NoError(t, w.Close())
 	// Read everything from the read end of the pipe
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, err := io.Copy(&buf, r)
+	require.NoError(t, err)
 	// Restore the original stderr
 	os.Stderr = oldStderr
 
