@@ -123,9 +123,16 @@ func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger
 			toolName = strings.ReplaceAll(toolName, " ", "_")
 			toolName = strings.ReplaceAll(toolName, "-", "_")
 
+			inputSchema, err := generateInputSchema(c)
+			if err != nil {
+				logger.Printf("error generating schema for command %s: %v", toolName, err)
+				continue
+			}
+
 			mcp.AddTool(server, &mcp.Tool{
 				Name:        toolName,
 				Description: c.Short,
+				InputSchema: inputSchema,
 			}, createHandler(c, logger))
 
 			logger.Printf("Registered tool: %s", toolName)
@@ -180,6 +187,59 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 			Error:  errBuf.String(),
 		}, nil
 	}
+}
+
+// JSONSchema represents a basic JSON schema.
+type JSONSchema struct {
+	Type        string                `json:"type"`
+	Properties  map[string]JSONSchema `json:"properties,omitempty"`
+	Items       *JSONSchema           `json:"items,omitempty"`
+	Description string                `json:"description,omitempty"`
+	Default     interface{}           `json:"default,omitempty"`
+}
+
+func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
+	flagProperties := make(map[string]JSONSchema)
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		var schemaType string
+		switch f.Value.Type() {
+		case "string", "stringSlice":
+			schemaType = "string"
+		case "int", "intSlice":
+			schemaType = "integer"
+		case "bool", "boolSlice":
+			schemaType = "boolean"
+		case "float64", "float64Slice":
+			schemaType = "number"
+		default:
+			schemaType = "string" // Default to string for unknown types
+		}
+
+		flagProperties[f.Name] = JSONSchema{
+			Type:        schemaType,
+			Description: f.Usage,
+			Default:     f.DefValue,
+		}
+	})
+
+	schema := JSONSchema{
+		Type: "object",
+		Properties: map[string]JSONSchema{
+			"flags": {
+				Type:       "object",
+				Properties: flagProperties,
+			},
+			"args": {
+				Type: "array",
+				Items: &JSONSchema{
+					Type: "string",
+				},
+				Description: "Positional arguments for the command.",
+			},
+		},
+	}
+
+	return json.Marshal(schema)
 }
 
 func init() {
