@@ -147,7 +147,9 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 			cmd.SetOut(originalOut)
 			cmd.SetErr(originalErr)
 			for name, value := range originalFlags {
-				cmd.Flags().Set(name, value)
+				if err := cmd.Flags().Set(name, value); err != nil {
+					logger.Printf("error restoring flag %s: %v", name, err)
+				}
 			}
 		}()
 
