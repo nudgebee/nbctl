@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"nudgebee.com/nbctl/pkg/client"
 	"nudgebee.com/nbctl/pkg/nubi"
@@ -136,9 +137,18 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 	return func(ctx context.Context, req *mcp.CallToolRequest, input GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
 		originalOut := cmd.OutOrStdout()
 		originalErr := cmd.ErrOrStderr()
+		originalFlags := make(map[string]string)
+
+		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			originalFlags[f.Name] = f.Value.String()
+		})
+
 		defer func() {
 			cmd.SetOut(originalOut)
 			cmd.SetErr(originalErr)
+			for name, value := range originalFlags {
+				cmd.Flags().Set(name, value)
+			}
 		}()
 
 		var outBuf, errBuf bytes.Buffer
@@ -147,7 +157,9 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 
 		// Set flags
 		for k, v := range input.Flags {
-			cmd.Flags().Set(k, fmt.Sprintf("%v", v))
+			if err := cmd.Flags().Set(k, fmt.Sprintf("%v", v)); err != nil {
+				return nil, GenericToolOutput{Error: fmt.Sprintf("error setting flag %s: %v", k, err)}, nil
+			}
 		}
 
 		// Execute the command
