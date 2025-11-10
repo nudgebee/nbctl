@@ -121,6 +121,7 @@ func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger
 		if c.Runnable() {
 			toolName := strings.ReplaceAll(c.CommandPath(), "nbctl ", "")
 			toolName = strings.ReplaceAll(toolName, " ", "_")
+			toolName = strings.ReplaceAll(toolName, "-", "_")
 
 			mcp.AddTool(server, &mcp.Tool{
 				Name:        toolName,
