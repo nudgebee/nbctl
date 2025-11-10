@@ -1,18 +1,23 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"time" // Re-add time import
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"nudgebee.com/nbctl/pkg/client"
+	"nudgebee.com/nbctl/pkg/format"
 	"nudgebee.com/nbctl/pkg/nubi"
 )
 
@@ -24,6 +29,18 @@ type NubiToolInput struct {
 // NubiToolOutput represents the output from the Nubi tool.
 type NubiToolOutput struct {
 	Response any `json:"response" jsonschema:"The response from the Nubi agent, formatted as Markdown."`
+}
+
+// GenericToolInput represents the input for a generic nbctl command tool.
+type GenericToolInput struct {
+	Flags map[string]any `json:"flags"`
+	Args  []string       `json:"args"`
+}
+
+// GenericToolOutput represents the output from a generic nbctl command tool.
+type GenericToolOutput struct {
+	Output any    `json:"output"`
+	Error  string `json:"error,omitempty"`
 }
 
 var mcpCmd = &cobra.Command{
@@ -86,12 +103,192 @@ var mcpCmd = &cobra.Command{
 		}, handler)
 		logger.Printf("Registered tool: nubi")
 
+		registerCommands(rootCmd, server, logger)
+
 		logger.Println("MCP server started, waiting for requests...")
 		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 			return fmt.Errorf("MCP server exited with error: %w", err)
 		}
 		return nil
 	},
+}
+
+func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger) {
+	for _, c := range cmd.Commands() {
+		if c.Name() == "mcp" || c.Name() == "nubi" || c.Name() == "completion" || c.Name() == "configure" || c.Name() == "help" || c.Name() == "version" {
+			continue
+		}
+
+		// Only register the command as a tool if it's runnable.
+		if c.Runnable() {
+			toolName := strings.ReplaceAll(c.CommandPath(), "nbctl ", "")
+			toolName = strings.ReplaceAll(toolName, " ", "_")
+			toolName = strings.ReplaceAll(toolName, "-", "_")
+
+			inputSchema, err := generateInputSchema(c)
+			if err != nil {
+				logger.Printf("error generating schema for command %s: %v", toolName, err)
+				continue
+			}
+
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        toolName,
+				Description: c.Short,
+				InputSchema: inputSchema,
+			}, createHandler(c, logger))
+
+			logger.Printf("Registered tool: %s", toolName)
+		}
+
+		// Always recurse into subcommands, even if the parent is not runnable.
+		if c.HasSubCommands() {
+			registerCommands(c, server, logger)
+		}
+	}
+}
+
+func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context, *mcp.CallToolRequest, GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
+		// Backup original state
+		originalOut := cmd.OutOrStdout()
+		originalErr := cmd.ErrOrStderr()
+		originalFlags := make(map[string]string)
+		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			originalFlags[f.Name] = f.Value.String()
+		})
+
+		formatter := format.GetFormat()
+		originalFormat := formatter.Get()
+		originalFormatterWriter := cmd.OutOrStdout() // Default is os.Stdout, which this should resolve to
+
+		// Defer restoration of original state
+		defer func() {
+			cmd.SetOut(originalOut)
+			cmd.SetErr(originalErr)
+			for name, value := range originalFlags {
+				if err := cmd.Flags().Set(name, value); err != nil {
+					logger.Printf("error restoring flag %s: %v", name, err)
+				}
+			}
+			formatter.Set(originalFormat)
+			formatter.SetOutput(originalFormatterWriter)
+		}()
+
+		// Hijack output for this execution
+		var outBuf, errBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&errBuf)
+		formatter.Set("json")
+		formatter.SetOutput(&outBuf)
+
+		// Set flags
+		for k, v := range input.Flags {
+			// Skip nil flags that might come from the model
+			if v == nil {
+				continue
+			}
+			if err := cmd.Flags().Set(k, fmt.Sprintf("%v", v)); err != nil {
+				// Log the error but don't fail the whole command
+				logger.Printf("error setting flag %s: %v", k, err)
+			}
+		}
+
+		// Execute the command
+		err := cmd.RunE(cmd, input.Args)
+		if err != nil {
+			errBuf.WriteString(err.Error())
+		}
+
+		outputStr := outBuf.String()
+		var outputData any
+
+		// Try to unmarshal the output as JSON
+		if err := json.Unmarshal([]byte(outputStr), &outputData); err != nil {
+			// If it fails, it's not JSON. Wrap the raw string in a "response" field.
+			outputData = map[string]string{"Data": strings.TrimSpace(outputStr)}
+		}
+
+		return nil, GenericToolOutput{
+			Output: outputData,
+			Error:  strings.TrimSpace(errBuf.String()),
+		}, nil
+	}
+}
+
+// JSONSchema represents a basic JSON schema.
+type JSONSchema struct {
+	Type        string                `json:"type"`
+	Properties  map[string]JSONSchema `json:"properties,omitempty"`
+	Items       *JSONSchema           `json:"items,omitempty"`
+	Description string                `json:"description,omitempty"`
+	Default     any                   `json:"default,omitempty"`
+}
+
+func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
+	flagProperties := make(map[string]JSONSchema)
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		var schemaType string
+		switch f.Value.Type() {
+		case "string", "stringSlice":
+			schemaType = "string"
+		case "int", "intSlice":
+			schemaType = "integer"
+		case "bool", "boolSlice":
+			schemaType = "boolean"
+		case "float64", "float64Slice":
+			schemaType = "number"
+		default:
+			schemaType = "string" // Default to string for unknown types
+		}
+
+		// Correctly type the default value
+		var defaultValue any
+		var err error
+		switch schemaType {
+		case "integer":
+			defaultValue, err = strconv.Atoi(f.DefValue)
+			if err != nil {
+				defaultValue = 0 // Or some other sensible default
+			}
+		case "boolean":
+			defaultValue, err = strconv.ParseBool(f.DefValue)
+			if err != nil {
+				defaultValue = false
+			}
+		case "number":
+			defaultValue, err = strconv.ParseFloat(f.DefValue, 64)
+			if err != nil {
+				defaultValue = 0.0
+			}
+		default:
+			defaultValue = f.DefValue
+		}
+
+		flagProperties[f.Name] = JSONSchema{
+			Type:        schemaType,
+			Description: f.Usage,
+			Default:     defaultValue,
+		}
+	})
+
+	schema := JSONSchema{
+		Type: "object",
+		Properties: map[string]JSONSchema{
+			"flags": {
+				Type:       "object",
+				Properties: flagProperties,
+			},
+			"args": {
+				Type: "array",
+				Items: &JSONSchema{
+					Type: "string",
+				},
+				Description: "Positional arguments for the command.",
+			},
+		},
+	}
+
+	return json.Marshal(schema)
 }
 
 func init() {

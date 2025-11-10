@@ -146,4 +146,13 @@ var eventsListCmd = &cobra.Command{
 
 func init() {
 	eventsCmd.AddCommand(eventsListCmd)
+	eventsListCmd.Flags().String("account-id", "", "Account ID")
+	eventsListCmd.Flags().String("start-time", "", "Start time (RFC3339)")
+	eventsListCmd.Flags().String("end-time", "", "End time (RFC3339)")
+	eventsListCmd.Flags().Int("limit", 10, "Limit")
+	eventsListCmd.Flags().Int("offset", 0, "Offset")
+	eventsListCmd.Flags().String("subject", "", "Filter by subject (ilike)")
+	eventsListCmd.Flags().String("status", "", "Filter by status")
+	eventsListCmd.Flags().String("title", "", "Filter by title (ilike)")
+	eventsListCmd.Flags().String("priority", "", "Filter by priority")
 }
