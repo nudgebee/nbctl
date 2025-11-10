@@ -117,16 +117,20 @@ func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger
 			continue
 		}
 
-		toolName := strings.ReplaceAll(c.CommandPath(), "nbctl ", "")
-		toolName = strings.ReplaceAll(toolName, " ", "_")
+		// Only register the command as a tool if it's runnable.
+		if c.Runnable() {
+			toolName := strings.ReplaceAll(c.CommandPath(), "nbctl ", "")
+			toolName = strings.ReplaceAll(toolName, " ", "_")
 
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        toolName,
-			Description: c.Short,
-		}, createHandler(c, logger))
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        toolName,
+				Description: c.Short,
+			}, createHandler(c, logger))
 
-		logger.Printf("Registered tool: %s", toolName)
+			logger.Printf("Registered tool: %s", toolName)
+		}
 
+		// Always recurse into subcommands, even if the parent is not runnable.
 		if c.HasSubCommands() {
 			registerCommands(c, server, logger)
 		}
