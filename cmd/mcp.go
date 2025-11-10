@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"nudgebee.com/nbctl/pkg/client"
+	"nudgebee.com/nbctl/pkg/format"
 	"nudgebee.com/nbctl/pkg/nubi"
 )
 
@@ -31,13 +33,13 @@ type NubiToolOutput struct {
 
 // GenericToolInput represents the input for a generic nbctl command tool.
 type GenericToolInput struct {
-	Flags map[string]interface{} `json:"flags"`
-	Args  []string               `json:"args"`
+	Flags map[string]any `json:"flags"`
+	Args  []string       `json:"args"`
 }
 
 // GenericToolOutput represents the output from a generic nbctl command tool.
 type GenericToolOutput struct {
-	Output string `json:"output"`
+	Output any    `json:"output"`
 	Error  string `json:"error,omitempty"`
 }
 
@@ -113,7 +115,7 @@ var mcpCmd = &cobra.Command{
 
 func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger) {
 	for _, c := range cmd.Commands() {
-		if c.Name() == "mcp" || c.Name() == "nubi" {
+		if c.Name() == "mcp" || c.Name() == "nubi" || c.Name() == "completion" || c.Name() == "configure" || c.Name() == "help" || c.Name() == "version" {
 			continue
 		}
 
@@ -147,14 +149,19 @@ func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger
 
 func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context, *mcp.CallToolRequest, GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input GenericToolInput) (*mcp.CallToolResult, GenericToolOutput, error) {
+		// Backup original state
 		originalOut := cmd.OutOrStdout()
 		originalErr := cmd.ErrOrStderr()
 		originalFlags := make(map[string]string)
-
 		cmd.Flags().VisitAll(func(f *pflag.Flag) {
 			originalFlags[f.Name] = f.Value.String()
 		})
 
+		formatter := format.GetFormat()
+		originalFormat := formatter.Get()
+		originalFormatterWriter := cmd.OutOrStdout() // Default is os.Stdout, which this should resolve to
+
+		// Defer restoration of original state
 		defer func() {
 			cmd.SetOut(originalOut)
 			cmd.SetErr(originalErr)
@@ -163,16 +170,26 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 					logger.Printf("error restoring flag %s: %v", name, err)
 				}
 			}
+			formatter.Set(originalFormat)
+			formatter.SetOutput(originalFormatterWriter)
 		}()
 
+		// Hijack output for this execution
 		var outBuf, errBuf bytes.Buffer
 		cmd.SetOut(&outBuf)
 		cmd.SetErr(&errBuf)
+		formatter.Set("json")
+		formatter.SetOutput(&outBuf)
 
 		// Set flags
 		for k, v := range input.Flags {
+			// Skip nil flags that might come from the model
+			if v == nil {
+				continue
+			}
 			if err := cmd.Flags().Set(k, fmt.Sprintf("%v", v)); err != nil {
-				return nil, GenericToolOutput{Error: fmt.Sprintf("error setting flag %s: %v", k, err)}, nil
+				// Log the error but don't fail the whole command
+				logger.Printf("error setting flag %s: %v", k, err)
 			}
 		}
 
@@ -182,9 +199,18 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 			errBuf.WriteString(err.Error())
 		}
 
+		outputStr := outBuf.String()
+		var outputData any
+
+		// Try to unmarshal the output as JSON
+		if err := json.Unmarshal([]byte(outputStr), &outputData); err != nil {
+			// If it fails, it's not JSON. Wrap the raw string in a "response" field.
+			outputData = map[string]string{"Data": strings.TrimSpace(outputStr)}
+		}
+
 		return nil, GenericToolOutput{
-			Output: outBuf.String(),
-			Error:  errBuf.String(),
+			Output: outputData,
+			Error:  strings.TrimSpace(errBuf.String()),
 		}, nil
 	}
 }
@@ -195,7 +221,7 @@ type JSONSchema struct {
 	Properties  map[string]JSONSchema `json:"properties,omitempty"`
 	Items       *JSONSchema           `json:"items,omitempty"`
 	Description string                `json:"description,omitempty"`
-	Default     interface{}           `json:"default,omitempty"`
+	Default     any                   `json:"default,omitempty"`
 }
 
 func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
@@ -215,10 +241,33 @@ func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
 			schemaType = "string" // Default to string for unknown types
 		}
 
+		// Correctly type the default value
+		var defaultValue any
+		var err error
+		switch schemaType {
+		case "integer":
+			defaultValue, err = strconv.Atoi(f.DefValue)
+			if err != nil {
+				defaultValue = 0 // Or some other sensible default
+			}
+		case "boolean":
+			defaultValue, err = strconv.ParseBool(f.DefValue)
+			if err != nil {
+				defaultValue = false
+			}
+		case "number":
+			defaultValue, err = strconv.ParseFloat(f.DefValue, 64)
+			if err != nil {
+				defaultValue = 0.0
+			}
+		default:
+			defaultValue = f.DefValue
+		}
+
 		flagProperties[f.Name] = JSONSchema{
 			Type:        schemaType,
 			Description: f.Usage,
-			Default:     f.DefValue,
+			Default:     defaultValue,
 		}
 	})
 

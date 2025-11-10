@@ -57,7 +57,7 @@ var logsQueryCmd = &cobra.Command{
 		innerQuery := fmt.Sprintf("query=%s&start=%d&end=%d&limit=%d", queryStr, startTime.UnixNano(), endTime.UnixNano(), limit)
 
 		req := graphql.NewRequest(`
-			mutation FetchLogs($request: FetchLogRequest!) {
+			query FetchLogs($request: FetchLogRequest!) {
 				logs_query(request: $request) {
 					timestamp
 					severity
