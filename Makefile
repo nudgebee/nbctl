@@ -24,3 +24,4 @@ build: validate
 install: build
 	mkdir -p ~/go/bin
 	cp dist/nbctl ~/go/bin/nbctl
+	codesign -s - -f ~/go/bin/nbctl
