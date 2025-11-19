@@ -28,7 +28,7 @@ type NubiToolInput struct {
 
 // NubiToolOutput represents the output from the Nubi tool.
 type NubiToolOutput struct {
-	Response any `json:"response" jsonschema:"The response from the Nubi agent, formatted as Markdown."`
+	Response json.RawMessage `json:"response" jsonschema:"The response from the Nubi agent, formatted as a JSON string."`
 }
 
 // GenericToolInput represents the input for a generic nbctl command tool.
@@ -39,8 +39,8 @@ type GenericToolInput struct {
 
 // GenericToolOutput represents the output from a generic nbctl command tool.
 type GenericToolOutput struct {
-	Output any    `json:"output"`
-	Error  string `json:"error,omitempty"`
+	Output json.RawMessage `json:"output"`
+	Error  string          `json:"error,omitempty"`
 }
 
 var mcpCmd = &cobra.Command{
@@ -87,11 +87,18 @@ var mcpCmd = &cobra.Command{
 					}
 
 					if status != "IN_PROGRESS" && status != "WAITING" {
-						var result any
-						if err := json.Unmarshal([]byte(resp), &result); err == nil {
-							return nil, NubiToolOutput{Response: result}, nil
+						trimmedResp := strings.TrimSpace(resp)
+						var finalResponse json.RawMessage
+						if trimmedResp == "" {
+							finalResponse = json.RawMessage("null")
+						} else if json.Valid([]byte(trimmedResp)) {
+							finalResponse = json.RawMessage(trimmedResp)
+						} else {
+							// Not valid JSON, so marshal it as a JSON string.
+							marshaledString, _ := json.Marshal(trimmedResp)
+							finalResponse = json.RawMessage(marshaledString)
 						}
-						return nil, NubiToolOutput{Response: resp}, nil
+						return nil, NubiToolOutput{Response: finalResponse}, nil
 					}
 				}
 			}
@@ -200,16 +207,21 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 		}
 
 		outputStr := outBuf.String()
-		var outputData any
+		var finalOutput json.RawMessage
 
-		// Try to unmarshal the output as JSON
-		if err := json.Unmarshal([]byte(outputStr), &outputData); err != nil {
-			// If it fails, it's not JSON. Wrap the raw string in a "response" field.
-			outputData = map[string]string{"Data": strings.TrimSpace(outputStr)}
+		trimmedOutput := strings.TrimSpace(outputStr)
+		if trimmedOutput == "" {
+			finalOutput = json.RawMessage("null")
+		} else if json.Valid([]byte(trimmedOutput)) {
+			finalOutput = json.RawMessage(trimmedOutput)
+		} else {
+			// If it's not valid JSON, wrap it in a structured object.
+			wrappedOutput, _ := json.Marshal(map[string]string{"Data": trimmedOutput})
+			finalOutput = json.RawMessage(wrappedOutput)
 		}
 
 		return nil, GenericToolOutput{
-			Output: outputData,
+			Output: finalOutput,
 			Error:  strings.TrimSpace(errBuf.String()),
 		}, nil
 	}
@@ -218,14 +230,14 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 // JSONSchema represents a basic JSON schema.
 type JSONSchema struct {
 	Type        string                `json:"type"`
-	Properties  map[string]JSONSchema `json:"properties,omitempty"`
+	Properties  map[string]*JSONSchema `json:"properties,omitempty"`
 	Items       *JSONSchema           `json:"items,omitempty"`
 	Description string                `json:"description,omitempty"`
 	Default     any                   `json:"default,omitempty"`
 }
 
 func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
-	flagProperties := make(map[string]JSONSchema)
+	flagProperties := make(map[string]*JSONSchema)
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		var schemaType string
 		switch f.Value.Type() {
@@ -264,7 +276,7 @@ func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
 			defaultValue = f.DefValue
 		}
 
-		flagProperties[f.Name] = JSONSchema{
+		flagProperties[f.Name] = &JSONSchema{
 			Type:        schemaType,
 			Description: f.Usage,
 			Default:     defaultValue,
@@ -273,7 +285,7 @@ func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
 
 	schema := JSONSchema{
 		Type: "object",
-		Properties: map[string]JSONSchema{
+		Properties: map[string]*JSONSchema{
 			"flags": {
 				Type:       "object",
 				Properties: flagProperties,
