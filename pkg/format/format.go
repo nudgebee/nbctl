@@ -41,6 +41,10 @@ func (f *Format) SetOutput(writer io.Writer) {
 	f.writer = writer
 }
 
+func (f *Format) GetOutput() io.Writer {
+	return f.writer
+}
+
 func (f *Format) Get() string {
 	return f.format
 }
