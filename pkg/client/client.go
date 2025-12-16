@@ -378,14 +378,30 @@ func (e GraphQLErrors) Error() string {
 	return buf.String()
 }
 
-// var DefaultClientFactory = func() *graphql.Client {
-// 	return NewClient()
-// }
+var (
+	runClient     *graphql.Client
+	runClientOnce sync.Once
+)
+
+// getRunClient returns the singleton GraphQL client, initializing it if necessary.
+func getRunClient() *graphql.Client {
+	runClientOnce.Do(func() {
+		runClient = NewClient()
+	})
+	return runClient
+}
+
+// ResetClient resets the shared client instance. This is primarily for testing.
+// Warning: This function is not thread-safe and should only be used in test cleanup.
+func ResetClient() {
+	runClient = nil
+	runClientOnce = sync.Once{}
+}
 
 // Run executes a GraphQL request.
 func Run(ctx context.Context, req *graphql.Request, resp any) error {
 	config.InitConfig()
-	client := NewClient()
+	client := getRunClient()
 
 	verbose := viper.GetBool("verbose")
 	if verbose {
