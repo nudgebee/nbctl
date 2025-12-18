@@ -251,18 +251,11 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-// cloneRequest creates a shallow copy of the request with a deep copy of the Header
+// cloneRequest creates a deep copy of the request, including the Header
 func cloneRequest(r *http.Request) *http.Request {
-	r2 := r.Clone(r.Context())
-	// Clone doesn't deep-copy Header map, so make a copy
-	hdr := make(http.Header, len(r.Header))
-	for k, vv := range r.Header {
-		vv2 := make([]string, len(vv))
-		copy(vv2, vv)
-		hdr[k] = vv2
-	}
-	r2.Header = hdr
-	return r2
+	// Clone returns a deep copy of r with its context changed to ctx.
+	// The Request.Header map is also deep copied.
+	return r.Clone(r.Context())
 }
 
 // tokenResponse models the expected JSON response from the token endpoint.
