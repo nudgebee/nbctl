@@ -107,7 +107,7 @@ func (f *Format) printTabularData(tabularData TabularData) {
 
 	for i := 0; i < val.Len(); i++ {
 		row := make([]string, len(tabularData.Fields))
-		for j, _ := range tabularData.Fields {
+		for j := range tabularData.Fields {
 			var fieldVal reflect.Value
 			if fieldIndices[j] != nil {
 				fieldVal = val.Index(i).FieldByIndex(fieldIndices[j])
