@@ -96,10 +96,24 @@ func (f *Format) printTabularData(tabularData TabularData) {
 	}
 	_, _ = fmt.Fprintln(w, strings.Join(headers, "\t"))
 
+	// Pre-calculate field indices to avoid repeated string lookups in the loop
+	elemType := val.Type().Elem()
+	fieldIndices := make([][]int, len(tabularData.Fields))
+	for j, field := range tabularData.Fields {
+		if sf, ok := elemType.FieldByName(field.Field); ok {
+			fieldIndices[j] = sf.Index
+		}
+	}
+
 	for i := 0; i < val.Len(); i++ {
 		row := make([]string, len(tabularData.Fields))
-		for j, field := range tabularData.Fields {
-			fieldVal := val.Index(i).FieldByName(field.Field)
+		item := val.Index(i)
+		for j := range tabularData.Fields {
+			var fieldVal reflect.Value
+			if fieldIndices[j] != nil {
+				fieldVal = item.FieldByIndex(fieldIndices[j])
+			}
+
 			if fieldVal.IsValid() {
 				if fieldVal.Type() == reflect.TypeOf(json.RawMessage{}) {
 					var recommendationContent struct {
