@@ -23,6 +23,9 @@ BIN ?= nbctl
 build: validate
 	go build -o dist/$(BIN) .
 
+build-artifact:
+	go build -o dist/$(BIN) .
+
 install: build
 	mkdir -p ~/go/bin
 	cp dist/nbctl ~/go/bin/nbctl
