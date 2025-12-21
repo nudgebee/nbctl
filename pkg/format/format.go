@@ -104,14 +104,18 @@ func (f *Format) printTabularData(tabularData TabularData) {
 	_, _ = fmt.Fprintln(w, strings.Join(headers, "\t"))
 
 	elemType := val.Type().Elem()
+	jsonRawMessageType := reflect.TypeOf(json.RawMessage{})
 	fieldIndices := make([][]int, len(tabularData.Fields))
+	isJsonRawMessage := make([]bool, len(tabularData.Fields))
+
 	for i, field := range tabularData.Fields {
 		if sf, ok := elemType.FieldByName(field.Field); ok {
 			fieldIndices[i] = sf.Index
+			if sf.Type == jsonRawMessageType {
+				isJsonRawMessage[i] = true
+			}
 		}
 	}
-
-	jsonRawMessageType := reflect.TypeOf(json.RawMessage{})
 
 	for i := 0; i < val.Len(); i++ {
 		row := make([]string, len(tabularData.Fields))
@@ -123,20 +127,29 @@ func (f *Format) printTabularData(tabularData TabularData) {
 			}
 
 			if fieldVal.IsValid() {
-				if fieldVal.Type() == jsonRawMessageType {
+				if isJsonRawMessage[j] {
 					var recommendationContent struct {
 						VulnerabilityID string `json:"VulnerabilityID"`
 						PrimaryURL      string `json:"PrimaryURL"`
 					}
 					rawJSON := fieldVal.Interface().(json.RawMessage)
-					// Unquote the raw JSON string if it's a string literal
-					unquotedJSON, err := strconv.Unquote(string(rawJSON))
-					if err != nil {
-						// If unquoting fails, assume it's already a direct JSON object
-						unquotedJSON = string(rawJSON)
+
+					var dataToUnmarshal []byte
+					// Check if it's a quoted string literal (starts with quote)
+					if len(rawJSON) > 0 && rawJSON[0] == '"' {
+						// Unquote the raw JSON string if it's a string literal
+						if s, err := strconv.Unquote(string(rawJSON)); err == nil {
+							dataToUnmarshal = []byte(s)
+						} else {
+							// If unquoting fails, fallback to original
+							dataToUnmarshal = rawJSON
+						}
+					} else {
+						// It's already a direct JSON object/array
+						dataToUnmarshal = rawJSON
 					}
 
-					if err := json.Unmarshal([]byte(unquotedJSON), &recommendationContent); err == nil {
+					if err := json.Unmarshal(dataToUnmarshal, &recommendationContent); err == nil {
 						if recommendationContent.PrimaryURL != "" {
 							row[j] = fmt.Sprintf("%s (%s)", recommendationContent.VulnerabilityID, recommendationContent.PrimaryURL)
 						} else {
