@@ -102,6 +102,32 @@ nbctl configure current
 
 The default configuration file is `~/.nudgebee/config.yaml`.
 
+## Model Context Protocol (MCP) Integration
+
+`nbctl` can act as an MCP server, allowing LLM clients (like Claude Desktop or Gemini) to interact with your Nudgebee resources using natural language.
+
+### Prerequisites
+
+1.  Configure `nbctl` with your credentials using `nbctl configure add`.
+2.  Ensure `nbctl` is in your `PATH`.
+
+### Claude Desktop Configuration
+
+Add the following to your Claude Desktop configuration file (usually `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "nudgebee": {
+      "command": "nbctl",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Once configured, restart Claude Desktop. You can then ask questions like "List my Nudgebee accounts" or "Show me high severity security recommendations".
+
 ### Persistent Flags
 
 The following flags can be used with any `nbctl` command:
@@ -177,9 +203,48 @@ Example:
 nbctl version
 ```
 
-#### `nbctl configure`
-
 ### Resource Management Commands
+
+#### `nbctl admin`
+
+Perform administrative tasks on the Nudgebee platform.
+
+##### `nbctl admin users`
+
+Manages user accounts.
+
+###### `nbctl admin users list`
+
+Lists all users with options to filter and paginate results.
+
+*   **Flags**:
+    *   `--offset <int>`: Offset for pagination. Default is 0.
+    *   `--limit <int>`: Limit for pagination. Default is 20.
+    *   `--name <string>`: Filter by name (case-insensitive like).
+    *   `--username <string>`: Filter by username (case-insensitive like).
+    *   `--status <string>`: Filter by status (exact match).
+    *   `--id <string>`: Filter by user ID (exact match).
+
+Example:
+
+```bash
+nbctl admin users list --limit 50 --status active
+```
+
+###### `nbctl admin users get`
+
+Retrieves details for a single user by ID or username.
+
+*   **Flags**:
+    *   `--id <string>`: The unique identifier of the user.
+    *   `--username <string>`: The username of the user.
+    *   *Note: Either `--id` or `--username` is required.*
+
+Example:
+
+```bash
+nbctl admin users get --username "john.doe@example.com"
+```
 
 #### `nbctl accounts`
 
@@ -498,6 +563,31 @@ Example:
 
 ```bash
 nbctl optimizations list --account-id 123e4567-e89b-12d3-a456-426614174000 --category "cost" --status "active"
+```
+
+#### `nbctl security`
+
+Manage and query security-related resources.
+
+##### `nbctl security list-image-cves`
+
+Lists security recommendations and CVEs for container images.
+
+*   **Flags**:
+    *   `--account-id <id>` (required): The account ID. If not provided, it attempts to read it from the configuration.
+    *   `--limit <int>`: Number of recommendations to retrieve. Default is 10.
+    *   `--offset <int>`: Offset for pagination. Default is 0.
+    *   `--severity <string>`: Filter by severity (e.g., Critical, High, Medium, Low).
+    *   `--namespace <string>`: Filter by namespace (case-insensitive like).
+    *   `--workload <string>`: Filter by workload name (case-insensitive like).
+    *   `--cve <string>`: Filter by CVE ID (case-insensitive like).
+    *   `--package-id <string>`: Filter by package ID (case-insensitive like).
+    *   `--image <string>`: Filter by image name (case-insensitive like).
+
+Example:
+
+```bash
+nbctl security list-image-cves --severity Critical --namespace production
 ```
 
 #### `nbctl traces`

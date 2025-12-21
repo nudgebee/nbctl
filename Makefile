@@ -18,8 +18,10 @@ lint:
 
 validate: lint test
 
+BIN ?= nbctl
+
 build: validate
-	go build -o dist/nbctl .
+	go build -o dist/$(BIN) .
 
 install: build
 	mkdir -p ~/go/bin

@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"nudgebee.com/nbctl/pkg/testutil"
+	"github.com/nudgebee/nbctl/pkg/testutil"
 )
 
 func TestLogsListLabels_Unit(t *testing.T) {

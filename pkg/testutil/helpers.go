@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/format"
 )
 
 // StartMockServer starts an httptest.Server with the provided handler and
@@ -59,8 +59,15 @@ func RunCommandCaptureOutput(command *cobra.Command, args []string) (string, err
 	if rootCmd == nil {
 		rootCmd = command
 	}
-	rootCmd.SetOut(&buf)
+
+	// Reset format persistent flag to default "text"
+	_ = rootCmd.PersistentFlags().Set("format", "text")
+	// Also reset the global format object state
+	format.GetFormat().Set("text")
 	format.GetFormat().SetOutput(&buf)
+
+	rootCmd.SetOut(&buf)
+
 	// ensure viper/config is initialized so tests pick up env vars
 	rootCmd.SetArgs(args)
 	err := rootCmd.Execute()

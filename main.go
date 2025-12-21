@@ -1,7 +1,7 @@
 package main
 
 import (
-	"nudgebee.com/nbctl/cmd"
+	"github.com/nudgebee/nbctl/cmd"
 )
 
 func main() {

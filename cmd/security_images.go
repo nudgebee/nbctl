@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
 )
 
 type SecurityImageRecommendation struct {

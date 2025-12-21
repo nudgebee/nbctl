@@ -5,11 +5,11 @@ import (
 	"log"
 	"os"
 
+	"github.com/nudgebee/nbctl/pkg/config"
+	"github.com/nudgebee/nbctl/pkg/format"
+	applog "github.com/nudgebee/nbctl/pkg/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/config"
-	"nudgebee.com/nbctl/pkg/format"
-	applog "nudgebee.com/nbctl/pkg/log"
 )
 
 var (

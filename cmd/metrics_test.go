@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"nudgebee.com/nbctl/pkg/testutil"
+	"github.com/nudgebee/nbctl/pkg/testutil"
 )
 
 func TestMetrics_NoSubcommand(t *testing.T) {

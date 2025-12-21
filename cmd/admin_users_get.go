@@ -6,10 +6,10 @@ import (
 	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
 )
 
 var (

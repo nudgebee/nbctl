@@ -41,6 +41,10 @@ func (f *Format) SetOutput(writer io.Writer) {
 	f.writer = writer
 }
 
+func (f *Format) GetOutput() io.Writer {
+	return f.writer
+}
+
 func (f *Format) Get() string {
 	return f.format
 }
@@ -57,6 +61,9 @@ func (f *Format) Print(obj any) {
 }
 
 func (f *Format) printJSON(obj any) {
+	if td, ok := obj.(TabularData); ok {
+		obj = td.Data
+	}
 	// Marshal the object into a JSON string.
 	// We use MarshalIndent for pretty-printing.
 	b, err := json.MarshalIndent(obj, "", "  ")
