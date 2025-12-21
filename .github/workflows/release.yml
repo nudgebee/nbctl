@@ -39,7 +39,7 @@ jobs:
             EXT=".exe"
           fi
           BIN=nbctl-${{ matrix.os }}-${{ matrix.arch }}${EXT}
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} BIN=$BIN make build
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} BIN=$BIN make build-artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
