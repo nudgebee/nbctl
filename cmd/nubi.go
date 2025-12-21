@@ -18,12 +18,12 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
+	"github.com/nudgebee/nbctl/pkg/log"
+	"github.com/nudgebee/nbctl/pkg/nubi"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
-	"nudgebee.com/nbctl/pkg/log"
-	"nudgebee.com/nbctl/pkg/nubi"
 )
 
 var suggestions = []prompt.Suggest{

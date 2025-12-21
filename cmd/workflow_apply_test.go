@@ -5,16 +5,16 @@ import (
 	"os"
 	"testing"
 
+	"github.com/nudgebee/nbctl/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"nudgebee.com/nbctl/pkg/testutil"
 )
 
 func TestWorkflowApplyCmd(t *testing.T) {
 	// Create a temporary YAML file
 	tmpFile, err := os.CreateTemp("", "workflow-*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	yamlContent := `
 name: New Workflow
@@ -26,7 +26,7 @@ definition:
 `
 	_, err = tmpFile.WriteString(yamlContent)
 	require.NoError(t, err)
-	tmpFile.Close()
+	require.NoError(t, tmpFile.Close())
 
 	mockResponse := map[string]interface{}{
 		"workflow_create": map[string]interface{}{
@@ -44,7 +44,7 @@ func TestWorkflowApplyCmd_JSON(t *testing.T) {
 	// Create a temporary YAML file
 	tmpFile, err := os.CreateTemp("", "workflow-*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	yamlContent := `
 name: New Workflow
@@ -53,7 +53,7 @@ definition:
 `
 	_, err = tmpFile.WriteString(yamlContent)
 	require.NoError(t, err)
-	tmpFile.Close()
+	require.NoError(t, tmpFile.Close())
 
 	mockResponse := map[string]interface{}{
 		"workflow_create": map[string]interface{}{

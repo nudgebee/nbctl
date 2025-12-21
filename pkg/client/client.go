@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/config"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/config"
 )
 
 // loggingTransport is an http.RoundTripper that logs requests and responses.

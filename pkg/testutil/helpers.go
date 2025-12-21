@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/format"
 )
 
 // StartMockServer starts an httptest.Server with the provided handler and

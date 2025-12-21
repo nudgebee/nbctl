@@ -3,13 +3,16 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
 )
+
+var workflowTriggerInputs []string
 
 var workflowTriggerCmd = &cobra.Command{
 	Use:   "trigger [id]",
@@ -28,12 +31,25 @@ mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
 }
 `
 		req := graphql.NewRequest(query)
-		accountId := viper.GetString("account-id")
+		accountId, _ := cmd.Flags().GetString("account-id")
+		if accountId == "" {
+			accountId = viper.GetString("account-id")
+		}
+
+		inputs := make(map[string]interface{})
+		for _, input := range workflowTriggerInputs {
+			parts := strings.SplitN(input, "=", 2)
+			if len(parts) == 2 {
+				inputs[parts[0]] = parts[1]
+			} else {
+				return fmt.Errorf("invalid input format: %s. Expected key=value", input)
+			}
+		}
 
 		requestVar := map[string]interface{}{
 			"account_id": accountId,
 			"id":         workflowId,
-			"inputs":     map[string]interface{}{},
+			"inputs":     inputs,
 		}
 
 		req.Var("request", requestVar)
@@ -52,7 +68,7 @@ mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
 		if format.GetFormat().Get() == "json" {
 			format.GetFormat().Print(respData.WorkflowTrigger)
 		} else {
-			fmt.Fprintf(format.GetFormat().GetOutput(), "Workflow triggered. Execution ID: %s\n", respData.WorkflowTrigger.ExecutionID)
+			_, _ = fmt.Fprintf(format.GetFormat().GetOutput(), "Workflow triggered. Execution ID: %s\n", respData.WorkflowTrigger.ExecutionID)
 		}
 
 		return nil
@@ -61,4 +77,6 @@ mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
 
 func init() {
 	workflowCmd.AddCommand(workflowTriggerCmd)
+	workflowTriggerCmd.Flags().StringSliceVarP(&workflowTriggerInputs, "input", "i", []string{}, "Workflow inputs in key=value format")
+	workflowTriggerCmd.Flags().String("account-id", "", "Account ID")
 }

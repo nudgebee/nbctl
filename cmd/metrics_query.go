@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 )
 
 func renderChart(payload []MetricsResult) {

@@ -13,12 +13,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
+	"github.com/nudgebee/nbctl/pkg/nubi"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
-	"nudgebee.com/nbctl/pkg/nubi"
 )
 
 // NubiToolInput represents the input for the Nubi tool.
@@ -28,7 +28,7 @@ type NubiToolInput struct {
 
 // NubiToolOutput represents the output from the Nubi tool.
 type NubiToolOutput struct {
-	Response json.RawMessage `json:"response" jsonschema:"The response from the Nubi agent, formatted as a JSON string."`
+	Response map[string]any `json:"response" jsonschema:"The response from the Nubi agent."`
 }
 
 // GenericToolInput represents the input for a generic nbctl command tool.
@@ -39,8 +39,8 @@ type GenericToolInput struct {
 
 // GenericToolOutput represents the output from a generic nbctl command tool.
 type GenericToolOutput struct {
-	Output json.RawMessage `json:"output"`
-	Error  string          `json:"error,omitempty"`
+	Output map[string]any `json:"output"`
+	Error  string         `json:"error,omitempty"`
 }
 
 var mcpCmd = &cobra.Command{
@@ -88,15 +88,24 @@ var mcpCmd = &cobra.Command{
 
 					if status != "IN_PROGRESS" && status != "WAITING" {
 						trimmedResp := strings.TrimSpace(resp)
-						var finalResponse json.RawMessage
+						var finalResponse map[string]any
+
 						if trimmedResp == "" {
-							finalResponse = json.RawMessage("null")
-						} else if json.Valid([]byte(trimmedResp)) {
-							finalResponse = json.RawMessage(trimmedResp)
+							finalResponse = map[string]any{"message": "No response"}
 						} else {
-							// Not valid JSON, so marshal it as a JSON string.
-							marshaledString, _ := json.Marshal(trimmedResp)
-							finalResponse = json.RawMessage(marshaledString)
+							var raw any
+							if err := json.Unmarshal([]byte(trimmedResp), &raw); err != nil {
+								finalResponse = map[string]any{"response": trimmedResp}
+							} else {
+								switch v := raw.(type) {
+								case map[string]any:
+									finalResponse = v
+								case []any:
+									finalResponse = map[string]any{"items": v}
+								default:
+									finalResponse = map[string]any{"value": v}
+								}
+							}
 						}
 						return nil, NubiToolOutput{Response: finalResponse}, nil
 					}
@@ -194,7 +203,21 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 			if v == nil {
 				continue
 			}
-			if err := cmd.Flags().Set(k, fmt.Sprintf("%v", v)); err != nil {
+
+			var valStr string
+			switch val := v.(type) {
+			case []interface{}:
+				// Handle JSON arrays (slices) by joining them with commas for pflag
+				var parts []string
+				for _, item := range val {
+					parts = append(parts, fmt.Sprintf("%v", item))
+				}
+				valStr = strings.Join(parts, ",")
+			default:
+				valStr = fmt.Sprintf("%v", v)
+			}
+
+			if err := cmd.Flags().Set(k, valStr); err != nil {
 				// Log the error but don't fail the whole command
 				logger.Printf("error setting flag %s: %v", k, err)
 			}
@@ -207,17 +230,27 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 		}
 
 		outputStr := outBuf.String()
-		var finalOutput json.RawMessage
+		var finalOutput map[string]any
 
 		trimmedOutput := strings.TrimSpace(outputStr)
 		if trimmedOutput == "" {
-			finalOutput = json.RawMessage("null")
-		} else if json.Valid([]byte(trimmedOutput)) {
-			finalOutput = json.RawMessage(trimmedOutput)
+			finalOutput = map[string]any{"message": "No output"}
 		} else {
-			// If it's not valid JSON, wrap it in a structured object.
-			wrappedOutput, _ := json.Marshal(map[string]string{"Data": trimmedOutput})
-			finalOutput = json.RawMessage(wrappedOutput)
+			var raw any
+			if err := json.Unmarshal([]byte(trimmedOutput), &raw); err != nil {
+				// Not valid JSON, wrap as string
+				finalOutput = map[string]any{"output": trimmedOutput}
+			} else {
+				// Valid JSON
+				switch v := raw.(type) {
+				case map[string]any:
+					finalOutput = v
+				case []any:
+					finalOutput = map[string]any{"items": v}
+				default:
+					finalOutput = map[string]any{"value": v}
+				}
+			}
 		}
 
 		return nil, GenericToolOutput{
@@ -229,26 +262,40 @@ func createHandler(cmd *cobra.Command, logger *log.Logger) func(context.Context,
 
 // JSONSchema represents a basic JSON schema.
 type JSONSchema struct {
-	Type        string                `json:"type"`
+	Type        string                 `json:"type"`
 	Properties  map[string]*JSONSchema `json:"properties,omitempty"`
-	Items       *JSONSchema           `json:"items,omitempty"`
-	Description string                `json:"description,omitempty"`
-	Default     any                   `json:"default,omitempty"`
+	Items       *JSONSchema            `json:"items,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Default     any                    `json:"default,omitempty"`
 }
 
 func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
 	flagProperties := make(map[string]*JSONSchema)
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		var schemaType string
+		var itemType string
+
 		switch f.Value.Type() {
-		case "string", "stringSlice":
+		case "string":
 			schemaType = "string"
-		case "int", "intSlice":
+		case "stringSlice":
+			schemaType = "array"
+			itemType = "string"
+		case "int":
 			schemaType = "integer"
-		case "bool", "boolSlice":
+		case "intSlice":
+			schemaType = "array"
+			itemType = "integer"
+		case "bool":
 			schemaType = "boolean"
-		case "float64", "float64Slice":
+		case "boolSlice":
+			schemaType = "array"
+			itemType = "boolean"
+		case "float64":
 			schemaType = "number"
+		case "float64Slice":
+			schemaType = "array"
+			itemType = "number"
 		default:
 			schemaType = "string" // Default to string for unknown types
 		}
@@ -256,11 +303,12 @@ func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
 		// Correctly type the default value
 		var defaultValue any
 		var err error
+
 		switch schemaType {
 		case "integer":
 			defaultValue, err = strconv.Atoi(f.DefValue)
 			if err != nil {
-				defaultValue = 0 // Or some other sensible default
+				defaultValue = 0
 			}
 		case "boolean":
 			defaultValue, err = strconv.ParseBool(f.DefValue)
@@ -272,15 +320,25 @@ func generateInputSchema(cmd *cobra.Command) (json.RawMessage, error) {
 			if err != nil {
 				defaultValue = 0.0
 			}
+		case "array":
+			defaultValue = nil // Simplify default for arrays
 		default:
 			defaultValue = f.DefValue
 		}
 
-		flagProperties[f.Name] = &JSONSchema{
+		propSchema := &JSONSchema{
 			Type:        schemaType,
 			Description: f.Usage,
 			Default:     defaultValue,
 		}
+
+		if schemaType == "array" {
+			propSchema.Items = &JSONSchema{
+				Type: itemType,
+			}
+		}
+
+		flagProperties[f.Name] = propSchema
 	})
 
 	schema := JSONSchema{

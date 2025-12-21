@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nudgebee/nbctl/pkg/testutil"
 	"github.com/stretchr/testify/assert"
-	"nudgebee.com/nbctl/pkg/testutil"
 )
 
 func TestMetricsQueryCmd(t *testing.T) {

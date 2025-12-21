@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/client"
 )
 
 // readInput is a helper function to read a line of input from stdin with a prompt.

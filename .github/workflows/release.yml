@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [linux, darwin]
+        os: [linux, darwin, windows]
         arch: [amd64, arm64]
 
     steps:
@@ -27,13 +27,17 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          BIN=nbctl-${{ matrix.os }}-${{ matrix.arch }}
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} make build
+          EXT=""
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            EXT=".exe"
+          fi
+          BIN=nbctl-${{ matrix.os }}-${{ matrix.arch }}${EXT}
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} BIN=$BIN make build
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: nbctl-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/nbctl-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/nbctl-${{ matrix.os }}-${{ matrix.arch }}*
 
   release:
     runs-on: ubuntu-latest

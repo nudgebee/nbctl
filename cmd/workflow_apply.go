@@ -6,11 +6,11 @@ import (
 	"os"
 
 	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
 )
 
 var workflowApplyCmd = &cobra.Command{
@@ -66,7 +66,7 @@ mutation CreateWorkflow($request: WorkflowCreateRequest!) {
 		if format.GetFormat().Get() == "json" {
 			format.GetFormat().Print(respData.WorkflowCreate)
 		} else {
-			fmt.Fprintf(format.GetFormat().GetOutput(), "Workflow created with ID: %s\n", respData.WorkflowCreate.ID)
+			_, _ = fmt.Fprintf(format.GetFormat().GetOutput(), "Workflow created with ID: %s\n", respData.WorkflowCreate.ID)
 		}
 
 		return nil

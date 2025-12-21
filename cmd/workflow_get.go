@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"nudgebee.com/nbctl/pkg/client"
-	"nudgebee.com/nbctl/pkg/format"
 )
 
 var workflowGetCmd = &cobra.Command{
@@ -124,15 +124,15 @@ query GetWorkflowById($accountId:String!, $workflowId:String!) {
 			format.GetFormat().Print(respData.WorkflowGet)
 		} else {
 			out := format.GetFormat().GetOutput()
-			fmt.Fprintf(out, "ID: %s\n", respData.WorkflowGet.ID)
-			fmt.Fprintf(out, "Name: %s\n", respData.WorkflowGet.Name)
-			fmt.Fprintf(out, "Status: %s\n", respData.WorkflowGet.Status)
-			fmt.Fprintf(out, "Last Execution Status: %s\n", respData.WorkflowGet.LastExecutionStatus)
-			fmt.Fprintf(out, "Created At: %s\n", respData.WorkflowGet.CreatedAt)
-			fmt.Fprintf(out, "Updated At: %s\n", respData.WorkflowGet.UpdatedAt)
-			fmt.Fprintf(out, "Definition:\n")
+			_, _ = fmt.Fprintf(out, "ID: %s\n", respData.WorkflowGet.ID)
+			_, _ = fmt.Fprintf(out, "Name: %s\n", respData.WorkflowGet.Name)
+			_, _ = fmt.Fprintf(out, "Status: %s\n", respData.WorkflowGet.Status)
+			_, _ = fmt.Fprintf(out, "Last Execution Status: %s\n", respData.WorkflowGet.LastExecutionStatus)
+			_, _ = fmt.Fprintf(out, "Created At: %s\n", respData.WorkflowGet.CreatedAt)
+			_, _ = fmt.Fprintf(out, "Updated At: %s\n", respData.WorkflowGet.UpdatedAt)
+			_, _ = fmt.Fprintf(out, "Definition:\n")
 			definitionIndented, _ := json.MarshalIndent(respData.WorkflowGet.Definition, "", "  ")
-			fmt.Fprintln(out, string(definitionIndented))
+			_, _ = fmt.Fprintln(out, string(definitionIndented))
 		}
 
 		return nil

@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nudgebee/nbctl/pkg/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"nudgebee.com/nbctl/pkg/testutil"
 )
 
 func TestInitConfig(t *testing.T) {
