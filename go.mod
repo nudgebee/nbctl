@@ -3,6 +3,7 @@ module github.com/nudgebee/nbctl
 go 1.25.1
 
 require (
+	github.com/atotto/clipboard v0.1.4
 	github.com/briandowns/spinner v1.23.2
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/charmbracelet/glamour v0.10.0
