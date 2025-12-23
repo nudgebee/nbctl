@@ -117,10 +117,14 @@ func (f *Format) printTabularData(tabularData TabularData) {
 		}
 	}
 
+	// Iterate over rows and write directly to tabwriter to avoid allocating []string slice per row.
 	for i := 0; i < val.Len(); i++ {
-		row := make([]string, len(tabularData.Fields))
 		item := val.Index(i)
 		for j := range tabularData.Fields {
+			if j > 0 {
+				_, _ = fmt.Fprint(w, "\t")
+			}
+
 			var fieldVal reflect.Value
 			if fieldIndices[j] != nil {
 				fieldVal = item.FieldByIndex(fieldIndices[j])
@@ -151,21 +155,22 @@ func (f *Format) printTabularData(tabularData TabularData) {
 
 					if err := json.Unmarshal(dataToUnmarshal, &recommendationContent); err == nil {
 						if recommendationContent.PrimaryURL != "" {
-							row[j] = fmt.Sprintf("%s (%s)", recommendationContent.VulnerabilityID, recommendationContent.PrimaryURL)
+							_, _ = fmt.Fprintf(w, "%s (%s)", recommendationContent.VulnerabilityID, recommendationContent.PrimaryURL)
 						} else {
-							row[j] = recommendationContent.VulnerabilityID
+							_, _ = fmt.Fprint(w, recommendationContent.VulnerabilityID)
 						}
 					} else {
-						row[j] = "Error parsing CVE" // Fallback in case of parsing error
+						_, _ = fmt.Fprint(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
-					row[j] = fmt.Sprintf("%v", fieldVal.Interface())
+					_, _ = fmt.Fprintf(w, "%v", fieldVal.Interface())
 				}
 			} else {
-				row[j] = ""
+				// Empty string effectively
+				_, _ = fmt.Fprint(w, "")
 			}
 		}
-		_, _ = fmt.Fprintln(w, strings.Join(row, "\t"))
+		_, _ = fmt.Fprintln(w)
 	}
 
 	_ = w.Flush()
@@ -197,18 +202,23 @@ func (f *Format) printSlice(val reflect.Value) {
 
 	w := tabwriter.NewWriter(f.writer, 0, 0, 3, ' ', 0)
 
-	headers := make([]string, elemType.NumField())
+	numFields := elemType.NumField()
+	headers := make([]string, numFields)
 	for i := range headers {
 		headers[i] = elemType.Field(i).Name
 	}
 	_, _ = fmt.Fprintln(w, strings.Join(headers, "\t"))
 
+	// Iterate over rows and write directly to tabwriter
 	for i := 0; i < val.Len(); i++ {
-		row := make([]string, elemType.NumField())
-		for j := range row {
-			row[j] = fmt.Sprintf("%v", val.Index(i).Field(j).Interface())
+		rowItem := val.Index(i)
+		for j := 0; j < numFields; j++ {
+			if j > 0 {
+				_, _ = fmt.Fprint(w, "\t")
+			}
+			_, _ = fmt.Fprintf(w, "%v", rowItem.Field(j).Interface())
 		}
-		_, _ = fmt.Fprintln(w, strings.Join(row, "\t"))
+		_, _ = fmt.Fprintln(w)
 	}
 
 	_ = w.Flush()
@@ -294,11 +304,14 @@ func (f *Format) printEvidences(fieldName string, evidences json.RawMessage) {
 				// print table
 				_, _ = fmt.Fprintln(f.writer, strings.Join(tableData.Headers, "\t"))
 				for _, row := range tableData.Rows {
-					var rowStr []string
-					for _, cell := range row {
-						rowStr = append(rowStr, fmt.Sprintf("%v", cell))
+					// Optimized table printing for evidences as well
+					for i, cell := range row {
+						if i > 0 {
+							_, _ = fmt.Fprint(f.writer, "\t")
+						}
+						_, _ = fmt.Fprintf(f.writer, "%v", cell)
 					}
-					_, _ = fmt.Fprintln(f.writer, strings.Join(rowStr, "\t"))
+					_, _ = fmt.Fprintln(f.writer)
 				}
 			}
 		case "json":
