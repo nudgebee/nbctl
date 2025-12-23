@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/briandowns/spinner"
 	"github.com/c-bata/go-prompt"
 	"github.com/charmbracelet/glamour"
@@ -35,6 +36,7 @@ var suggestions = []prompt.Suggest{
 	{Text: "/agents", Description: "List available agents"},
 	{Text: "/tools", Description: "List available tools"},
 	{Text: "/functions", Description: "List available functions"},
+	{Text: "/copy", Description: "Copy the last response to clipboard"},
 	{Text: "/exit", Description: "Exit the Nubi shell"},
 }
 
@@ -159,6 +161,7 @@ type nubiShell struct {
 	history          []string
 	waitingMessageID string
 	waitingAgentID   string
+	lastResponse     string
 }
 
 type MessageConfig struct {
@@ -238,6 +241,8 @@ func (s *nubiShell) executor(in string) {
 		}
 		return
 	}
+
+	s.lastResponse = response
 
 	if status == "WAITING" {
 		fmt.Println(response)
@@ -414,6 +419,16 @@ func (s *nubiShell) handleSlashCommand(in string) {
 				{Header: "VARIABLES", Field: "Variables"},
 			},
 		})
+	case "/copy":
+		if s.lastResponse == "" {
+			fmt.Println("Nothing to copy.")
+			return
+		}
+		if err := clipboard.WriteAll(s.lastResponse); err != nil {
+			fmt.Printf("Error copying to clipboard: %v\n", err)
+		} else {
+			fmt.Println("Copied to clipboard!")
+		}
 	case "/exit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
