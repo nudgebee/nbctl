@@ -33,6 +33,8 @@ type TabularData struct {
 	Fields []TableField
 }
 
+var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
+
 func (f *Format) Set(format string) {
 	f.format = format
 }
@@ -104,7 +106,6 @@ func (f *Format) printTabularData(tabularData TabularData) {
 	_, _ = fmt.Fprintln(w, strings.Join(headers, "\t"))
 
 	elemType := val.Type().Elem()
-	jsonRawMessageType := reflect.TypeOf(json.RawMessage{})
 	fieldIndices := make([][]int, len(tabularData.Fields))
 	isJsonRawMessage := make([]bool, len(tabularData.Fields))
 
@@ -222,8 +223,10 @@ func (f *Format) printStruct(val reflect.Value) {
 	var evidenceFieldName string
 
 	for i := 0; i < val.NumField(); i++ {
-		fieldName := typ.Field(i).Name
+		structField := typ.Field(i)
+		fieldName := structField.Name
 		fieldValue := val.Field(i)
+		fieldType := structField.Type
 
 		if fieldName == "Evidences" {
 			evidenceField = fieldValue
@@ -231,7 +234,7 @@ func (f *Format) printStruct(val reflect.Value) {
 			continue
 		}
 
-		if fieldValue.Type() == reflect.TypeOf(json.RawMessage{}) {
+		if fieldType == jsonRawMessageType {
 			var data map[string]any
 			if err := json.Unmarshal(fieldValue.Interface().(json.RawMessage), &data); err == nil {
 				_, _ = fmt.Fprintf(w, "%s:\n", fieldName)
@@ -241,12 +244,12 @@ func (f *Format) printStruct(val reflect.Value) {
 			} else {
 				_, _ = fmt.Fprintf(w, "%s\t%s\n", fieldName, string(fieldValue.Interface().(json.RawMessage)))
 			}
-		} else if fieldValue.Kind() == reflect.Slice && fieldValue.Type().Elem().Kind() == reflect.Struct {
+		} else if fieldType.Kind() == reflect.Slice && fieldType.Elem().Kind() == reflect.Struct {
 			_, _ = fmt.Fprintf(w, "\n%s:\n", fieldName)
 			f.printSlice(fieldValue)
-		} else if fieldValue.Kind() == reflect.Struct {
+		} else if fieldType.Kind() == reflect.Struct {
 			_, _ = fmt.Fprintf(w, "\n%s:\n", fieldName)
-			nestedTyp := fieldValue.Type()
+			nestedTyp := fieldType
 			for j := 0; j < fieldValue.NumField(); j++ {
 				nestedFieldName := nestedTyp.Field(j).Name
 				nestedFieldValue := fieldValue.Field(j)
