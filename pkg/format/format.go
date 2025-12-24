@@ -99,11 +99,13 @@ func (f *Format) printTabularData(tabularData TabularData) {
 
 	w := tabwriter.NewWriter(f.writer, 0, 0, 3, ' ', 0)
 
-	headers := make([]string, len(tabularData.Fields))
 	for i, field := range tabularData.Fields {
-		headers[i] = field.Header
+		if i > 0 {
+			_, _ = fmt.Fprint(w, "\t")
+		}
+		_, _ = fmt.Fprint(w, field.Header)
 	}
-	_, _ = fmt.Fprintln(w, strings.Join(headers, "\t"))
+	_, _ = fmt.Fprintln(w)
 
 	elemType := val.Type().Elem()
 	fieldIndices := make([][]int, len(tabularData.Fields))
@@ -119,9 +121,11 @@ func (f *Format) printTabularData(tabularData TabularData) {
 	}
 
 	for i := 0; i < val.Len(); i++ {
-		row := make([]string, len(tabularData.Fields))
 		item := val.Index(i)
 		for j := range tabularData.Fields {
+			if j > 0 {
+				_, _ = fmt.Fprint(w, "\t")
+			}
 			var fieldVal reflect.Value
 			if fieldIndices[j] != nil {
 				fieldVal = item.FieldByIndex(fieldIndices[j])
@@ -152,21 +156,21 @@ func (f *Format) printTabularData(tabularData TabularData) {
 
 					if err := json.Unmarshal(dataToUnmarshal, &recommendationContent); err == nil {
 						if recommendationContent.PrimaryURL != "" {
-							row[j] = fmt.Sprintf("%s (%s)", recommendationContent.VulnerabilityID, recommendationContent.PrimaryURL)
+							_, _ = fmt.Fprintf(w, "%s (%s)", recommendationContent.VulnerabilityID, recommendationContent.PrimaryURL)
 						} else {
-							row[j] = recommendationContent.VulnerabilityID
+							_, _ = fmt.Fprint(w, recommendationContent.VulnerabilityID)
 						}
 					} else {
-						row[j] = "Error parsing CVE" // Fallback in case of parsing error
+						_, _ = fmt.Fprint(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
-					row[j] = fmt.Sprintf("%v", fieldVal.Interface())
+					_, _ = fmt.Fprint(w, fieldVal.Interface())
 				}
 			} else {
-				row[j] = ""
+				// Empty field, but tab was already printed if j > 0
 			}
 		}
-		_, _ = fmt.Fprintln(w, strings.Join(row, "\t"))
+		_, _ = fmt.Fprintln(w)
 	}
 
 	_ = w.Flush()
@@ -198,18 +202,22 @@ func (f *Format) printSlice(val reflect.Value) {
 
 	w := tabwriter.NewWriter(f.writer, 0, 0, 3, ' ', 0)
 
-	headers := make([]string, elemType.NumField())
-	for i := range headers {
-		headers[i] = elemType.Field(i).Name
+	for i := 0; i < elemType.NumField(); i++ {
+		if i > 0 {
+			_, _ = fmt.Fprint(w, "\t")
+		}
+		_, _ = fmt.Fprint(w, elemType.Field(i).Name)
 	}
-	_, _ = fmt.Fprintln(w, strings.Join(headers, "\t"))
+	_, _ = fmt.Fprintln(w)
 
 	for i := 0; i < val.Len(); i++ {
-		row := make([]string, elemType.NumField())
-		for j := range row {
-			row[j] = fmt.Sprintf("%v", val.Index(i).Field(j).Interface())
+		for j := 0; j < elemType.NumField(); j++ {
+			if j > 0 {
+				_, _ = fmt.Fprint(w, "\t")
+			}
+			_, _ = fmt.Fprint(w, val.Index(i).Field(j).Interface())
 		}
-		_, _ = fmt.Fprintln(w, strings.Join(row, "\t"))
+		_, _ = fmt.Fprintln(w)
 	}
 
 	_ = w.Flush()
