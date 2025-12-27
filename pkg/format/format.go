@@ -74,7 +74,8 @@ func (f *Format) printJSON(obj any) {
 		os.Exit(1)
 	}
 	// Print the JSON string to the writer.
-	_, _ = fmt.Fprintln(f.writer, string(b))
+	_, _ = f.writer.Write(b)
+	_, _ = f.writer.Write([]byte("\n"))
 }
 
 func (f *Format) printText(obj any) {
