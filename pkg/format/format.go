@@ -306,11 +306,13 @@ func (f *Format) printEvidences(fieldName string, evidences json.RawMessage) {
 				// print table
 				_, _ = fmt.Fprintln(f.writer, strings.Join(tableData.Headers, "\t"))
 				for _, row := range tableData.Rows {
-					var rowStr []string
-					for _, cell := range row {
-						rowStr = append(rowStr, fmt.Sprintf("%v", cell))
+					for i, cell := range row {
+						if i > 0 {
+							_, _ = fmt.Fprint(f.writer, "\t")
+						}
+						_, _ = fmt.Fprint(f.writer, cell)
 					}
-					_, _ = fmt.Fprintln(f.writer, strings.Join(rowStr, "\t"))
+					_, _ = fmt.Fprintln(f.writer)
 				}
 			}
 		case "json":
