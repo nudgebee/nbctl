@@ -66,16 +66,14 @@ func (f *Format) printJSON(obj any) {
 	if td, ok := obj.(TabularData); ok {
 		obj = td.Data
 	}
-	// Marshal the object into a JSON string.
-	// We use MarshalIndent for pretty-printing.
-	b, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
+	// Use json.Encoder to stream directly to the writer, avoiding
+	// large intermediate byte slice allocations from MarshalIndent.
+	enc := json.NewEncoder(f.writer)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(obj); err != nil {
 		fmt.Fprintf(os.Stderr, "Error marshaling to JSON: %v\n", err)
 		os.Exit(1)
 	}
-	// Print the JSON string to the writer.
-	_, _ = f.writer.Write(b)
-	_, _ = f.writer.Write([]byte("\n"))
 }
 
 func (f *Format) printText(obj any) {
