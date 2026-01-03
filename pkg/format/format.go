@@ -7,7 +7,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
@@ -302,13 +301,22 @@ func (f *Format) printEvidences(fieldName string, evidences json.RawMessage) {
 			}
 			if err := json.Unmarshal(ev.Data, &tableData); err == nil {
 				// print table
-				_, _ = fmt.Fprintln(f.writer, strings.Join(tableData.Headers, "\t"))
-				for _, row := range tableData.Rows {
-					var rowStr []string
-					for _, cell := range row {
-						rowStr = append(rowStr, fmt.Sprintf("%v", cell))
+				for i, header := range tableData.Headers {
+					if i > 0 {
+						_, _ = fmt.Fprint(f.writer, "\t")
 					}
-					_, _ = fmt.Fprintln(f.writer, strings.Join(rowStr, "\t"))
+					_, _ = fmt.Fprint(f.writer, header)
+				}
+				_, _ = fmt.Fprintln(f.writer)
+
+				for _, row := range tableData.Rows {
+					for i, cell := range row {
+						if i > 0 {
+							_, _ = fmt.Fprint(f.writer, "\t")
+						}
+						_, _ = fmt.Fprint(f.writer, cell)
+					}
+					_, _ = fmt.Fprintln(f.writer)
 				}
 			}
 		case "json":
