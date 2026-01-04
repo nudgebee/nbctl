@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nudgebee/nbctl/pkg/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,7 +100,7 @@ current-profile: prof1
 
 func TestIsConfigured(t *testing.T) {
 	t.Run("returns true when all required fields are set", func(t *testing.T) {
-		defer testutil.WithViper(map[string]any{
+		defer WithViper(map[string]any{
 			"endpoint":   "http://test.com",
 			"api-key":    "test-key",
 			"username":   "test-user",
@@ -112,7 +111,7 @@ func TestIsConfigured(t *testing.T) {
 	})
 
 	t.Run("returns false when endpoint is missing", func(t *testing.T) {
-		defer testutil.WithViper(map[string]any{
+		defer WithViper(map[string]any{
 			"endpoint":   "",
 			"api-key":    "test-key",
 			"username":   "test-user",
@@ -123,7 +122,7 @@ func TestIsConfigured(t *testing.T) {
 	})
 
 	t.Run("returns false when api-key is missing", func(t *testing.T) {
-		defer testutil.WithViper(map[string]any{
+		defer WithViper(map[string]any{
 			"endpoint":   "http://test.com",
 			"api-key":    "",
 			"username":   "test-user",
@@ -134,7 +133,7 @@ func TestIsConfigured(t *testing.T) {
 	})
 
 	t.Run("returns false when username is missing", func(t *testing.T) {
-		defer testutil.WithViper(map[string]any{
+		defer WithViper(map[string]any{
 			"endpoint":   "http://test.com",
 			"api-key":    "test-key",
 			"username":   "",
@@ -145,7 +144,7 @@ func TestIsConfigured(t *testing.T) {
 	})
 
 	t.Run("returns false when account-id is missing", func(t *testing.T) {
-		defer testutil.WithViper(map[string]any{
+		defer WithViper(map[string]any{
 			"endpoint":   "http://test.com",
 			"api-key":    "test-key",
 			"username":   "test-user",

@@ -3,12 +3,14 @@ package testutil
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -71,6 +73,11 @@ func RunCommandCaptureOutput(command *cobra.Command, args []string) (string, err
 	// ensure viper/config is initialized so tests pick up env vars
 	rootCmd.SetArgs(args)
 	err := rootCmd.Execute()
+	if err != nil {
+		// If SilenceErrors is true, we need to manually write the error to the buffer
+		// so tests that check 'output' for error messages still pass.
+		_, _ = fmt.Fprintln(rootCmd.OutOrStdout(), err)
+	}
 	return buf.String(), err
 }
 
@@ -78,6 +85,9 @@ func RunCommandCaptureOutput(command *cobra.Command, args []string) (string, err
 // overrides, runs the provided cobra command, and tears down everything.
 // It returns the captured output and any error from running the command.
 func RunWithMockServer(handler http.HandlerFunc, viperOverrides map[string]any, cmd *cobra.Command, args []string) (string, error) {
+	// Reset the singleton client to ensure it picks up the new mock configuration
+	client.ResetClient()
+
 	url, teardown := StartMockServer(handler)
 	defer teardown()
 
