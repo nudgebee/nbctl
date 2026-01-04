@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -103,8 +102,8 @@ var configureAddCmd = &cobra.Command{
 
 		// Validate the configuration by making a simple API call
 		fmt.Println("Validating configuration...")
-		client := client.NewClient(client.WithApiKey(apiKey), client.WithEndpoint(endpoint), client.WithUsername(username))
-		req := graphql.NewRequest(`
+		gqlClient := client.NewClient(client.WithApiKey(apiKey), client.WithEndpoint(endpoint), client.WithUsername(username))
+		req := client.NewRequest(`
 			query {
 				cloud_accounts(limit: 1) {
 					id
@@ -117,7 +116,7 @@ var configureAddCmd = &cobra.Command{
 				Tenant string `json:"tenant"`
 			} `json:"cloud_accounts"`
 		}
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := gqlClient.Run(context.Background(), req, &respData); err != nil {
 			fmt.Println("Configuration validation failed. Please check your credentials and re-run 'nbctl configure add'.")
 			return err
 		}

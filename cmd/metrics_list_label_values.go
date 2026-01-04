@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -15,7 +14,7 @@ var metricsListLabelValuesCmd = &cobra.Command{
 	Use:   "list-label-values",
 	Short: "List metric label values",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -27,7 +26,7 @@ var metricsListLabelValuesCmd = &cobra.Command{
 
 		label, _ := cmd.Flags().GetString("label")
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query MetricsLabelValueList($accountId: String!, $labelName: String!) {
 			  metrics_list_label_values(request: {account_id: $accountId, label: $labelName}) {
 				value
@@ -44,7 +43,7 @@ var metricsListLabelValuesCmd = &cobra.Command{
 			} `json:"metrics_list_label_values"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

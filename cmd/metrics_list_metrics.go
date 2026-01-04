@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -15,7 +14,7 @@ var metricsListMetricsCmd = &cobra.Command{
 	Use:   "list-metrics",
 	Short: "List metrics",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -25,7 +24,7 @@ var metricsListMetricsCmd = &cobra.Command{
 			return fmt.Errorf("account-id is required")
 		}
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			mutation MetricsList($accountId: String!) {
 			  metrics_list(request: {account_id: $accountId}) {
 				metric
@@ -41,7 +40,7 @@ var metricsListMetricsCmd = &cobra.Command{
 			} `json:"metrics_list"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

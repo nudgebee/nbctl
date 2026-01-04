@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -16,7 +15,7 @@ var optimizationsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List optimizations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -46,7 +45,7 @@ var optimizationsListCmd = &cobra.Command{
 			where["status"] = map[string]any{"_in": []string{status}}
 		}
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query list_k8_recommendation($where: RecommendationWhereRequest!, $limit: Int, $offset: Int) {
 			  recommendation: recommendations_v2(where: $where, limit: $limit, offset: $offset, order_by: {column: "estimated_savings", order: desc}) {
 				rows{
@@ -92,7 +91,7 @@ var optimizationsListCmd = &cobra.Command{
 			} `json:"recommendation"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -20,7 +19,7 @@ var workflowTriggerCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowId := args[0]
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		query := `
 mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
@@ -30,7 +29,7 @@ mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
   }
 }
 `
-		req := graphql.NewRequest(query)
+		req := client.NewRequest(query)
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
 			accountId = viper.GetString("account-id")
@@ -61,7 +60,7 @@ mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
 			} `json:"workflow_trigger"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

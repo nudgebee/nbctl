@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -21,9 +20,9 @@ var accountsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all accounts",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query GetCloudAccounts($where: cloud_accounts_bool_exp) {
 				cloud_accounts(where: $where) {
 					cloud_provider
@@ -85,7 +84,7 @@ var accountsListCmd = &cobra.Command{
 				} `json:"cloud_account_attrs"`
 			} `json:"cloud_accounts"`
 		}
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

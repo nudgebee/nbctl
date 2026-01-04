@@ -8,17 +8,48 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/config"
 	"github.com/spf13/viper"
 )
+
+// Request is a GraphQL request.
+type Request struct {
+	q      string
+	vars   map[string]interface{}
+	header http.Header
+}
+
+// NewRequest creates a new GraphQL request.
+func NewRequest(q string) *Request {
+	return &Request{
+		q:      q,
+		vars:   make(map[string]interface{}),
+		header: make(http.Header),
+	}
+}
+
+// Var sets a variable.
+func (r *Request) Var(key string, value interface{}) {
+	r.vars[key] = value
+}
+
+// Header sets a header.
+func (r *Request) Header(key, value string) {
+	r.header.Set(key, value)
+}
+
+// Client is a GraphQL client.
+type Client struct {
+	endpoint   string
+	httpClient *http.Client
+}
 
 // loggingTransport is an http.RoundTripper that logs requests and responses.
 type loggingTransport struct {
@@ -128,7 +159,7 @@ func WithEndpoint(endpoint string) ClientOption {
 }
 
 // NewClient creates a new GraphQL client.
-func NewClient(opts ...ClientOption) *graphql.Client {
+func NewClient(opts ...ClientOption) *Client {
 	config := clientOptions{}
 	for _, o := range opts {
 		o.apply(&config)
@@ -184,11 +215,13 @@ func NewClient(opts ...ClientOption) *graphql.Client {
 
 	httpClient := &http.Client{
 		Transport: finalTransport,
+		Timeout:   30 * time.Second,
 	}
 
-	client := graphql.NewClient(graphqlEndpoint, graphql.WithHTTPClient(httpClient))
-
-	return client
+	return &Client{
+		endpoint:   graphqlEndpoint,
+		httpClient: httpClient,
+	}
 }
 
 // NewHTTPClient creates a new authenticated http.Client.
@@ -430,12 +463,12 @@ func (e GraphQLErrors) Error() string {
 }
 
 var (
-	runClient     *graphql.Client
+	runClient     *Client
 	runClientOnce sync.Once
 )
 
 // getRunClient returns the singleton GraphQL client, initializing it if necessary.
-func getRunClient() *graphql.Client {
+func getRunClient() *Client {
 	runClientOnce.Do(func() {
 		runClient = NewClient()
 	})
@@ -450,83 +483,143 @@ func ResetClient() {
 }
 
 // Run executes a GraphQL request.
-func Run(ctx context.Context, req *graphql.Request, resp any) error {
+func Run(ctx context.Context, req *Request, resp any) error {
 	config.InitConfig()
 	client := getRunClient()
+	return client.Run(ctx, req, resp)
+}
 
-	verbose := viper.GetBool("verbose")
-	if verbose {
-		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.Printf("Error opening log file: %v\n", err)
-		} else {
-			defer func() {
-				if err := logFile.Close(); err != nil {
-					slog.Error("unable to close log file", "error", err)
-				}
-			}()
-			logger := log.New(logFile, "", log.LstdFlags)
-
-			// Log the GraphQL request
-			requestBody, err := json.MarshalIndent(req, "", "  ")
-			if err != nil {
-				logger.Printf("Error marshalling GraphQL request: %v\n", err)
-			} else {
-				logger.Printf("GraphQL Request: %s\n", requestBody)
-			}
-		}
+func (c *Client) Run(ctx context.Context, req *Request, resp any) error {
+	// 1. Prepare payload
+	payload := map[string]interface{}{
+		"query":     req.q,
+		"variables": req.vars,
 	}
 
-	// Execute the GraphQL request into a temporary struct that captures both data and errors.
-	var rawGraphQLResponse struct {
-		Data   json.RawMessage `json:"data"`
-		Errors []GraphQLError  `json:"errors"`
-	}
-
-	// Use the underlying machinebox/graphql client's Run method.
-	// This will handle network errors and HTTP status codes.
-	err := client.Run(ctx, req, &rawGraphQLResponse)
-
+	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
-		// This error is from the underlying HTTP request or client.Run itself (e.g., non-2xx/4xx status, network error).
-		return fmt.Errorf("GraphQL client execution failed: %w", err)
+		return fmt.Errorf("failed to marshal graphql payload: %w", err)
 	}
 
-	// If the GraphQL response contains errors, return our custom error type.
-	if len(rawGraphQLResponse.Errors) > 0 {
-		return GraphQLErrors(rawGraphQLResponse.Errors)
+	// 2. Create Request
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create http request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	for k, v := range req.header {
+		httpReq.Header[k] = v
 	}
 
-	// If no GraphQL errors, unmarshal the data into the caller's response struct.
-	if err := json.Unmarshal(rawGraphQLResponse.Data, resp); err != nil {
-		return fmt.Errorf("failed to unmarshal GraphQL data: %w", err)
+	// 3. Execute Request
+	httpResp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("http request failed: %w", err)
+	}
+	defer func() {
+		_ = httpResp.Body.Close()
+	}()
+
+	// 4. Read Response
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	if verbose {
-		logFile, fileErr := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if fileErr != nil {
-			log.Printf("Error opening log file: %v\n", fileErr)
-		} else {
-			defer func() {
-				if err := logFile.Close(); err != nil {
-					slog.Error("unable to close log file", "error", err)
-				}
-			}()
-			logger := log.New(logFile, "", log.LstdFlags)
+	// 5. Decode Response
+	// We want to handle errors specifically, so we decode into a raw map first or a struct with Errors.
+	// We'll use a struct that captures Data as RawMessage to allow unmarshalling later.
+	var graphQLResp struct {
+		Data   json.RawMessage `json:"data"`
+		Errors []interface{}   `json:"errors"`
+	}
 
-			// Log the GraphQL response or error
-			if err != nil {
-				logger.Printf("GraphQL Response Error: %v\n", err)
-			} else {
-				respBytes, marshalErr := json.MarshalIndent(resp, "", "  ")
-				if marshalErr != nil {
-					logger.Printf("Error marshalling GraphQL response: %v\n", marshalErr)
-				} else {
-					logger.Printf("GraphQL Response: %s\n", respBytes)
-				}
-			}
-		}
+	if err := json.Unmarshal(respBody, &graphQLResp); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	// 6. Handle Errors
+	if len(graphQLResp.Errors) > 0 {
+		return c.handleGraphQLErrors(graphQLResp.Errors)
+	}
+
+	// 7. Unmarshal Data
+	if resp == nil {
+		return nil
+	}
+
+	if len(graphQLResp.Data) == 0 {
+		// No data and no errors?
+		return nil
+	}
+
+	// machinebox/graphql unmarshals into the struct.
+	// If the user provided a struct, we need to be careful.
+	// machinebox/graphql logic:
+	// - if resp is a map, it just unmarshals data into it.
+	// - if resp is a struct, it tries to match fields.
+
+	// We will attempt to unmarshal data directly into resp.
+	if err := json.Unmarshal(graphQLResp.Data, resp); err != nil {
+		return fmt.Errorf("failed to unmarshal graphql data: %w", err)
 	}
 
 	return nil
+}
+
+func (c *Client) handleGraphQLErrors(errorsVal []interface{}) error {
+	// Check for specific crash signature in error messages (Hasura ActionWebhookErrorResponse)
+	for _, errItem := range errorsVal {
+		if errMap, ok := errItem.(map[string]interface{}); ok {
+			if msg, ok := errMap["message"].(string); ok {
+				if strings.Contains(msg, "ActionWebhookErrorResponse") && strings.Contains(msg, "key \"message\" not found") {
+					// Attempt to drill down into the actual error from the webhook
+					// extensions.internal.response.body.errors[].message
+					if extensions, ok := errMap["extensions"].(map[string]interface{}); ok {
+						if internal, ok := extensions["internal"].(map[string]interface{}); ok {
+							if response, ok := internal["response"].(map[string]interface{}); ok {
+								if body, ok := response["body"].(map[string]interface{}); ok {
+									if bodyErrs, ok := body["errors"].([]interface{}); ok && len(bodyErrs) > 0 {
+										var sb strings.Builder
+										sb.WriteString("Backend validation failed:\n")
+										for _, be := range bodyErrs {
+											if beMap, ok := be.(map[string]interface{}); ok {
+												if beMsg, ok := beMap["message"].(string); ok {
+													sb.WriteString(fmt.Sprintf("- %s\n", beMsg))
+												}
+											}
+										}
+										return fmt.Errorf("%s", sb.String())
+									}
+								}
+							}
+						}
+					}
+					// Fallback if drill-down fails but it matched the signature
+					if viper.GetBool("verbose") {
+						jsonBytes, _ := json.MarshalIndent(errorsVal, "", "  ")
+						return fmt.Errorf("validation failed (server error):\n%s", string(jsonBytes))
+					}
+					return fmt.Errorf("validation failed (server error). Run with --verbose to see full details")
+				}
+			}
+		}
+	}
+
+	// Generic error handling
+	// Convert errors to GraphQLErrors for backward compatibility or better typing?
+	// The original code used a custom struct. Let's try to map it to GraphQLErrors if possible,
+	// or just return a formatted error string.
+
+	var errs GraphQLErrors
+	jsonBytes, _ := json.Marshal(errorsVal)
+	_ = json.Unmarshal(jsonBytes, &errs) // Best effort to unmarshal into our struct
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	// If unmarshalling failed (e.g. different structure), return JSON string
+	formatted, _ := json.MarshalIndent(errorsVal, "", "  ")
+	return fmt.Errorf("graphql errors:\n%s", string(formatted))
 }

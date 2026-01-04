@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -16,11 +15,11 @@ var optimizationsGetCmd = &cobra.Command{
 	Short: "Get an optimization by ID",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		id := args[0]
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query GetRecommendationById($id: String!) {
 			  recommendations_v2(where: {id: {_eq: $id}}) {
 				rows {
@@ -92,7 +91,7 @@ var optimizationsGetCmd = &cobra.Command{
 			} `json:"recommendations_v2"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			fmt.Printf("GraphQL error: %v\n", err)
 			return err
 		}
