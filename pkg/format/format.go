@@ -208,12 +208,15 @@ func (f *Format) printSlice(val reflect.Value) {
 	}
 	_, _ = fmt.Fprintln(w)
 
+	numFields := elemType.NumField()
 	for i := 0; i < val.Len(); i++ {
-		for j := 0; j < elemType.NumField(); j++ {
+		// Hoist item retrieval to avoid repeated bounds checks and Value allocations
+		item := val.Index(i)
+		for j := 0; j < numFields; j++ {
 			if j > 0 {
 				_, _ = fmt.Fprint(w, "\t")
 			}
-			_, _ = fmt.Fprintf(w, "%v", val.Index(i).Field(j).Interface())
+			_, _ = fmt.Fprintf(w, "%v", item.Field(j).Interface())
 		}
 		_, _ = fmt.Fprintln(w)
 	}
