@@ -14,9 +14,11 @@ import (
 
 var (
 	rootCmd = &cobra.Command{
-		Use:   "nbctl",
-		Short: "A CLI for interacting with the Nudgebee API",
-		Long:  `nbctl is a command-line interface for Nudgebee.`,
+		Use:           "nbctl",
+		Short:         "A CLI for interacting with the Nudgebee API",
+		Long:          `nbctl is a command-line interface for Nudgebee.`,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	completionCmd = &cobra.Command{

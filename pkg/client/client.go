@@ -191,6 +191,64 @@ func NewClient(opts ...ClientOption) *graphql.Client {
 	return client
 }
 
+// NewHTTPClient creates a new authenticated http.Client.
+func NewHTTPClient(opts ...ClientOption) *http.Client {
+	config := clientOptions{}
+	for _, o := range opts {
+		o.apply(&config)
+	}
+
+	endpoint := config.endpoint
+	if endpoint == "" {
+		endpoint = viper.GetString("endpoint")
+	}
+	if endpoint == "" {
+		endpoint = "https://app.nudgebee.com"
+	}
+	if endpoint[len(endpoint)-1] == '/' {
+		endpoint = endpoint[:len(endpoint)-1]
+	}
+
+	apiKey := config.apiKey
+	if apiKey == "" {
+		apiKey = viper.GetString("api-key")
+	}
+
+	username := config.username
+	if username == "" {
+		username = viper.GetString("username")
+	}
+	tokenEndpoint := endpoint + "/api/auth/token"
+
+	transport := &authTransport{
+		apiKey:        apiKey,
+		username:      username,
+		tokenEndpoint: tokenEndpoint,
+		wrapped:       http.DefaultTransport,
+		httpClient:    &http.Client{Timeout: 30 * time.Second},
+	}
+
+	var finalTransport http.RoundTripper = transport
+	verbose := viper.GetBool("verbose")
+	if verbose {
+		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			log.Printf("Error opening log file: %v\n", err)
+		} else {
+			logger := log.New(logFile, "", log.LstdFlags)
+			finalTransport = &loggingTransport{
+				wrapped: transport,
+				logger:  logger,
+			}
+		}
+	}
+
+	return &http.Client{
+		Transport: finalTransport,
+		Timeout:   30 * time.Second,
+	}
+}
+
 type authTransport struct {
 	apiKey        string
 	username      string
