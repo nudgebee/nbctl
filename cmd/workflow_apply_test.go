@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
+	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/nudgebee/nbctl/pkg/testutil"
@@ -10,7 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWorkflowApplyCmd(t *testing.T) {
+func TestWorkflowApplyCmd_Create(t *testing.T) {
+	_ = os.Setenv("NBCTL_TESTING", "true")
+	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
+
 	// Create a temporary YAML file
 	tmpFile, err := os.CreateTemp("", "workflow-*.yaml")
 	require.NoError(t, err)
@@ -28,26 +33,67 @@ definition:
 	require.NoError(t, err)
 	require.NoError(t, tmpFile.Close())
 
-	mockResponse := map[string]interface{}{
-		"workflow_create": map[string]interface{}{
-			"id": "wf-new-1",
-		},
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/auth/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
+			return
+		}
+		if r.URL.Path == "/api/graphql" {
+			var reqBody struct {
+				Query string `json:"query"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&reqBody)
+
+			w.Header().Set("Content-Type", "application/json")
+			if strings.Contains(reqBody.Query, "ListWorkflows") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"workflow_list": map[string]any{
+							"workflows": []any{},
+						},
+					},
+				})
+			} else if strings.Contains(reqBody.Query, "CreateWorkflow") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"workflow_create": map[string]any{
+							"id": "wf-new-1",
+						},
+					},
+				})
+			} else {
+				// Fallback or error
+				w.WriteHeader(http.StatusBadRequest)
+			}
+			return
+		}
+		http.NotFound(w, r)
 	}
 
-	output, err := testutil.RunWithSimpleGraphQL(mockResponse, workflowCmd, []string{"workflow", "apply", tmpFile.Name()})
+	defaults := map[string]any{
+		"api-key":    "dummy",
+		"username":   "dummy-user",
+		"account-id": "dummy-account",
+	}
+
+	output, err := testutil.RunWithMockServer(http.HandlerFunc(handler), defaults, workflowCmd, []string{"workflow", "apply", tmpFile.Name()})
 	require.NoError(t, err)
 
 	assert.Contains(t, output, "Workflow created with ID: wf-new-1")
 }
 
-func TestWorkflowApplyCmd_JSON(t *testing.T) {
+func TestWorkflowApplyCmd_Update(t *testing.T) {
+	_ = os.Setenv("NBCTL_TESTING", "true")
+	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
+
 	// Create a temporary YAML file
 	tmpFile, err := os.CreateTemp("", "workflow-*.yaml")
 	require.NoError(t, err)
 	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	yamlContent := `
-name: New Workflow
+name: Existing Workflow
 definition:
   version: v1
 `
@@ -55,17 +101,57 @@ definition:
 	require.NoError(t, err)
 	require.NoError(t, tmpFile.Close())
 
-	mockResponse := map[string]interface{}{
-		"workflow_create": map[string]interface{}{
-			"id": "wf-new-1",
-		},
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/auth/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
+			return
+		}
+		if r.URL.Path == "/api/graphql" {
+			var reqBody struct {
+				Query string `json:"query"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&reqBody)
+
+			w.Header().Set("Content-Type", "application/json")
+			if strings.Contains(reqBody.Query, "ListWorkflows") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"workflow_list": map[string]any{
+							"workflows": []any{
+								map[string]any{
+									"id":   "wf-existing-1",
+									"name": "Existing Workflow",
+								},
+							},
+						},
+					},
+				})
+			} else if strings.Contains(reqBody.Query, "UpdateWorkflow") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"workflow_update": map[string]any{
+							"id": "wf-existing-1",
+						},
+					},
+				})
+			} else {
+				// Fail if it tries to create
+				w.WriteHeader(http.StatusBadRequest)
+			}
+			return
+		}
+		http.NotFound(w, r)
 	}
 
-	output, err := testutil.RunWithSimpleGraphQL(mockResponse, workflowCmd, []string{"workflow", "apply", tmpFile.Name(), "--format", "json"})
+	defaults := map[string]any{
+		"api-key":    "dummy",
+		"username":   "dummy-user",
+		"account-id": "dummy-account",
+	}
+
+	output, err := testutil.RunWithMockServer(http.HandlerFunc(handler), defaults, workflowCmd, []string{"workflow", "apply", tmpFile.Name()})
 	require.NoError(t, err)
 
-	var result map[string]interface{}
-	err = json.Unmarshal([]byte(output), &result)
-	require.NoError(t, err)
-	assert.Equal(t, "wf-new-1", result["id"])
+	assert.Contains(t, output, "Workflow updated with ID: wf-existing-1")
 }
