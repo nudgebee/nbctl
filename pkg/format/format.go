@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"strconv"
 	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
@@ -140,11 +139,14 @@ func (f *Format) printTabularData(tabularData TabularData) {
 					var dataToUnmarshal []byte
 					// Check if it's a quoted string literal (starts with quote)
 					if len(rawJSON) > 0 && rawJSON[0] == '"' {
-						// Unquote the raw JSON string if it's a string literal
-						if s, err := strconv.Unquote(string(rawJSON)); err == nil {
+						// Use json.Unmarshal to unquote the string. This avoids the string(rawJSON) allocation
+						// required by strconv.Unquote and correctly handles JSON escape sequences (like \/)
+						// that strconv.Unquote rejects.
+						var s string
+						if err := json.Unmarshal(rawJSON, &s); err == nil {
 							dataToUnmarshal = []byte(s)
 						} else {
-							// If unquoting fails, fallback to original
+							// If unmarshalling fails, fallback to original
 							dataToUnmarshal = rawJSON
 						}
 					} else {
