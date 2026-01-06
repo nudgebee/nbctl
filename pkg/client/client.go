@@ -169,6 +169,7 @@ func NewClient(opts ...ClientOption) *graphql.Client {
 
 	var finalTransport http.RoundTripper = transport
 	verbose := viper.GetBool("verbose")
+
 	if verbose {
 		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -230,6 +231,7 @@ func NewHTTPClient(opts ...ClientOption) *http.Client {
 
 	var finalTransport http.RoundTripper = transport
 	verbose := viper.GetBool("verbose")
+
 	if verbose {
 		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -455,6 +457,8 @@ func Run(ctx context.Context, req *graphql.Request, resp any) error {
 	client := getRunClient()
 
 	verbose := viper.GetBool("verbose")
+	var logger *log.Logger
+
 	if verbose {
 		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -465,7 +469,7 @@ func Run(ctx context.Context, req *graphql.Request, resp any) error {
 					slog.Error("unable to close log file", "error", err)
 				}
 			}()
-			logger := log.New(logFile, "", log.LstdFlags)
+			logger = log.New(logFile, "", log.LstdFlags)
 
 			// Log the GraphQL request
 			requestBody, err := json.MarshalIndent(req, "", "  ")
@@ -488,43 +492,36 @@ func Run(ctx context.Context, req *graphql.Request, resp any) error {
 	err := client.Run(ctx, req, &rawGraphQLResponse)
 
 	if err != nil {
+		if logger != nil {
+			logger.Printf("GraphQL Response Error: %v\n", err)
+		}
 		// This error is from the underlying HTTP request or client.Run itself (e.g., non-2xx/4xx status, network error).
 		return fmt.Errorf("GraphQL client execution failed: %w", err)
 	}
 
 	// If the GraphQL response contains errors, return our custom error type.
 	if len(rawGraphQLResponse.Errors) > 0 {
-		return GraphQLErrors(rawGraphQLResponse.Errors)
+		gqlErrors := GraphQLErrors(rawGraphQLResponse.Errors)
+		if logger != nil {
+			logger.Printf("GraphQL Response Error: %v\n", gqlErrors)
+		}
+		return gqlErrors
 	}
 
 	// If no GraphQL errors, unmarshal the data into the caller's response struct.
 	if err := json.Unmarshal(rawGraphQLResponse.Data, resp); err != nil {
+		if logger != nil {
+			logger.Printf("GraphQL Response Unmarshal Error: %v\n", err)
+		}
 		return fmt.Errorf("failed to unmarshal GraphQL data: %w", err)
 	}
 
-	if verbose {
-		logFile, fileErr := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if fileErr != nil {
-			log.Printf("Error opening log file: %v\n", fileErr)
+	if logger != nil {
+		respBytes, marshalErr := json.MarshalIndent(resp, "", "  ")
+		if marshalErr != nil {
+			logger.Printf("Error marshalling GraphQL response: %v\n", marshalErr)
 		} else {
-			defer func() {
-				if err := logFile.Close(); err != nil {
-					slog.Error("unable to close log file", "error", err)
-				}
-			}()
-			logger := log.New(logFile, "", log.LstdFlags)
-
-			// Log the GraphQL response or error
-			if err != nil {
-				logger.Printf("GraphQL Response Error: %v\n", err)
-			} else {
-				respBytes, marshalErr := json.MarshalIndent(resp, "", "  ")
-				if marshalErr != nil {
-					logger.Printf("Error marshalling GraphQL response: %v\n", marshalErr)
-				} else {
-					logger.Printf("GraphQL Response: %s\n", respBytes)
-				}
-			}
+			logger.Printf("GraphQL Response: %s\n", respBytes)
 		}
 	}
 
