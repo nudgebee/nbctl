@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
 )
 
 type NubiClient struct {
-	Client         *graphql.Client
+	Client         *client.Client
 	AccountID      string
 	Username       string
 	SessionID      string
@@ -20,7 +20,7 @@ type NubiClient struct {
 	Endpoint       string
 }
 
-func New(client *graphql.Client, accountID, username, sessionID, endpoint string) *NubiClient {
+func New(client *client.Client, accountID, username, sessionID, endpoint string) *NubiClient {
 	return &NubiClient{
 		Client:    client,
 		AccountID: accountID,
@@ -38,7 +38,7 @@ type ConversationMessage struct {
 }
 
 func (c *NubiClient) GetConversationMessages(conversationID string) ([]ConversationMessage, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query GetLlmConversationMessages($conversationId: uuid!) {
 		  llm_conversation_messages(where: {conversation_id: {_eq: $conversationId}, message_type: {_in: ["generation", "followup"]}}, order_by: {created_at: asc}) {
 			role
@@ -62,7 +62,7 @@ func (c *NubiClient) GetConversationMessages(conversationID string) ([]Conversat
 }
 
 func (c *NubiClient) SwitchToConversation(conversationID string) ([]ConversationMessage, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query GetLlmConversationDetails($id: uuid!) {
 		  llm_conversations_by_pk(id: $id) {
 			id
@@ -100,7 +100,7 @@ type ConversationHistoryItem struct {
 }
 
 func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query LlmConversationHistory($limit: Int!, $accountId: uuid!, $username: citext!) {
 		  llm_conversations(
 			where: {
@@ -150,7 +150,7 @@ func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
 }
 
 func (c *NubiClient) TriggerInvestigation(ctx context.Context, query string) error {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		mutation AiTriggerInvestigateResponse($accountId: String!, $query: String!, $sessionId: String!) {
 		  ai_trigger_investigation(request: {account_id: $accountId, query: $query, user_id: "", session_id: $sessionId, async: true}) {
 			data {
@@ -172,7 +172,7 @@ func (c *NubiClient) TriggerInvestigation(ctx context.Context, query string) err
 }
 
 func (c *NubiClient) GetConversation(ctx context.Context) (string, string, string, string, string, string, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query GetLlmConversation($sessionId: String!) {
 		  llm_conversations(where: {session_id: {_eq: $sessionId}}, order_by: {created_at: desc}, limit: 1) {
 			id
@@ -302,7 +302,7 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 }
 
 func (c *NubiClient) SendFollowupResponse(ctx context.Context, query, agentID, messageID string) error {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		mutation AiFollowupResponse($accountId: String!, $query: String!, $userId: String!, $conversationId: String!, $agentId: String!, $messageId: String!) {
 		  ai_followup_response(request: {account_id: $accountId, query: $query, user_id: $userId, conversation_id: $conversationId, agent_id: $agentId, message_id: $messageId, async: true}) {
 			data {
@@ -328,7 +328,7 @@ func (c *NubiClient) StopConversation() {
 		return
 	}
 
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		mutation AIStopInvestigationRequest($accountId: String!, $conversationId: String!, $username: String!) {
 		  ai_stop_investigation(request: {account_id: $accountId, conversation_id: $conversationId, user_id: $username}) {
 			data
@@ -350,7 +350,7 @@ func (c *NubiClient) StopConversation() {
 }
 
 func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		mutation GetConversationUsageMetrics($accountId: String!, $conversationId: String!) {
 		  ai_get_conversation_usage_metrics(request: {account_id: $accountId, conversation_id: $conversationId}) {
 			data
@@ -382,7 +382,7 @@ func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
 }
 
 func (c *NubiClient) AddBookmark(conversationID string) error {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		mutation SaveConversation($data: SaveLLMConversationRequest!) {
 		  ai_save_conversation(request: $data) {
 			data {
@@ -404,7 +404,7 @@ func (c *NubiClient) AddBookmark(conversationID string) error {
 }
 
 func (c *NubiClient) RemoveBookmark(conversationID string) error {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		mutation RemoveBookmark($conversationId: uuid!, $username: String!) {
 		  delete_llm_conversation_saveds_by_pk(conversation_id: $conversationId, user_id: $username) {
 			conversation_id
@@ -422,7 +422,7 @@ type BookmarkItem struct {
 }
 
 func (c *NubiClient) ListBookmarks() ([]BookmarkItem, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query ListBookmarks($username: citext!, $accountId: uuid!) {
 		  llm_conversations(
 			where: {
@@ -460,7 +460,7 @@ type AgentItem struct {
 }
 
 func (c *NubiClient) ListAgents() ([]AgentItem, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query ListAgents($accountId: String!) {
 		  ai_list_agents(request: {account_id: $accountId}) {
 			data
@@ -495,7 +495,7 @@ type ToolItem struct {
 }
 
 func (c *NubiClient) ListTools() ([]ToolItem, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query ListTools($accountId: String!) {
 		  ai_list_tools(request: {account_id: $accountId}) {
 			data
@@ -530,7 +530,7 @@ type FunctionItem struct {
 }
 
 func (c *NubiClient) ListFunctions() ([]FunctionItem, error) {
-	req := graphql.NewRequest(`
+	req := client.NewRequest(`
 		query GetFunctions($accountId: uuid!) {
 		  llm_functions(where: {account_id: {_eq: $accountId}}) {
 			id

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -22,7 +21,7 @@ var workflowListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all workflows",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		query := `
 query ListWorkflows($accountId:String!, $status:String, $last_execution_status:String, $type:String) {
@@ -54,7 +53,7 @@ query ListWorkflows($accountId:String!, $status:String, $last_execution_status:S
   }
 }
 `
-		req := graphql.NewRequest(query)
+		req := client.NewRequest(query)
 
 		accountId := viper.GetString("account-id")
 		req.Var("accountId", accountId)
@@ -85,7 +84,7 @@ query ListWorkflows($accountId:String!, $status:String, $last_execution_status:S
 			} `json:"workflow_list"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

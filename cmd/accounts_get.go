@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -28,9 +27,9 @@ var accountsGetCmd = &cobra.Command{
 	Short: "Get a single account by ID",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query($id: uuid!) {
 				cloud_accounts_by_pk(id: $id) {
 					id
@@ -80,7 +79,7 @@ var accountsGetCmd = &cobra.Command{
 			} `json:"cloud_accounts_by_pk"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

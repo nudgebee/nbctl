@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -16,7 +15,7 @@ var logsListLabelsCmd = &cobra.Command{
 	Use:   "list-labels",
 	Short: "List log labels",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -52,7 +51,7 @@ var logsListLabelsCmd = &cobra.Command{
 
 		query := fmt.Sprintf("start=%d&end=%d", startTime.UnixNano(), endTime.UnixNano())
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			mutation FetchLogLabels($accountId: String!, $query: String!) {
 			  logs_list_labels(request: {account_id: $accountId, request: {query: $query}}) {
 				label
@@ -69,7 +68,7 @@ var logsListLabelsCmd = &cobra.Command{
 			} `json:"logs_list_labels"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

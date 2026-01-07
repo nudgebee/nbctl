@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/samber/lo"
@@ -25,9 +24,9 @@ var adminUsersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all users",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query GetUsersByTenant($offset: Int, $limit: Int, $where: users_bool_exp) {
 				users(limit: $limit, offset: $offset, order_by: {display_name:asc}, where: $where) {
 					display_name
@@ -128,7 +127,7 @@ var adminUsersListCmd = &cobra.Command{
 				} `json:"aggregate"`
 			} `json:"users_aggregate"`
 		}
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

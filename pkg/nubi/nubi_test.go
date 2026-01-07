@@ -8,15 +8,26 @@ import (
 	"testing"
 	"time"
 
-	"github.com/machinebox/graphql"
+	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func newTestNubiClient(handler http.HandlerFunc) (*NubiClient, func()) {
-	srv := httptest.NewServer(handler)
-	client := graphql.NewClient(srv.URL)
-	nubiClient := New(client, "test-account", "test-user", "test-session", srv.URL)
+	// Wrapper handler to handle token endpoint
+	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/auth/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
+			return
+		}
+		// Delegate to the test-specific handler for other requests (presumably graphql)
+		handler(w, r)
+	})
+
+	srv := httptest.NewServer(wrappedHandler)
+	c := client.NewClient(client.WithEndpoint(srv.URL))
+	nubiClient := New(c, "test-account", "test-user", "test-session", srv.URL)
 	return nubiClient, srv.Close
 }
 
@@ -33,10 +44,10 @@ func TestNubiClient_GetConversationMessages(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	messages, err := client.GetConversationMessages("test-conversation")
+	messages, err := c.GetConversationMessages("test-conversation")
 	assert.NoError(t, err)
 	assert.Len(t, messages, 2)
 	assert.Equal(t, "user", messages[0].Role)
@@ -58,10 +69,10 @@ func TestNubiClient_ShowHistory(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	history, err := client.ShowHistory(2)
+	history, err := c.ShowHistory(2)
 	assert.NoError(t, err)
 	assert.Len(t, history, 2)
 	assert.Equal(t, "1", history[0].ID)
@@ -82,10 +93,10 @@ func TestNubiClient_TriggerInvestigation(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	err := client.TriggerInvestigation(context.Background(), "test query")
+	err := c.TriggerInvestigation(context.Background(), "test query")
 	assert.NoError(t, err)
 }
 
@@ -103,14 +114,14 @@ func TestNubiClient_SwitchToConversation(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	messages, err := client.SwitchToConversation("test-conv")
+	messages, err := c.SwitchToConversation("test-conv")
 	assert.NoError(t, err)
 	assert.Empty(t, messages)
-	assert.Equal(t, "test-conv", client.ConversationID)
-	assert.Equal(t, "test-sess", client.SessionID)
+	assert.Equal(t, "test-conv", c.ConversationID)
+	assert.Equal(t, "test-sess", c.SessionID)
 }
 
 func TestNubiClient_GetConversation(t *testing.T) {
@@ -136,10 +147,10 @@ func TestNubiClient_GetConversation(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	finalResponse, status, _, _, _, _, err := client.GetConversation(context.Background())
+	finalResponse, status, _, _, _, _, err := c.GetConversation(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, "Final Response", finalResponse)
 	assert.Equal(t, "COMPLETED", status)
@@ -157,11 +168,11 @@ func TestNubiClient_SendFollowupResponse(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
-	client.ConversationID = "test-conv"
+	c.ConversationID = "test-conv"
 
-	err := client.SendFollowupResponse(context.Background(), "test query", "agent-1", "msg-1")
+	err := c.SendFollowupResponse(context.Background(), "test query", "agent-1", "msg-1")
 	assert.NoError(t, err)
 }
 
@@ -177,11 +188,11 @@ func TestNubiClient_StopConversation(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
-	client.ConversationID = "test-conv"
+	c.ConversationID = "test-conv"
 
-	client.StopConversation()
+	c.StopConversation()
 	// No error to assert, just ensuring it doesn't panic
 }
 
@@ -203,10 +214,10 @@ func TestNubiClient_GetUsageMetrics(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	metrics, err := client.GetUsageMetrics(context.Background())
+	metrics, err := c.GetUsageMetrics(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, "Cost: $0.001230, Input Tokens: 100, Output Tokens: 200", metrics)
 }
@@ -225,10 +236,10 @@ func TestNubiClient_AddBookmark(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	err := client.AddBookmark("test-conv")
+	err := c.AddBookmark("test-conv")
 	assert.NoError(t, err)
 }
 
@@ -244,10 +255,10 @@ func TestNubiClient_RemoveBookmark(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	err := client.RemoveBookmark("test-conv")
+	err := c.RemoveBookmark("test-conv")
 	assert.NoError(t, err)
 }
 
@@ -264,10 +275,10 @@ func TestNubiClient_ListBookmarks(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	bookmarks, err := client.ListBookmarks()
+	bookmarks, err := c.ListBookmarks()
 	assert.NoError(t, err)
 	assert.Len(t, bookmarks, 2)
 	assert.Equal(t, "1", bookmarks[0].ID)
@@ -286,10 +297,10 @@ func TestNubiClient_ListAgents(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	agents, err := client.ListAgents()
+	agents, err := c.ListAgents()
 	assert.NoError(t, err)
 	assert.Len(t, agents, 1)
 	assert.Equal(t, "agent1", agents[0].Name)
@@ -308,10 +319,10 @@ func TestNubiClient_ListTools(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	tools, err := client.ListTools()
+	tools, err := c.ListTools()
 	assert.NoError(t, err)
 	assert.Len(t, tools, 1)
 	assert.Equal(t, "tool1", tools[0].Name)
@@ -330,10 +341,10 @@ func TestNubiClient_ListFunctions(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}
 
-	client, teardown := newTestNubiClient(handler)
+	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	functions, err := client.ListFunctions()
+	functions, err := c.ListFunctions()
 	assert.NoError(t, err)
 	assert.Len(t, functions, 1)
 	assert.Equal(t, "func1", functions[0].Name)

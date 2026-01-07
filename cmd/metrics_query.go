@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/guptarohit/asciigraph"
-	"github.com/machinebox/graphql"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -55,7 +54,7 @@ var metricsQueryCmd = &cobra.Command{
 	Use:   "query",
 	Short: "Query metrics",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -99,7 +98,7 @@ var metricsQueryCmd = &cobra.Command{
 		startTimeMs := float64(startTime.UnixNano() / int64(time.Millisecond))
 		endTimeMs := float64(endTime.UnixNano() / int64(time.Millisecond))
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query MetricsQuery(
 				$account_id: String!
 				$queries: jsonb!
@@ -128,7 +127,7 @@ var metricsQueryCmd = &cobra.Command{
 		req.Var("end_time", endTimeMs)
 
 		var respData MetricsQueryResponse
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

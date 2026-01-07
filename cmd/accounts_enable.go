@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -17,9 +16,9 @@ var accountsEnableCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		accountID := args[0]
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			mutation UpdateCloudAccount($id: uuid!, $status: cloud_account_status_type_enum!) {
 				update_cloud_accounts(where: {id:{_eq:$id}}, _set: {status:$status}) {
 					affected_rows
@@ -36,7 +35,7 @@ var accountsEnableCmd = &cobra.Command{
 			} `json:"update_cloud_accounts"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return fmt.Errorf("failed to enable account: %w", err)
 		}
 

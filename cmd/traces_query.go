@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -28,7 +27,7 @@ var tracesQueryCmd = &cobra.Command{
 	Use:   "query",
 	Short: "Query traces",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId := viper.GetString("account-id")
 
@@ -75,7 +74,7 @@ var tracesQueryCmd = &cobra.Command{
 
 		whereClause = append(whereClause, fmt.Sprintf(`timestamp:{_between:{_gte:"%s",_lte:"%s"}}`, st.Format(time.RFC3339), et.Format(time.RFC3339)))
 
-		req := graphql.NewRequest(fmt.Sprintf(`
+		req := client.NewRequest(fmt.Sprintf(`
 			query TraceV3($account_id: String!) {
 				traces_v3(request: {account_id: $account_id, query:"",start_time:0,end_time:0,query_request:{where:{_binary:{%s}},having:{},limit:50,offset:0,order_by:[{column:"timestamp",order:"desc"}]}}) {
 					trace_id
@@ -127,7 +126,7 @@ var tracesQueryCmd = &cobra.Command{
 			} `json:"traces_v3"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

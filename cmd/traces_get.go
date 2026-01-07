@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -15,9 +14,9 @@ var tracesGetCmd = &cobra.Command{
 	Short: "Get a trace by ID",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query($traceId: String!) {
 				traces_by_pk(trace_id: $traceId) {
 					trace_id
@@ -43,7 +42,7 @@ var tracesGetCmd = &cobra.Command{
 			} `json:"traces_by_pk"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

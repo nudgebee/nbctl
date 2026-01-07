@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -17,7 +16,7 @@ var logsQueryCmd = &cobra.Command{
 	Use:   "query",
 	Short: "Query logs",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -56,7 +55,7 @@ var logsQueryCmd = &cobra.Command{
 		// Construct the inner query string
 		innerQuery := fmt.Sprintf("query=%s&start=%d&end=%d&limit=%d", queryStr, startTime.UnixNano(), endTime.UnixNano(), limit)
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query FetchLogs($request: FetchLogRequest!) {
 				logs_query(request: $request) {
 					timestamp
@@ -86,7 +85,7 @@ var logsQueryCmd = &cobra.Command{
 			} `json:"logs_list"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

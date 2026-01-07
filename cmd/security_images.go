@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -39,7 +38,7 @@ var securityImagesCmd = &cobra.Command{
 	Short: "List security recommendations for images",
 	Long:  `Retrieves and displays security recommendations related to container images from the Nudgebee API.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -135,7 +134,7 @@ var securityImagesCmd = &cobra.Command{
 			}
 		`, argsClause, whereClauseForAggregate) // Use whereClauseForAggregate for aggregate query
 
-		req := graphql.NewRequest(query)
+		req := client.NewRequest(query)
 
 		req.Var("limit", limit)
 		req.Var("offset", offset)
@@ -160,7 +159,7 @@ var securityImagesCmd = &cobra.Command{
 		}
 
 		var respData SecurityImageResponse
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

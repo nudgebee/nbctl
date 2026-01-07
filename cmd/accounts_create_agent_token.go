@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -17,9 +16,9 @@ var accountsCreateAgentTokenCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		accountID := args[0]
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			mutation CreateAgentToken($accountId: String!) {
 				agent_token_create(object: {account_id: $accountId}) {
 					access_secret
@@ -39,7 +38,7 @@ var accountsCreateAgentTokenCmd = &cobra.Command{
 			} `json:"agent_token_create"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return fmt.Errorf("failed to create agent token: %w", err)
 		}
 

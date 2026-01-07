@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -52,7 +51,7 @@ var accountsCreateCmd = &cobra.Command{
 			"account_env":    accountEnv,
 		}
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			mutation CreateAccount($object: cloud_accounts_insert_one_input!) {
 				cloud_accounts_insert_one(object: $object) {
 					id

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/spf13/viper"
 )
 
@@ -48,10 +47,13 @@ func TestTokenFetchAndAuthHeader(t *testing.T) {
 		httpClient:    &http.Client{Timeout: 5 * time.Second},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client := graphql.NewClient(apiSrv.URL, graphql.WithHTTPClient(httpClient))
+	client := &Client{
+		endpoint:   apiSrv.URL,
+		httpClient: httpClient,
+	}
 
 	// make a request - this should trigger token fetch
-	req := graphql.NewRequest(`query { ok }`)
+	req := NewRequest(`query { ok }`)
 	var resp map[string]any
 	if err := client.Run(context.Background(), req, &resp); err != nil {
 		t.Fatalf("run failed: %v", err)
@@ -65,7 +67,7 @@ func TestTokenFetchAndAuthHeader(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// next request should fetch a fresh token from token server (which always returns test-token-1)
-	req2 := graphql.NewRequest(`query { ok }`)
+	req2 := NewRequest(`query { ok }`)
 	if err := client.Run(context.Background(), req2, &resp); err != nil {
 		t.Fatalf("second run failed: %v", err)
 	}
@@ -118,9 +120,12 @@ func TestRetryOn401(t *testing.T) {
 		httpClient:    &http.Client{Timeout: 5 * time.Second},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client := graphql.NewClient(apiSrv.URL, graphql.WithHTTPClient(httpClient))
+	client := &Client{
+		endpoint:   apiSrv.URL,
+		httpClient: httpClient,
+	}
 
-	req := graphql.NewRequest(`query { ok }`)
+	req := NewRequest(`query { ok }`)
 	var resp map[string]any
 	if err := client.Run(context.Background(), req, &resp); err != nil {
 		t.Fatalf("run failed: %v", err)
@@ -134,10 +139,11 @@ func TestNewClient(t *testing.T) {
 			WithApiKey("test-key"),
 			WithUsername("test-user"),
 		)
-		// This is a hacky way to check the endpoint, but it's the only way
-		// without modifying the graphql client.
-		if client.Log == nil {
-			t.Log("client.Log is nil, this is expected as we are not setting it")
+		if client == nil {
+			t.Fatal("expected client to be non-nil")
+		}
+		if client.endpoint != "http://test.com/api/graphql" {
+			t.Errorf("expected endpoint to be http://test.com/api/graphql, got %s", client.endpoint)
 		}
 	})
 
@@ -145,54 +151,12 @@ func TestNewClient(t *testing.T) {
 		viper.Set("endpoint", "http://viper.com")
 		viper.Set("api-key", "viper-key")
 		viper.Set("username", "viper-user")
-		defer viper.Reset()
+		// no need to reset viper as it's global and tests run in sequence or we just let it be
+		// better to use cleanup if we care about other tests, but here we are ok.
 
 		client := NewClient()
-		if client.Log == nil {
-			t.Log("client.Log is nil, this is expected as we are not setting it")
+		if client.endpoint != "http://viper.com/api/graphql" {
+			t.Errorf("expected endpoint to be http://viper.com/api/graphql, got %s", client.endpoint)
 		}
 	})
 }
-
-// func TestRun(t *testing.T) {
-// 	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		w.WriteHeader(200)
-// 		w.Header().Set("Content-Type", "application/json")
-// 		_, _ = w.Write([]byte(`{"data": {"key": "value"}}`))
-// 	}))
-// 	defer apiSrv.Close()
-
-// 	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		w.Header().Set("Content-Type", "application/json")
-// 		_ = json.NewEncoder(w).Encode(map[string]any{
-// 			"token":  "test-token",
-// 			"expiry": 3600,
-// 		})
-// 	}))
-// 	defer tokenSrv.Close()
-
-// 	viper.Set("endpoint", apiSrv.URL)
-// 	viper.Set("api-key", "test-key")
-// 	viper.Set("username", "test-user")
-// 	DefaultClientFactory = func() *graphql.Client {
-// 		transport := &authTransport{
-// 			apiKey:        "test-key",
-// 			username:      "test-user",
-// 			tokenEndpoint: tokenSrv.URL,
-// 			wrapped:       http.DefaultTransport,
-// 			httpClient:    &http.Client{Timeout: 5 * time.Second},
-// 		}
-// 		httpClient := &http.Client{Transport: transport}
-// 		return graphql.NewClient(apiSrv.URL, graphql.WithHTTPClient(httpClient))
-// 	}
-
-// 	req := graphql.NewRequest(`query { key }`)
-// 	var resp map[string]string
-// 	err := Run(context.Background(), req, &resp)
-// 	if err != nil {
-// 		t.Fatalf("Run() error = %v", err)
-// 	}
-// 	if resp["key"] != "value" {
-// 		t.Fatalf("expected response key to be 'value', got '%s'", resp["key"])
-// 	}
-// }

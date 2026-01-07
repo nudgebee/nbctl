@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -17,7 +16,7 @@ var eventsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List events",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -74,7 +73,7 @@ var eventsListCmd = &cobra.Command{
 			where["priority"] = map[string]any{"_eq": priority}
 		}
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query list_k8_issues_data($where: EventsWhereRequest!, $limit: Int, $offset: Int) {
 			  events: events_v2(where: $where, order_by: [{column: "starts_at", order: desc}], limit: $limit, offset: $offset) {
 				rows{
@@ -124,7 +123,7 @@ var eventsListCmd = &cobra.Command{
 			} `json:"events"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

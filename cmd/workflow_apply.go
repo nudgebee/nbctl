@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -35,7 +34,7 @@ var workflowApplyCmd = &cobra.Command{
 			workflowData["account_id"] = accountId
 		}
 
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		query := `
 mutation CreateWorkflow($request: WorkflowCreateRequest!) {
@@ -44,7 +43,7 @@ mutation CreateWorkflow($request: WorkflowCreateRequest!) {
   }
 }
 `
-		req := graphql.NewRequest(query)
+		req := client.NewRequest(query)
 
 		requestVar := map[string]interface{}{
 			"account_id": accountId,
@@ -59,7 +58,7 @@ mutation CreateWorkflow($request: WorkflowCreateRequest!) {
 			} `json:"workflow_create"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 

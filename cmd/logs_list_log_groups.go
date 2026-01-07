@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/machinebox/graphql"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -28,7 +27,7 @@ var logsListLogGroupsCmd = &cobra.Command{
 	Short: "List log groups with critical/error messages",
 	Long:  `Executes a metrics query to find log groups with critical or error messages and displays them.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		accountId, _ := cmd.Flags().GetString("account-id")
 		if accountId == "" {
@@ -59,7 +58,7 @@ var logsListLogGroupsCmd = &cobra.Command{
 		startTimeMs := float64(startTime.UnixNano() / int64(time.Millisecond))
 		endTimeMs := float64(endTime.UnixNano() / int64(time.Millisecond))
 
-		req := graphql.NewRequest(`
+		req := client.NewRequest(`
 			query MetricsQuery(
 				$account_id: String!
 				$queries: jsonb!
@@ -88,7 +87,7 @@ var logsListLogGroupsCmd = &cobra.Command{
 		req.Var("end_time", endTimeMs)
 
 		var rawResp json.RawMessage
-		if err := client.Run(context.Background(), req, &rawResp); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &rawResp); err != nil {
 			return err
 		}
 

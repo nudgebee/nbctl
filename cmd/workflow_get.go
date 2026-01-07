@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/machinebox/graphql"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -18,7 +17,7 @@ var workflowGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowId := args[0]
-		client := client.NewClient()
+		graphqlClient := client.NewClient()
 
 		query := `
 query GetWorkflowById($accountId:String!, $workflowId:String!) {
@@ -97,7 +96,7 @@ query GetWorkflowById($accountId:String!, $workflowId:String!) {
   }
 }
 `
-		req := graphql.NewRequest(query)
+		req := client.NewRequest(query)
 		accountId := viper.GetString("account-id")
 		req.Var("accountId", accountId)
 		req.Var("workflowId", workflowId)
@@ -116,7 +115,7 @@ query GetWorkflowById($accountId:String!, $workflowId:String!) {
 			} `json:"workflow_get"`
 		}
 
-		if err := client.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
