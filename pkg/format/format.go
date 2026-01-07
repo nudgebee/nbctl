@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strconv"
 	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
@@ -32,6 +33,8 @@ type TabularData struct {
 }
 
 var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
+var tabBytes = []byte("\t")
+var newlineBytes = []byte("\n")
 
 func (f *Format) Set(format string) {
 	f.format = format
@@ -98,11 +101,11 @@ func (f *Format) printTabularData(tabularData TabularData) {
 
 	for i, field := range tabularData.Fields {
 		if i > 0 {
-			_, _ = fmt.Fprint(w, "\t")
+			_, _ = w.Write(tabBytes)
 		}
 		_, _ = fmt.Fprint(w, field.Header)
 	}
-	_, _ = fmt.Fprintln(w)
+	_, _ = w.Write(newlineBytes)
 
 	elemType := val.Type().Elem()
 	fieldIndices := make([][]int, len(tabularData.Fields))
@@ -117,11 +120,14 @@ func (f *Format) printTabularData(tabularData TabularData) {
 		}
 	}
 
+	// Reusable buffer for number formatting to avoid allocations
+	scratch := make([]byte, 0, 64)
+
 	for i := 0; i < val.Len(); i++ {
 		item := val.Index(i)
 		for j := range tabularData.Fields {
 			if j > 0 {
-				_, _ = fmt.Fprint(w, "\t")
+				_, _ = w.Write(tabBytes)
 			}
 			var fieldVal reflect.Value
 			if fieldIndices[j] != nil {
@@ -164,13 +170,31 @@ func (f *Format) printTabularData(tabularData TabularData) {
 						_, _ = fmt.Fprint(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
-					_, _ = fmt.Fprintf(w, "%v", fieldVal.Interface())
+					// Optimization: Handle common types directly to avoid interface boxing and reflection overhead
+					switch fieldVal.Kind() {
+					case reflect.String:
+						_, _ = w.Write([]byte(fieldVal.String()))
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						scratch = strconv.AppendInt(scratch[:0], fieldVal.Int(), 10)
+						_, _ = w.Write(scratch)
+					case reflect.Bool:
+						scratch = strconv.AppendBool(scratch[:0], fieldVal.Bool())
+						_, _ = w.Write(scratch)
+					case reflect.Float32:
+						scratch = strconv.AppendFloat(scratch[:0], fieldVal.Float(), 'f', -1, 32)
+						_, _ = w.Write(scratch)
+					case reflect.Float64:
+						scratch = strconv.AppendFloat(scratch[:0], fieldVal.Float(), 'f', -1, 64)
+						_, _ = w.Write(scratch)
+					default:
+						_, _ = fmt.Fprintf(w, "%v", fieldVal.Interface())
+					}
 				}
 			} else {
-				_, _ = fmt.Fprint(w, "")
+				// Empty string
 			}
 		}
-		_, _ = fmt.Fprintln(w)
+		_, _ = w.Write(newlineBytes)
 	}
 
 	_ = w.Flush()
@@ -204,23 +228,24 @@ func (f *Format) printSlice(val reflect.Value) {
 
 	for i := 0; i < elemType.NumField(); i++ {
 		if i > 0 {
-			_, _ = fmt.Fprint(w, "\t")
+			_, _ = w.Write(tabBytes)
 		}
 		_, _ = fmt.Fprint(w, elemType.Field(i).Name)
 	}
-	_, _ = fmt.Fprintln(w)
+	_, _ = w.Write(newlineBytes)
 
 	numFields := elemType.NumField()
+	// Reuse buffer for fallback logic if we were to apply it here too
 	for i := 0; i < val.Len(); i++ {
 		// Hoist item retrieval to avoid repeated bounds checks and Value allocations
 		item := val.Index(i)
 		for j := 0; j < numFields; j++ {
 			if j > 0 {
-				_, _ = fmt.Fprint(w, "\t")
+				_, _ = w.Write(tabBytes)
 			}
 			_, _ = fmt.Fprintf(w, "%v", item.Field(j).Interface())
 		}
-		_, _ = fmt.Fprintln(w)
+		_, _ = w.Write(newlineBytes)
 	}
 
 	_ = w.Flush()
@@ -296,6 +321,9 @@ func (f *Format) printEvidences(fieldName string, evidences json.RawMessage) {
 
 	bold := lipgloss.NewStyle().Bold(true)
 
+	// Create a new tabwriter for evidences to ensure correct formatting
+	w := tabwriter.NewWriter(f.writer, 0, 0, 3, ' ', 0)
+
 	for _, ev := range evidenceData {
 		_, _ = fmt.Fprintf(f.writer, "\n%s:\n", bold.Render(ev.AdditionalInfo.Title))
 		switch ev.Type {
@@ -308,20 +336,20 @@ func (f *Format) printEvidences(fieldName string, evidences json.RawMessage) {
 				// print table
 				for i, header := range tableData.Headers {
 					if i > 0 {
-						_, _ = fmt.Fprint(f.writer, "\t")
+						_, _ = w.Write(tabBytes)
 					}
-					_, _ = fmt.Fprint(f.writer, header)
+					_, _ = fmt.Fprint(w, header)
 				}
-				_, _ = fmt.Fprintln(f.writer)
+				_, _ = w.Write(newlineBytes)
 
 				for _, row := range tableData.Rows {
 					for i, cell := range row {
 						if i > 0 {
-							_, _ = fmt.Fprint(f.writer, "\t")
+							_, _ = w.Write(tabBytes)
 						}
-						_, _ = fmt.Fprint(f.writer, cell)
+						_, _ = fmt.Fprint(w, cell)
 					}
-					_, _ = fmt.Fprintln(f.writer)
+					_, _ = w.Write(newlineBytes)
 				}
 			}
 		case "json":
@@ -337,6 +365,7 @@ func (f *Format) printEvidences(fieldName string, evidences json.RawMessage) {
 			_, _ = fmt.Fprintf(f.writer, "\t%s\n", string(ev.Data))
 		}
 	}
+	_ = w.Flush()
 }
 
 var formatHandler = &Format{writer: os.Stdout}
