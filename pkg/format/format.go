@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strconv"
 	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
@@ -83,6 +84,31 @@ func (f *Format) printText(obj any) {
 	}
 }
 
+func (f *Format) writeValue(w io.Writer, v reflect.Value, scratch []byte) []byte {
+	switch v.Kind() {
+	case reflect.String:
+		_, _ = io.WriteString(w, v.String())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		scratch = strconv.AppendInt(scratch[:0], v.Int(), 10)
+		_, _ = w.Write(scratch)
+	case reflect.Bool:
+		scratch = strconv.AppendBool(scratch[:0], v.Bool())
+		_, _ = w.Write(scratch)
+	case reflect.Float32:
+		scratch = strconv.AppendFloat(scratch[:0], v.Float(), 'g', -1, 32)
+		_, _ = w.Write(scratch)
+	case reflect.Float64:
+		scratch = strconv.AppendFloat(scratch[:0], v.Float(), 'g', -1, 64)
+		_, _ = w.Write(scratch)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		scratch = strconv.AppendUint(scratch[:0], v.Uint(), 10)
+		_, _ = w.Write(scratch)
+	default:
+		_, _ = fmt.Fprintf(w, "%v", v.Interface())
+	}
+	return scratch
+}
+
 func (f *Format) printTabularData(tabularData TabularData) {
 	val := reflect.ValueOf(tabularData.Data)
 	if val.Kind() != reflect.Slice {
@@ -116,6 +142,9 @@ func (f *Format) printTabularData(tabularData TabularData) {
 			}
 		}
 	}
+
+	// Reusable buffer for formatting numbers/bools to avoid allocation
+	scratch := make([]byte, 0, 64)
 
 	for i := 0; i < val.Len(); i++ {
 		item := val.Index(i)
@@ -164,7 +193,7 @@ func (f *Format) printTabularData(tabularData TabularData) {
 						_, _ = fmt.Fprint(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
-					_, _ = fmt.Fprintf(w, "%v", fieldVal.Interface())
+					scratch = f.writeValue(w, fieldVal, scratch)
 				}
 			} else {
 				_, _ = fmt.Fprint(w, "")
@@ -211,6 +240,9 @@ func (f *Format) printSlice(val reflect.Value) {
 	_, _ = fmt.Fprintln(w)
 
 	numFields := elemType.NumField()
+	// Reusable buffer for formatting numbers/bools to avoid allocation
+	scratch := make([]byte, 0, 64)
+
 	for i := 0; i < val.Len(); i++ {
 		// Hoist item retrieval to avoid repeated bounds checks and Value allocations
 		item := val.Index(i)
@@ -218,7 +250,7 @@ func (f *Format) printSlice(val reflect.Value) {
 			if j > 0 {
 				_, _ = fmt.Fprint(w, "\t")
 			}
-			_, _ = fmt.Fprintf(w, "%v", item.Field(j).Interface())
+			scratch = f.writeValue(w, item.Field(j), scratch)
 		}
 		_, _ = fmt.Fprintln(w)
 	}
@@ -232,6 +264,9 @@ func (f *Format) printStruct(val reflect.Value) {
 	typ := val.Type()
 	var evidenceField reflect.Value
 	var evidenceFieldName string
+
+	// Reusable buffer for formatting numbers/bools to avoid allocation
+	scratch := make([]byte, 0, 64)
 
 	for i := 0; i < val.NumField(); i++ {
 		structField := typ.Field(i)
@@ -264,10 +299,14 @@ func (f *Format) printStruct(val reflect.Value) {
 			for j := 0; j < fieldValue.NumField(); j++ {
 				nestedFieldName := nestedTyp.Field(j).Name
 				nestedFieldValue := fieldValue.Field(j)
-				_, _ = fmt.Fprintf(w, "\t%s\t%v\n", nestedFieldName, nestedFieldValue.Interface())
+				_, _ = fmt.Fprintf(w, "\t%s\t", nestedFieldName)
+				scratch = f.writeValue(w, nestedFieldValue, scratch)
+				_, _ = fmt.Fprintln(w)
 			}
 		} else {
-			_, _ = fmt.Fprintf(w, "%s\t%v\n", fieldName, fieldValue.Interface())
+			_, _ = fmt.Fprintf(w, "%s\t", fieldName)
+			scratch = f.writeValue(w, fieldValue, scratch)
+			_, _ = fmt.Fprintln(w)
 		}
 	}
 
