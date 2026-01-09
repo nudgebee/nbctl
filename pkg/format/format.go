@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"strconv"
 	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
@@ -31,7 +32,11 @@ type TabularData struct {
 	Fields []TableField
 }
 
-var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
+var (
+	jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
+	stringerType       = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
+	errorType          = reflect.TypeOf((*error)(nil)).Elem()
+)
 
 func (f *Format) Set(format string) {
 	f.format = format
@@ -80,6 +85,48 @@ func (f *Format) printText(obj any) {
 	} else {
 		// Fallback to reflection-based table for slices
 		f.printReflectedTable(obj)
+	}
+}
+
+// writeValue optimized writer for common types to avoid fmt.Fprintf reflection overhead
+func (f *Format) writeValue(w io.Writer, v reflect.Value) {
+	// If the value implements fmt.Stringer or error, let fmt handle it to preserve custom formatting.
+	// This check does involve some reflection overhead, but it's necessary for correctness.
+	// We check if the type implements the interface.
+	if v.Type().Implements(stringerType) || v.Type().Implements(errorType) {
+		_, _ = fmt.Fprintf(w, "%v", v.Interface())
+		return
+	}
+
+	switch v.Kind() {
+	case reflect.String:
+		_, _ = io.WriteString(w, v.String())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		var buf [24]byte
+		b := strconv.AppendInt(buf[:0], v.Int(), 10)
+		_, _ = w.Write(b)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		var buf [24]byte
+		b := strconv.AppendUint(buf[:0], v.Uint(), 10)
+		_, _ = w.Write(b)
+	case reflect.Bool:
+		if v.Bool() {
+			_, _ = io.WriteString(w, "true")
+		} else {
+			_, _ = io.WriteString(w, "false")
+		}
+	case reflect.Float32:
+		var buf [64]byte
+		// Use 32 for bitSize to avoid precision artifacts
+		b := strconv.AppendFloat(buf[:0], v.Float(), 'g', -1, 32)
+		_, _ = w.Write(b)
+	case reflect.Float64:
+		var buf [64]byte
+		b := strconv.AppendFloat(buf[:0], v.Float(), 'g', -1, 64)
+		_, _ = w.Write(b)
+	default:
+		// Fallback for complex types
+		_, _ = fmt.Fprintf(w, "%v", v.Interface())
 	}
 }
 
@@ -164,7 +211,7 @@ func (f *Format) printTabularData(tabularData TabularData) {
 						_, _ = fmt.Fprint(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
-					_, _ = fmt.Fprintf(w, "%v", fieldVal.Interface())
+					f.writeValue(w, fieldVal)
 				}
 			} else {
 				_, _ = fmt.Fprint(w, "")
@@ -218,7 +265,7 @@ func (f *Format) printSlice(val reflect.Value) {
 			if j > 0 {
 				_, _ = fmt.Fprint(w, "\t")
 			}
-			_, _ = fmt.Fprintf(w, "%v", item.Field(j).Interface())
+			f.writeValue(w, item.Field(j))
 		}
 		_, _ = fmt.Fprintln(w)
 	}
@@ -264,10 +311,14 @@ func (f *Format) printStruct(val reflect.Value) {
 			for j := 0; j < fieldValue.NumField(); j++ {
 				nestedFieldName := nestedTyp.Field(j).Name
 				nestedFieldValue := fieldValue.Field(j)
-				_, _ = fmt.Fprintf(w, "\t%s\t%v\n", nestedFieldName, nestedFieldValue.Interface())
+				_, _ = fmt.Fprintf(w, "\t%s\t", nestedFieldName)
+				f.writeValue(w, nestedFieldValue)
+				_, _ = fmt.Fprintln(w)
 			}
 		} else {
-			_, _ = fmt.Fprintf(w, "%s\t%v\n", fieldName, fieldValue.Interface())
+			_, _ = fmt.Fprintf(w, "%s\t", fieldName)
+			f.writeValue(w, fieldValue)
+			_, _ = fmt.Fprintln(w)
 		}
 	}
 
