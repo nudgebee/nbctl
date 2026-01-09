@@ -41,12 +41,18 @@ definition:
 		}
 		if r.URL.Path == "/api/graphql" {
 			var reqBody struct {
-				Query string `json:"query"`
+				Query     string         `json:"query"`
+				Variables map[string]any `json:"variables"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 			w.Header().Set("Content-Type", "application/json")
 			if strings.Contains(reqBody.Query, "ListWorkflows") {
+				// Verify name variable is passed
+				if reqBody.Variables["name"] != "New Workflow" {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
 						"workflow_list": map[string]any{
@@ -109,12 +115,17 @@ definition:
 		}
 		if r.URL.Path == "/api/graphql" {
 			var reqBody struct {
-				Query string `json:"query"`
+				Query     string         `json:"query"`
+				Variables map[string]any `json:"variables"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 			w.Header().Set("Content-Type", "application/json")
 			if strings.Contains(reqBody.Query, "ListWorkflows") {
+				if reqBody.Variables["name"] != "Existing Workflow" {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
 						"workflow_list": map[string]any{

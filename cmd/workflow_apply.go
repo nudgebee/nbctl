@@ -122,9 +122,8 @@ mutation CreateWorkflow($request: WorkflowCreateRequest!) {
 
 func findWorkflowByName(c *client.Client, accountId, name string) (string, error) {
 	query := `
-query ListWorkflows($accountId:String!, $pageToken:String) {
-  workflow_list(request: {account_id: $accountId, page_token: $pageToken}) {
-    next_page_token
+query ListWorkflows($accountId:String!, $name:String) {
+  workflow_list(request: {account_id: $accountId, name: $name}) {
     workflows {
       id
       name
@@ -132,39 +131,31 @@ query ListWorkflows($accountId:String!, $pageToken:String) {
   }
 }
 `
-	var pageToken *string
-	for {
-		req := client.NewRequest(query)
-		req.Var("accountId", accountId)
-		if pageToken != nil {
-			req.Var("pageToken", *pageToken)
-		}
+	req := client.NewRequest(query)
+	req.Var("accountId", accountId)
+	req.Var("name", name)
 
-		var respData struct {
-			WorkflowList struct {
-				NextPageToken *string `json:"next_page_token"`
-				Workflows     []struct {
+	var respData struct {
+		WorkflowList struct {
+			Workflows []struct {
 					ID   string `json:"id"`
 					Name string `json:"name"`
-				} `json:"workflows"`
-			} `json:"workflow_list"`
-		}
-
-		if err := c.Run(context.Background(), req, &respData); err != nil {
-			return "", err
-		}
-
-		for _, wf := range respData.WorkflowList.Workflows {
-			if wf.Name == name {
-				return wf.ID, nil
-			}
-		}
-
-		if respData.WorkflowList.NextPageToken == nil || *respData.WorkflowList.NextPageToken == "" {
-			break
-		}
-		pageToken = respData.WorkflowList.NextPageToken
+			} `json:"workflows"`
+		} `json:"workflow_list"`
 	}
+
+	if err := c.Run(context.Background(), req, &respData); err != nil {
+		return "", err
+	}
+
+	if Logger != nil {
+		Logger.Printf("Found workflows for '%s': %+v", name, respData.WorkflowList.Workflows)
+	}
+
+	if len(respData.WorkflowList.Workflows) > 0 {
+		return respData.WorkflowList.Workflows[0].ID, nil
+	}
+
 	return "", nil
 }
 
