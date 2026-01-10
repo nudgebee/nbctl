@@ -181,7 +181,8 @@ func (f *Format) printTabularData(tabularData TabularData) {
 						VulnerabilityID string `json:"VulnerabilityID"`
 						PrimaryURL      string `json:"PrimaryURL"`
 					}
-					rawJSON := fieldVal.Interface().(json.RawMessage)
+					// Use Bytes() directly to avoid interface{} allocation
+					rawJSON := fieldVal.Bytes()
 
 					var dataToUnmarshal []byte
 					// Check if it's a quoted string literal (starts with quote)
@@ -294,13 +295,15 @@ func (f *Format) printStruct(val reflect.Value) {
 
 		if fieldType == jsonRawMessageType {
 			var data map[string]any
-			if err := json.Unmarshal(fieldValue.Interface().(json.RawMessage), &data); err == nil {
+			// Use Bytes() directly to avoid interface{} allocation
+			if err := json.Unmarshal(fieldValue.Bytes(), &data); err == nil {
 				_, _ = fmt.Fprintf(w, "%s:\n", fieldName)
 				for k, v := range data {
 					_, _ = fmt.Fprintf(w, "\t%s\t%v\n", k, v)
 				}
 			} else {
-				_, _ = fmt.Fprintf(w, "%s\t%s\n", fieldName, string(fieldValue.Interface().(json.RawMessage)))
+				// Use Bytes() directly
+				_, _ = fmt.Fprintf(w, "%s\t%s\n", fieldName, string(fieldValue.Bytes()))
 			}
 		} else if fieldType.Kind() == reflect.Slice && fieldType.Elem().Kind() == reflect.Struct {
 			_, _ = fmt.Fprintf(w, "\n%s:\n", fieldName)
@@ -324,7 +327,7 @@ func (f *Format) printStruct(val reflect.Value) {
 
 	if evidenceField.IsValid() {
 		_, _ = fmt.Fprintf(f.writer, "\n%s:\n", evidenceFieldName)
-		f.printEvidences(evidenceFieldName, evidenceField.Interface().(json.RawMessage))
+		f.printEvidences(evidenceFieldName, json.RawMessage(evidenceField.Bytes()))
 	}
 
 	_ = w.Flush()
