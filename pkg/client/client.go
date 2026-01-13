@@ -520,22 +520,16 @@ func (c *Client) Run(ctx context.Context, req *Request, resp any) error {
 		_ = httpResp.Body.Close()
 	}()
 
-	// 4. Read Response
-	respBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// 5. Decode Response
-	// We want to handle errors specifically, so we decode into a raw map first or a struct with Errors.
-	// We'll use a struct that captures Data as RawMessage to allow unmarshalling later.
+	// 4 & 5. Decode Response
+	// We use json.NewDecoder to stream the response directly, avoiding large intermediate
+	// byte slice allocations from io.ReadAll.
 	var graphQLResp struct {
 		Data   json.RawMessage `json:"data"`
 		Errors []interface{}   `json:"errors"`
 	}
 
-	if err := json.Unmarshal(respBody, &graphQLResp); err != nil {
-		return fmt.Errorf("failed to unmarshal response: %w", err)
+	if err := json.NewDecoder(httpResp.Body).Decode(&graphQLResp); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// 6. Handle Errors
