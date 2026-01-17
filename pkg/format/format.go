@@ -36,6 +36,8 @@ var (
 	jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
 	stringerType       = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
 	errorType          = reflect.TypeOf((*error)(nil)).Elem()
+	tabBytes           = []byte("\t")
+	newlineBytes       = []byte("\n")
 )
 
 func (f *Format) Set(format string) {
@@ -145,11 +147,11 @@ func (f *Format) printTabularData(tabularData TabularData) {
 
 	for i, field := range tabularData.Fields {
 		if i > 0 {
-			_, _ = fmt.Fprint(w, "\t")
+			_, _ = w.Write(tabBytes)
 		}
-		_, _ = fmt.Fprint(w, field.Header)
+		_, _ = io.WriteString(w, field.Header)
 	}
-	_, _ = fmt.Fprintln(w)
+	_, _ = w.Write(newlineBytes)
 
 	elemType := val.Type().Elem()
 	fieldIndices := make([][]int, len(tabularData.Fields))
@@ -168,7 +170,7 @@ func (f *Format) printTabularData(tabularData TabularData) {
 		item := val.Index(i)
 		for j := range tabularData.Fields {
 			if j > 0 {
-				_, _ = fmt.Fprint(w, "\t")
+				_, _ = w.Write(tabBytes)
 			}
 			var fieldVal reflect.Value
 			if fieldIndices[j] != nil {
@@ -208,16 +210,16 @@ func (f *Format) printTabularData(tabularData TabularData) {
 							_, _ = fmt.Fprint(w, recommendationContent.VulnerabilityID)
 						}
 					} else {
-						_, _ = fmt.Fprint(w, "Error parsing CVE") // Fallback in case of parsing error
+						_, _ = io.WriteString(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
 					f.writeValue(w, fieldVal)
 				}
 			} else {
-				_, _ = fmt.Fprint(w, "")
+				_, _ = io.WriteString(w, "")
 			}
 		}
-		_, _ = fmt.Fprintln(w)
+		_, _ = w.Write(newlineBytes)
 	}
 
 	_ = w.Flush()
@@ -251,11 +253,11 @@ func (f *Format) printSlice(val reflect.Value) {
 
 	for i := 0; i < elemType.NumField(); i++ {
 		if i > 0 {
-			_, _ = fmt.Fprint(w, "\t")
+			_, _ = w.Write(tabBytes)
 		}
-		_, _ = fmt.Fprint(w, elemType.Field(i).Name)
+		_, _ = io.WriteString(w, elemType.Field(i).Name)
 	}
-	_, _ = fmt.Fprintln(w)
+	_, _ = w.Write(newlineBytes)
 
 	numFields := elemType.NumField()
 	for i := 0; i < val.Len(); i++ {
@@ -263,11 +265,11 @@ func (f *Format) printSlice(val reflect.Value) {
 		item := val.Index(i)
 		for j := 0; j < numFields; j++ {
 			if j > 0 {
-				_, _ = fmt.Fprint(w, "\t")
+				_, _ = w.Write(tabBytes)
 			}
 			f.writeValue(w, item.Field(j))
 		}
-		_, _ = fmt.Fprintln(w)
+		_, _ = w.Write(newlineBytes)
 	}
 
 	_ = w.Flush()
