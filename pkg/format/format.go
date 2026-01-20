@@ -216,8 +216,6 @@ func (f *Format) printTabularData(tabularData TabularData) {
 				} else {
 					f.writeValue(w, fieldVal)
 				}
-			} else {
-				// empty string
 			}
 		}
 		_, _ = w.Write(newlineBytes)
