@@ -2,7 +2,6 @@ package nubi
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -471,7 +470,7 @@ func (c *NubiClient) ListAgents() ([]AgentItem, error) {
 
 	var respData struct {
 		AiListAgents struct {
-			Data json.RawMessage `json:"data"`
+			Data []AgentItem `json:"data"`
 		} `json:"ai_list_agents"`
 	}
 
@@ -479,12 +478,7 @@ func (c *NubiClient) ListAgents() ([]AgentItem, error) {
 		return nil, err
 	}
 
-	var agents []AgentItem
-	if err := json.Unmarshal(respData.AiListAgents.Data, &agents); err != nil {
-		return nil, err
-	}
-
-	return agents, nil
+	return respData.AiListAgents.Data, nil
 }
 
 type ToolItem struct {
@@ -506,7 +500,7 @@ func (c *NubiClient) ListTools() ([]ToolItem, error) {
 
 	var respData struct {
 		AiListTools struct {
-			Data json.RawMessage `json:"data"`
+			Data []ToolItem `json:"data"`
 		} `json:"ai_list_tools"`
 	}
 
@@ -514,12 +508,7 @@ func (c *NubiClient) ListTools() ([]ToolItem, error) {
 		return nil, err
 	}
 
-	var tools []ToolItem
-	if err := json.Unmarshal(respData.AiListTools.Data, &tools); err != nil {
-		return nil, err
-	}
-
-	return tools, nil
+	return respData.AiListTools.Data, nil
 }
 
 type FunctionItem struct {
