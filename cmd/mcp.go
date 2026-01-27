@@ -71,7 +71,8 @@ var mcpCmd = &cobra.Command{
 		) {
 			logger.Printf("Invoking nubi with query: %s (SessionID: %s)", input.Query, nubiClient.SessionID)
 
-			if err := nubiClient.TriggerInvestigation(ctx, input.Query); err != nil {
+			disabledTools := viper.GetStringSlice("disabled-server-tools")
+			if err := nubiClient.TriggerInvestigation(ctx, input.Query, disabledTools); err != nil {
 				return nil, NubiToolOutput{}, fmt.Errorf("failed to trigger investigation: %w", err)
 			}
 
@@ -81,13 +82,13 @@ var mcpCmd = &cobra.Command{
 				case <-ctx.Done():
 					return nil, NubiToolOutput{}, ctx.Err()
 				case <-time.After(2 * time.Second):
-					resp, status, _, _, _, _, err := nubiClient.GetConversation(ctx)
+					details, err := nubiClient.GetConversation(ctx)
 					if err != nil {
 						return nil, NubiToolOutput{}, err
 					}
 
-					if status != "IN_PROGRESS" && status != "WAITING" {
-						trimmedResp := strings.TrimSpace(resp)
+					if details.Status != "IN_PROGRESS" && details.Status != "WAITING" {
+						trimmedResp := strings.TrimSpace(details.FinalResponse)
 						var finalResponse map[string]any
 
 						if trimmedResp == "" {

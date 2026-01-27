@@ -86,7 +86,9 @@ func TestNubiClient_TriggerInvestigation(t *testing.T) {
 		resp := map[string]any{
 			"data": map[string]any{
 				"ai_trigger_investigation": map[string]any{
-					"data": "{}",
+					"data": map[string]any{
+						"status": "IN_PROGRESS",
+					},
 				},
 			},
 		}
@@ -96,7 +98,7 @@ func TestNubiClient_TriggerInvestigation(t *testing.T) {
 	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	err := c.TriggerInvestigation(context.Background(), "test query")
+	err := c.TriggerInvestigation(context.Background(), "test query", nil)
 	assert.NoError(t, err)
 }
 
@@ -150,10 +152,10 @@ func TestNubiClient_GetConversation(t *testing.T) {
 	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	finalResponse, status, _, _, _, _, err := c.GetConversation(context.Background())
+	details, err := c.GetConversation(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, "Final Response", finalResponse)
-	assert.Equal(t, "COMPLETED", status)
+	assert.Equal(t, "Final Response", details.FinalResponse)
+	assert.Equal(t, "COMPLETED", details.Status)
 }
 
 func TestNubiClient_SendFollowupResponse(t *testing.T) {

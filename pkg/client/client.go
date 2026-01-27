@@ -63,7 +63,7 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	if err != nil {
 		t.logger.Printf("Error dumping request: %v", err)
 	} else {
-		t.logger.Printf("Request:\n%s", reqDump)
+		t.logger.Printf("--- API REQUEST ---\n%s\n-------------------\n", reqDump)
 	}
 
 	resp, err := t.wrapped.RoundTrip(req)
@@ -73,31 +73,57 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 
 	// Log the response
-	// We need to read the body and then replace it.
 	body, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
 		t.logger.Printf("Error reading response body: %v", readErr)
-		return resp, err // return original response and error
+		return resp, err
 	}
-	if err := resp.Body.Close(); err != nil {
-		t.logger.Printf("Error closing response body: %v", err)
-	} // close original body
+	_ = resp.Body.Close()
 
-	// Create a new response with the same body, so it can be read again.
+	// Create a new response with the same body
 	resp.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	// Dump the response for logging.
 	respDump, dumpErr := httputil.DumpResponse(resp, true)
 	if dumpErr != nil {
 		t.logger.Printf("Error dumping response: %v", dumpErr)
 	} else {
-		t.logger.Printf("Response:\n%s", respDump)
+		t.logger.Printf("--- API RESPONSE ---\n%s\n--------------------\n", respDump)
 	}
 
-	// Restore the original body so it can be read by the caller.
+	// Restore the original body
 	resp.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	return resp, err
+}
+
+func getFinalTransport(base http.RoundTripper) http.RoundTripper {
+	finalTransport := base
+
+	debug := viper.GetBool("debug")
+	verbose := viper.GetBool("verbose")
+
+	if debug || verbose {
+		var out io.Writer
+		if debug {
+			out = os.Stderr
+		} else {
+			logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+			if err != nil {
+				log.Printf("Error opening log file: %v\n", err)
+				out = os.Stderr // fallback
+			} else {
+				out = logFile
+			}
+		}
+
+		logger := log.New(out, "", log.LstdFlags)
+		finalTransport = &loggingTransport{
+			wrapped: base,
+			logger:  logger,
+		}
+	}
+
+	return finalTransport
 }
 
 type clientOptions struct {
@@ -188,33 +214,20 @@ func NewClient(opts ...ClientOption) *Client {
 	}
 	tokenEndpoint := endpoint + "/api/auth/token"
 
+	// Create base transport with logging if enabled
+	baseTransport := getFinalTransport(http.DefaultTransport)
+
 	// create a new http client with the auth header
-	// transport that injects bearer tokens obtained from token endpoint
 	transport := &authTransport{
 		apiKey:        apiKey,
 		username:      username,
 		tokenEndpoint: tokenEndpoint,
-		wrapped:       http.DefaultTransport,
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
-	}
-
-	var finalTransport http.RoundTripper = transport
-	verbose := viper.GetBool("verbose")
-	if verbose {
-		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.Printf("Error opening log file: %v\n", err)
-		} else {
-			logger := log.New(logFile, "", log.LstdFlags)
-			finalTransport = &loggingTransport{
-				wrapped: transport,
-				logger:  logger,
-			}
-		}
+		wrapped:       baseTransport,
+		httpClient:    &http.Client{Transport: baseTransport, Timeout: 30 * time.Second},
 	}
 
 	httpClient := &http.Client{
-		Transport: finalTransport,
+		Transport: transport,
 		Timeout:   30 * time.Second,
 	}
 
@@ -253,31 +266,18 @@ func NewHTTPClient(opts ...ClientOption) *http.Client {
 	}
 	tokenEndpoint := endpoint + "/api/auth/token"
 
+	baseTransport := getFinalTransport(http.DefaultTransport)
+
 	transport := &authTransport{
 		apiKey:        apiKey,
 		username:      username,
 		tokenEndpoint: tokenEndpoint,
-		wrapped:       http.DefaultTransport,
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
-	}
-
-	var finalTransport http.RoundTripper = transport
-	verbose := viper.GetBool("verbose")
-	if verbose {
-		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.Printf("Error opening log file: %v\n", err)
-		} else {
-			logger := log.New(logFile, "", log.LstdFlags)
-			finalTransport = &loggingTransport{
-				wrapped: transport,
-				logger:  logger,
-			}
-		}
+		wrapped:       baseTransport,
+		httpClient:    &http.Client{Transport: baseTransport, Timeout: 30 * time.Second},
 	}
 
 	return &http.Client{
-		Transport: finalTransport,
+		Transport: transport,
 		Timeout:   30 * time.Second,
 	}
 }

@@ -107,11 +107,17 @@ func init() {
 	rootCmd.PersistentFlags().Bool("verbose", false, "Enable verbose logging for GraphQL requests and responses")
 	_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 
+	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug mode (prints all API calls to stderr)")
+	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+
 	// Add a persistent flag for the output format.
 	var formatVar string
 	rootCmd.PersistentFlags().StringVar(&formatVar, "format", "text", "Output format (json)")
 	rootCmd.PersistentFlags().String("profile", "", "Use a specific profile from your config file")
 	_ = viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile"))
+
+	rootCmd.PersistentFlags().String("endpoint", "", "Override the Nudgebee API endpoint")
+	_ = viper.BindPFlag("endpoint", rootCmd.PersistentFlags().Lookup("endpoint"))
 
 	// Initialize a logger that writes to the command's stderr. Using PersistentPreRunE
 	// ensures cmd.ErrOrStderr() is available during execution and in tests.

@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,8 +24,10 @@ import (
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/nudgebee/nbctl/pkg/log"
 	"github.com/nudgebee/nbctl/pkg/nubi"
+	"github.com/nudgebee/nbctl/pkg/nubi/tools"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 var suggestions = []prompt.Suggest{
@@ -55,13 +58,18 @@ var nubiCmd = &cobra.Command{
 
 		var accountID string
 		if len(args) > 0 {
-			accountID = args[0]
-		} else {
-			accountID = viper.GetString("account-id")
+			// If the first argument is "true" or "false", it's likely a misplaced boolean flag value
+			if args[0] != "true" && args[0] != "false" {
+				accountID = args[0]
+			}
 		}
 
 		if accountID == "" {
-			return fmt.Errorf("account-id is required, please provide it as an argument or set it in your config file")
+			accountID = viper.GetString("account-id")
+		}
+
+		if accountID == "" || accountID == "true" || accountID == "false" {
+			return fmt.Errorf("invalid account-id: %q. Please provide a valid account ID as an argument or set it in your config file", accountID)
 		}
 
 		username := viper.GetString("username")
@@ -81,6 +89,31 @@ var nubiCmd = &cobra.Command{
 			log.Errorf("Error reading history file: %v\n", err)
 		}
 
+		// Handle disabled tools merging
+		disabledMap := make(map[string]bool)
+
+		// If either flag was changed, merge them. Otherwise use the default from one of them.
+		if cmd.Flags().Changed("disabled-tools") || cmd.Flags().Changed("disabled-server-tools") {
+			for _, t := range viper.GetStringSlice("disabled-tools") {
+				disabledMap[t] = true
+			}
+			for _, t := range viper.GetStringSlice("disabled-server-tools") {
+				disabledMap[t] = true
+			}
+		} else {
+			// Use default from the primary flag
+			for _, t := range viper.GetStringSlice("disabled-tools") {
+				disabledMap[t] = true
+			}
+		}
+
+		var finalDisabledTools []string
+		for t := range disabledMap {
+			if t != "" {
+				finalDisabledTools = append(finalDisabledTools, t)
+			}
+		}
+
 		s := &nubiShell{
 			nubiClient: nubi.New(
 				client.NewClient(),
@@ -89,10 +122,14 @@ var nubiCmd = &cobra.Command{
 				uuid.New().String(),
 				viper.GetString("endpoint"),
 			),
-			spinner:     spinner.New(spinner.CharSets[9], 100*time.Millisecond),
-			historyFile: historyFile,
-			history:     history,
+			spinner:              spinner.New(spinner.CharSets[9], 100*time.Millisecond),
+			historyFile:          historyFile,
+			history:              history,
+			processedToolCallIDs: make(map[string]bool),
+			disabledTools:        finalDisabledTools,
+			toolResults:          make(map[string]toolResult),
 		}
+		s.nubiClient.EnableLocalTools = viper.GetBool("enable-local-tools")
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGTERM)
@@ -111,9 +148,19 @@ var nubiCmd = &cobra.Command{
 		style := lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#00B3FF"))
+		infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 		fmt.Printf("Hello %s!\n", style.Render(username))
-		fmt.Printf("Using account: %s\n\n", style.Render(accountID))
+		fmt.Printf("Using account: %s\n", style.Render(accountID))
+
+		if s.nubiClient.EnableLocalTools {
+			localTools := tools.GetLocalToolNames()
+			fmt.Printf("%s\n", infoStyle.Render(fmt.Sprintf("Local tools enabled: %s", strings.Join(localTools, ", "))))
+		}
+		if len(s.disabledTools) > 0 {
+			fmt.Printf("%s\n", infoStyle.Render(fmt.Sprintf("Disabled server tools: %s", strings.Join(s.disabledTools, ", "))))
+		}
+		fmt.Println()
 
 		printNubiHelp()
 
@@ -154,14 +201,23 @@ var nubiCmd = &cobra.Command{
 }
 
 type nubiShell struct {
-	nubiClient       *nubi.NubiClient
-	spinner          *spinner.Spinner
-	cancel           context.CancelFunc
-	historyFile      string
-	history          []string
-	waitingMessageID string
-	waitingAgentID   string
-	lastResponse     string
+	nubiClient           *nubi.NubiClient
+	spinner              *spinner.Spinner
+	cancel               context.CancelFunc
+	historyFile          string
+	history              []string
+	waitingMessageID     string
+	waitingAgentID       string
+	lastResponse         string
+	processedToolCallIDs map[string]bool
+	disabledTools        []string
+	toolResults          map[string]toolResult // Cache for re-submission
+}
+
+type toolResult struct {
+	result    string
+	status    string
+	timestamp time.Time
 }
 
 type MessageConfig struct {
@@ -200,7 +256,7 @@ func (s *nubiShell) executor(in string) {
 
 	// Check if a conversation is already in progress
 	if s.nubiClient.ConversationID != "" {
-		_, currentStatus, _, _, waitingMessageID, waitingAgentID, getErr := s.nubiClient.GetConversation(context.Background())
+		details, getErr := s.nubiClient.GetConversation(context.Background())
 		if getErr != nil {
 			fmt.Printf("Error checking conversation status: %v\n", getErr)
 			// Even if there's an error checking status, we should probably reset to allow a new conversation
@@ -209,9 +265,9 @@ func (s *nubiShell) executor(in string) {
 			fmt.Println("Could not check previous conversation status. Starting a new conversation.")
 			response, status, err = s.triggerAndPoll(ctx, in)
 		} else {
-			s.waitingMessageID = waitingMessageID
-			s.waitingAgentID = waitingAgentID
-			switch currentStatus {
+			s.waitingMessageID = details.WaitingMessageID
+			s.waitingAgentID = details.WaitingAgentID
+			switch details.Status {
 			case "IN_PROGRESS":
 				fmt.Println("Previous conversation was still in progress. Starting a new conversation for your query.")
 				s.nubiClient.ConversationID = ""
@@ -222,6 +278,8 @@ func (s *nubiShell) executor(in string) {
 				if err == nil {
 					response, status, err = s.poll(ctx)
 				}
+			case "WAITING_FOR_CLIENT_TOOL":
+				response, status, err = s.poll(ctx)
 			default:
 				// For other statuses like COMPLETED, FAILED, etc., continue the conversation
 				response, status, err = s.triggerAndPoll(ctx, in)
@@ -281,6 +339,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 		if len(parts) < 2 {
 			s.nubiClient.ConversationID = ""
 			s.nubiClient.SessionID = uuid.New().String()
+			s.processedToolCallIDs = make(map[string]bool)
 			fmt.Println("Started a new conversation.")
 			return
 		}
@@ -307,10 +366,10 @@ func (s *nubiShell) handleSlashCommand(in string) {
 				}
 			}
 			// Now, check the status and show followup
-			_, status, _, followupJSON, _, _, err := s.nubiClient.GetConversation(context.Background())
-			if err == nil && status == "WAITING" && followupJSON != "" {
+			details, err := s.nubiClient.GetConversation(context.Background())
+			if err == nil && details.Status == "WAITING" && details.FollowupMessageConfig != "" {
 				var msgConfig MessageConfig
-				if err := json.Unmarshal([]byte(followupJSON), &msgConfig); err == nil {
+				if err := json.Unmarshal([]byte(details.FollowupMessageConfig), &msgConfig); err == nil {
 					var builder strings.Builder
 					builder.WriteString(msgConfig.Question)
 					builder.WriteString("\n\n")
@@ -360,6 +419,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 		s.nubiClient.AccountID = accountID
 		s.nubiClient.SessionID = uuid.New().String()
 		s.nubiClient.ConversationID = ""
+		s.processedToolCallIDs = make(map[string]bool)
 		fmt.Printf("Switched to account %s\n", accountID)
 	case "/help":
 		fmt.Println("Available commands:")
@@ -495,22 +555,106 @@ func (s *nubiShell) poll(ctx context.Context) (string, string, error) {
 		case <-ctx.Done():
 			return "", "", ctx.Err()
 		case <-time.After(2 * time.Second):
-			resp, status, statusText, followupJSON, waitingMessageID, waitingAgentID, err := s.nubiClient.GetConversation(ctx)
+			details, err := s.nubiClient.GetConversation(ctx)
 			if err != nil {
 				return "", "", err
 			}
-			s.waitingMessageID = waitingMessageID
-			s.waitingAgentID = waitingAgentID
+			s.waitingMessageID = details.WaitingMessageID
+			s.waitingAgentID = details.WaitingAgentID
 
 			if s.spinner != nil {
 				cyan := "\033[36m"
 				reset := "\033[0m"
-				s.spinner.Suffix = " " + cyan + statusText + reset
+				s.spinner.Suffix = " " + cyan + details.StatusText + reset
 			}
 
-			if status == "WAITING" && followupJSON != "" {
+			// If we have pending tool calls, pick the first one that hasn't been processed
+			if len(details.PendingToolCalls) > 0 {
+				for _, toolCall := range details.PendingToolCalls {
+					// Use MessageID + UUID + Args hash to uniquely identify this tool call attempt
+					// This ensures that if the server updates the parameters but keeps the same ID, we re-process it.
+					argHash := fmt.Sprintf("%x", md5.Sum([]byte(toolCall.Args)))
+					toolKey := fmt.Sprintf("%s:%s:%s", toolCall.MessageID, toolCall.UUID, argHash)
+
+					if !s.processedToolCallIDs[toolKey] {
+						details.WaitingToolCallID = toolCall.ID
+						details.WaitingToolUUID = toolCall.UUID
+						details.WaitingToolName = toolCall.Name
+						details.WaitingToolArgs = toolCall.Args
+						// Update waiting IDs to match the specific tool call
+						s.waitingAgentID = toolCall.AgentID
+						s.waitingMessageID = toolCall.MessageID
+						break
+					}
+				}
+			}
+
+			// Handle client tool execution
+			if details.WaitingToolCallID != "" && details.WaitingToolName != "" {
+				argHash := fmt.Sprintf("%x", md5.Sum([]byte(details.WaitingToolArgs)))
+				toolKey := fmt.Sprintf("%s:%s:%s", s.waitingMessageID, details.WaitingToolUUID, argHash)
+
+				if s.processedToolCallIDs[toolKey] {
+					// If already processed, check if we should re-submit (every 30s) if the server is still waiting
+					cached := s.toolResults[toolKey]
+					if !cached.timestamp.IsZero() && time.Since(cached.timestamp) > 30*time.Second {
+						if s.spinner != nil {
+							s.spinner.Suffix = fmt.Sprintf(" Still waiting for server to acknowledge %s, re-submitting...", details.WaitingToolName)
+						}
+						_ = s.nubiClient.SubmitClientToolResult(ctx, details.WaitingToolCallID, s.waitingAgentID, s.waitingMessageID, cached.result, cached.status)
+						cached.timestamp = time.Now()
+						s.toolResults[toolKey] = cached
+					} else if s.spinner != nil {
+						s.spinner.Suffix = fmt.Sprintf(" Already submitted %s, waiting for server...", details.WaitingToolName)
+					}
+					continue
+				}
+
+				args, err := lenientUnmarshal(details.WaitingToolArgs, details.WaitingToolName)
+				result := ""
+				resultStatus := "SUCCESS"
+
+				if err != nil {
+					// If all parsing fails, report error back to server
+					result = fmt.Sprintf("Invalid argument format. Please provide arguments as a JSON or YAML object. Error: %v", err)
+					resultStatus = "ERROR"
+				} else {
+					s.spinner.Suffix = fmt.Sprintf(" Executing local tool: %s", details.WaitingToolName)
+					result, err = tools.ExecuteTool(ctx, details.WaitingToolName, args)
+					if err != nil {
+						result = err.Error()
+						resultStatus = "ERROR"
+						if s.spinner != nil {
+							s.spinner.Stop()
+							fmt.Printf("❌ Error executing tool %s: %v\n", details.WaitingToolName, err)
+							s.spinner.Start()
+						}
+					}
+				}
+
+				// Ensure result is not empty to satisfy backend validation
+				if result == "" {
+					result = "[no output]"
+				}
+
+				if err := s.nubiClient.SubmitClientToolResult(ctx, details.WaitingToolCallID, s.waitingAgentID, s.waitingMessageID, result, resultStatus); err != nil {
+					if strings.Contains(err.Error(), "conversation is currently in progress") {
+						// If server is already processing, mark as handled locally to stop looping
+						s.processedToolCallIDs[toolKey] = true
+						s.toolResults[toolKey] = toolResult{result: result, status: resultStatus, timestamp: time.Now()}
+					} else {
+						log.Errorf("Error submitting client tool result: %v\n", err)
+					}
+				} else {
+					s.processedToolCallIDs[toolKey] = true
+					s.toolResults[toolKey] = toolResult{result: result, status: resultStatus, timestamp: time.Now()}
+				}
+				continue
+			}
+
+			if details.Status == "WAITING" && details.FollowupMessageConfig != "" {
 				var msgConfig MessageConfig
-				if err := json.Unmarshal([]byte(followupJSON), &msgConfig); err == nil {
+				if err := json.Unmarshal([]byte(details.FollowupMessageConfig), &msgConfig); err == nil {
 					var builder strings.Builder
 					builder.WriteString(msgConfig.Question)
 					builder.WriteString("\n\n")
@@ -518,21 +662,23 @@ func (s *nubiShell) poll(ctx context.Context) (string, string, error) {
 					for _, opt := range msgConfig.FollowupOptions {
 						builder.WriteString(fmt.Sprintf("- %s\n", opt))
 					}
-					return builder.String(), status, nil
+					return builder.String(), details.Status, nil
 				}
 			}
 
-			if status != "IN_PROGRESS" && status != "WAITING" {
-				return resp, status, nil
+			if details.Status != "IN_PROGRESS" && details.Status != "WAITING" && details.Status != "WAITING_FOR_CLIENT_TOOL" {
+				return details.FinalResponse, details.Status, nil
 			}
 		}
 	}
 }
 
 func (s *nubiShell) triggerAndPoll(ctx context.Context, query string) (string, string, error) {
-	if err := s.nubiClient.TriggerInvestigation(ctx, query); err != nil {
+	err := s.nubiClient.TriggerInvestigation(ctx, query, s.disabledTools)
+	if err != nil {
 		return "", "", err
 	}
+
 	return s.poll(ctx)
 }
 
@@ -601,4 +747,85 @@ func saveHistory(file string, history []string) error {
 
 func init() {
 	rootCmd.AddCommand(nubiCmd)
+	defaultDisabled := []string{"server", "aws", "azure", "gcp", "kubectl", "github"}
+	nubiCmd.PersistentFlags().StringSlice("disabled-tools", defaultDisabled, "List of server-side tools to disable for this session")
+	nubiCmd.PersistentFlags().StringSlice("disabled-server-tools", defaultDisabled, "Alias for --disabled-tools")
+	nubiCmd.PersistentFlags().Bool("enable-local-tools", false, "Enable local tool execution (default: false)")
+	_ = viper.BindPFlag("disabled-tools", nubiCmd.PersistentFlags().Lookup("disabled-tools"))
+	_ = viper.BindPFlag("disabled-server-tools", nubiCmd.PersistentFlags().Lookup("disabled-server-tools"))
+	_ = viper.BindPFlag("enable-local-tools", nubiCmd.PersistentFlags().Lookup("enable-local-tools"))
+}
+
+func lenientUnmarshal(input string, toolName string) (map[string]any, error) {
+	var args map[string]any
+	// 1. Try JSON
+	if err := json.Unmarshal([]byte(input), &args); err == nil {
+		return args, nil
+	}
+
+	// 2. Try YAML
+	if err := yaml.Unmarshal([]byte(input), &args); err == nil {
+		return args, nil
+	}
+
+	// 3. Lenient fallback for local_write_file with non-indented content
+	if toolName == "local_write_file" {
+		lines := strings.Split(input, "\n")
+		res := make(map[string]any)
+		contentFound := false
+
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				continue
+			}
+
+			// If we haven't found content yet, look for path/filename/mode/search
+			if !contentFound {
+				if strings.HasPrefix(trimmed, "path:") || strings.HasPrefix(trimmed, "filename:") {
+					parts := strings.SplitN(trimmed, ":", 2)
+					res["path"] = strings.TrimSpace(parts[1])
+					continue
+				}
+				if strings.HasPrefix(trimmed, "mode:") {
+					parts := strings.SplitN(trimmed, ":", 2)
+					res["mode"] = strings.TrimSpace(parts[1])
+					continue
+				}
+				if strings.HasPrefix(trimmed, "search:") {
+					parts := strings.SplitN(trimmed, ":", 2)
+					res["search"] = strings.TrimSpace(parts[1])
+					continue
+				}
+				if strings.HasPrefix(trimmed, "content:") {
+					// Check if there's anything on the same line
+					parts := strings.SplitN(line, ":", 2)
+					firstPart := strings.TrimSpace(parts[1])
+					// If it's just "content:" or "content: |" or "content: >", we ignore firstPart if it's just the indicator
+					if firstPart == "|" || firstPart == ">" {
+						firstPart = ""
+					}
+
+					remaining := strings.Join(lines[i+1:], "\n")
+					if firstPart != "" {
+						if remaining != "" {
+							res["content"] = firstPart + "\n" + remaining
+						} else {
+							res["content"] = firstPart
+						}
+					} else {
+						res["content"] = remaining
+					}
+					contentFound = true
+					break
+				}
+			}
+		}
+
+		if res["path"] != "" && contentFound {
+			return res, nil
+		}
+	}
+
+	return nil, fmt.Errorf("failed to parse arguments as JSON or YAML")
 }
