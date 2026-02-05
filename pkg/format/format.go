@@ -93,11 +93,10 @@ func (f *Format) printText(obj any) {
 }
 
 // writeValue optimized writer for common types to avoid fmt.Fprintf reflection overhead
-func (f *Format) writeValue(w io.Writer, v reflect.Value) {
+func (f *Format) writeValue(w io.Writer, v reflect.Value, isStringerOrError bool) {
 	// If the value implements fmt.Stringer or error, let fmt handle it to preserve custom formatting.
-	// This check does involve some reflection overhead, but it's necessary for correctness.
-	// We check if the type implements the interface.
-	if v.Type().Implements(stringerType) || v.Type().Implements(errorType) {
+	// We rely on the caller to pass this information to avoid repeated reflection overhead.
+	if isStringerOrError {
 		_, _ = fmt.Fprintf(w, "%v", v.Interface())
 		return
 	}
@@ -158,12 +157,17 @@ func (f *Format) printTabularData(tabularData TabularData) {
 	elemType := val.Type().Elem()
 	fieldIndices := make([][]int, len(tabularData.Fields))
 	isJsonRawMessage := make([]bool, len(tabularData.Fields))
+	isStringerOrError := make([]bool, len(tabularData.Fields))
 
 	for i, field := range tabularData.Fields {
 		if sf, ok := elemType.FieldByName(field.Field); ok {
 			fieldIndices[i] = sf.Index
 			if sf.Type == jsonRawMessageType {
 				isJsonRawMessage[i] = true
+			}
+			ft := sf.Type
+			if ft.Implements(stringerType) || ft.Implements(errorType) {
+				isStringerOrError[i] = true
 			}
 		}
 	}
@@ -215,7 +219,7 @@ func (f *Format) printTabularData(tabularData TabularData) {
 						_, _ = io.WriteString(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
-					f.writeValue(w, fieldVal)
+					f.writeValue(w, fieldVal, isStringerOrError[j])
 				}
 			}
 		}
@@ -260,6 +264,14 @@ func (f *Format) printSlice(val reflect.Value) {
 	_, _ = w.Write(newlineBytes)
 
 	numFields := elemType.NumField()
+	isStringerOrError := make([]bool, numFields)
+	for i := 0; i < numFields; i++ {
+		ft := elemType.Field(i).Type
+		if ft.Implements(stringerType) || ft.Implements(errorType) {
+			isStringerOrError[i] = true
+		}
+	}
+
 	for i := 0; i < val.Len(); i++ {
 		// Hoist item retrieval to avoid repeated bounds checks and Value allocations
 		item := val.Index(i)
@@ -267,7 +279,7 @@ func (f *Format) printSlice(val reflect.Value) {
 			if j > 0 {
 				_, _ = w.Write(tabBytes)
 			}
-			f.writeValue(w, item.Field(j))
+			f.writeValue(w, item.Field(j), isStringerOrError[j])
 		}
 		_, _ = w.Write(newlineBytes)
 	}
@@ -294,6 +306,15 @@ func (f *Format) printStruct(val reflect.Value) {
 			continue
 		}
 
+		// Check if it implements Stringer or error FIRST to avoid exploding structs like time.Time
+		isStrOrErr := fieldType.Implements(stringerType) || fieldType.Implements(errorType)
+		if isStrOrErr {
+			_, _ = fmt.Fprintf(w, "%s\t", fieldName)
+			f.writeValue(w, fieldValue, true)
+			_, _ = fmt.Fprintln(w)
+			continue
+		}
+
 		if fieldType == jsonRawMessageType {
 			var data map[string]any
 			if err := json.Unmarshal(fieldValue.Interface().(json.RawMessage), &data); err == nil {
@@ -314,12 +335,15 @@ func (f *Format) printStruct(val reflect.Value) {
 				nestedFieldName := nestedTyp.Field(j).Name
 				nestedFieldValue := fieldValue.Field(j)
 				_, _ = fmt.Fprintf(w, "\t%s\t", nestedFieldName)
-				f.writeValue(w, nestedFieldValue)
+
+				nft := nestedTyp.Field(j).Type
+				nisStrOrErr := nft.Implements(stringerType) || nft.Implements(errorType)
+				f.writeValue(w, nestedFieldValue, nisStrOrErr)
 				_, _ = fmt.Fprintln(w)
 			}
 		} else {
 			_, _ = fmt.Fprintf(w, "%s\t", fieldName)
-			f.writeValue(w, fieldValue)
+			f.writeValue(w, fieldValue, false) // We already checked, so it's false
 			_, _ = fmt.Fprintln(w)
 		}
 	}
