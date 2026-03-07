@@ -94,15 +94,20 @@ func (f *Format) printText(obj any) {
 
 // writeValue optimized writer for common types to avoid fmt.Fprintf reflection overhead
 func (f *Format) writeValue(w io.Writer, v reflect.Value) {
-	// If the value implements fmt.Stringer or error, let fmt handle it to preserve custom formatting.
-	// This check does involve some reflection overhead, but it's necessary for correctness.
-	// We check if the type implements the interface.
-	if v.Type().Implements(stringerType) || v.Type().Implements(errorType) {
+	t := v.Type()
+	// Check if the type implements the interface.
+	isStringerOrError := t.Implements(stringerType) || t.Implements(errorType)
+	f.writeField(w, v, isStringerOrError, v.Kind())
+}
+
+// writeField writes a value using pre-calculated type information to avoid repeated reflection overhead
+func (f *Format) writeField(w io.Writer, v reflect.Value, isStringerOrError bool, kind reflect.Kind) {
+	if isStringerOrError {
 		_, _ = fmt.Fprintf(w, "%v", v.Interface())
 		return
 	}
 
-	switch v.Kind() {
+	switch kind {
 	case reflect.String:
 		_, _ = io.WriteString(w, v.String())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -158,6 +163,8 @@ func (f *Format) printTabularData(tabularData TabularData) {
 	elemType := val.Type().Elem()
 	fieldIndices := make([][]int, len(tabularData.Fields))
 	isJsonRawMessage := make([]bool, len(tabularData.Fields))
+	fieldKinds := make([]reflect.Kind, len(tabularData.Fields))
+	isStringerOrError := make([]bool, len(tabularData.Fields))
 
 	for i, field := range tabularData.Fields {
 		if sf, ok := elemType.FieldByName(field.Field); ok {
@@ -165,6 +172,8 @@ func (f *Format) printTabularData(tabularData TabularData) {
 			if sf.Type == jsonRawMessageType {
 				isJsonRawMessage[i] = true
 			}
+			fieldKinds[i] = sf.Type.Kind()
+			isStringerOrError[i] = sf.Type.Implements(stringerType) || sf.Type.Implements(errorType)
 		}
 	}
 
@@ -215,7 +224,7 @@ func (f *Format) printTabularData(tabularData TabularData) {
 						_, _ = io.WriteString(w, "Error parsing CVE") // Fallback in case of parsing error
 					}
 				} else {
-					f.writeValue(w, fieldVal)
+					f.writeField(w, fieldVal, isStringerOrError[j], fieldKinds[j])
 				}
 			}
 		}
