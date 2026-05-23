@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -42,7 +43,7 @@ var logsListLogGroupsCmd = &cobra.Command{
 		// The metrics query to execute
 		queryFilter := `level=~"critical|error", container_id!~".*(prometheus|grafana|kube-system|nudgebee-agent|containerd|kubelet).*"`
 		if namespace != "" {
-			queryFilter = fmt.Sprintf(`%s, container_id=~"/k8s/%s/.*"`, queryFilter, namespace)
+			queryFilter = fmt.Sprintf(`%s, container_id=~"/k8s/%s/.*"`, queryFilter, regexp.QuoteMeta(namespace))
 		}
 		promQLQuery := fmt.Sprintf(`increase(container_log_messages_total{ __CLUSTER__ %s}[1h]) > 0`, queryFilter)
 
