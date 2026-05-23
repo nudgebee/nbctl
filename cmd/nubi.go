@@ -316,7 +316,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 					builder.WriteString("\n\n")
 					builder.WriteString("Options:\n")
 					for _, opt := range msgConfig.FollowupOptions {
-						builder.WriteString(fmt.Sprintf("- %s\n", opt))
+						fmt.Fprintf(&builder, "- %s\n", opt)
 					}
 					rendered, err := renderMarkdown(builder.String())
 					if err != nil {
@@ -516,7 +516,7 @@ func (s *nubiShell) poll(ctx context.Context) (string, string, error) {
 					builder.WriteString("\n\n")
 					builder.WriteString("Options:\n")
 					for _, opt := range msgConfig.FollowupOptions {
-						builder.WriteString(fmt.Sprintf("- %s\n", opt))
+						fmt.Fprintf(&builder, "- %s\n", opt)
 					}
 					return builder.String(), status, nil
 				}

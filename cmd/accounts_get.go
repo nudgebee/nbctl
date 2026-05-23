@@ -30,19 +30,22 @@ var accountsGetCmd = &cobra.Command{
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
-			query($id: uuid!) {
-				cloud_accounts_by_pk(id: $id) {
-					id
-					account_name
-					account_type
-					cloud_provider
-					status
-					account_number
-					created_at
-					updated_at
-					synced_at
-					agent_synced_at
-					agents {
+			query GetCloudAccountById($where: CloudAccountWhereRequest!, $agentWhere: AgentHealthWhereRequest!) {
+				cloud_accounts: get_cloud_accounts_v2(where: $where, limit: 1, offset: 0) {
+					rows {
+						id
+						account_name
+						account_type
+						cloud_provider
+						status
+						account_number
+						created_at
+						synced_at
+						agent_synced_at
+					}
+				}
+				agents: get_agent_health_v2(where: $agentWhere) {
+					rows {
 						last_connected_at
 						status
 						version
@@ -54,41 +57,51 @@ var accountsGetCmd = &cobra.Command{
 			}
 		`)
 
-		req.Var("id", args[0])
+		req.Var("where", map[string]any{
+			"id": map[string]any{"_eq": args[0]},
+		})
+		req.Var("agentWhere", map[string]any{
+			"cloud_account_id": map[string]any{"_eq": args[0]},
+		})
 
 		var respData struct {
-			CloudAccount struct {
-				ID            string `json:"id"`
-				AccountName   string `json:"account_name"`
-				AccountType   string `json:"account_type"`
-				CloudProvider string `json:"cloud_provider"`
-				Status        string `json:"status"`
-				AccountNumber string `json:"account_number"`
-				CreatedAt     string `json:"created_at"`
-				UpdatedAt     string `json:"updated_at"`
-				SyncedAt      string `json:"synced_at"`
-				AgentSyncedAt string `json:"agent_synced_at"`
-				Agents        []struct {
-					LastConnectedAt  string          `json:"last_connected_at"`
-					Status           string          `json:"status"`
-					Version          string          `json:"version"`
-					ConnectionStatus json.RawMessage `json:"connection_status"`
-					K8sProvider      string          `json:"k8s_provider"`
-					K8sVersion       string          `json:"k8s_version"`
-				} `json:"agents"`
-			} `json:"cloud_accounts_by_pk"`
+			CloudAccounts struct {
+				Rows []struct {
+					ID            string `json:"id"`
+					AccountName   string `json:"account_name"`
+					AccountType   string `json:"account_type"`
+					CloudProvider string `json:"cloud_provider"`
+					Status        string `json:"status"`
+					AccountNumber string `json:"account_number"`
+					CreatedAt     string `json:"created_at"`
+					SyncedAt      string `json:"synced_at"`
+					AgentSyncedAt string `json:"agent_synced_at"`
+				} `json:"rows"`
+			} `json:"cloud_accounts"`
+			Agents struct {
+				Rows []struct {
+					LastConnectedAt  string `json:"last_connected_at"`
+					Status           string `json:"status"`
+					Version          string `json:"version"`
+					ConnectionStatus string `json:"connection_status"`
+					K8sProvider      string `json:"k8s_provider"`
+					K8sVersion       string `json:"k8s_version"`
+				} `json:"rows"`
+			} `json:"agents"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
-		if respData.CloudAccount.ID == "" {
+		if len(respData.CloudAccounts.Rows) == 0 {
 			fmt.Println("Account not found.")
 			return nil
 		}
+		cloudAccount := respData.CloudAccounts.Rows[0]
+		agentsRows := respData.Agents.Rows
 
-		if respData.CloudAccount.AccountType == "kubernetes" {
+		if cloudAccount.AccountType == "kubernetes" {
 			var agents []struct {
 				Version         string
 				Status          string
@@ -116,7 +129,7 @@ var accountsGetCmd = &cobra.Command{
 				Cron              string
 			}
 
-			for _, agent := range respData.CloudAccount.Agents {
+			for _, agent := range agentsRows {
 				agents = append(agents, struct {
 					Version         string
 					Status          string
@@ -155,8 +168,10 @@ var accountsGetCmd = &cobra.Command{
 					} `json:"schedule_jobs"`
 				}
 
-				if err := json.Unmarshal(agent.ConnectionStatus, &connectionStatus); err != nil {
-					return err
+				if agent.ConnectionStatus != "" {
+					if err := json.Unmarshal([]byte(agent.ConnectionStatus), &connectionStatus); err != nil {
+						return err
+					}
 				}
 
 				features.Relay = "Disconnected"
@@ -229,7 +244,6 @@ var accountsGetCmd = &cobra.Command{
 				Status        string
 				AccountNumber string
 				CreatedAt     string
-				UpdatedAt     string
 				SyncedAt      string
 				AgentSyncedAt string
 				Agents        []struct {
@@ -257,16 +271,15 @@ var accountsGetCmd = &cobra.Command{
 					Cron              string
 				}
 			}{
-				ID:            respData.CloudAccount.ID,
-				AccountName:   respData.CloudAccount.AccountName,
-				AccountType:   respData.CloudAccount.AccountType,
-				CloudProvider: respData.CloudAccount.CloudProvider,
-				Status:        respData.CloudAccount.Status,
-				AccountNumber: respData.CloudAccount.AccountNumber,
-				CreatedAt:     respData.CloudAccount.CreatedAt,
-				UpdatedAt:     respData.CloudAccount.UpdatedAt,
-				SyncedAt:      respData.CloudAccount.SyncedAt,
-				AgentSyncedAt: respData.CloudAccount.AgentSyncedAt,
+				ID:            cloudAccount.ID,
+				AccountName:   cloudAccount.AccountName,
+				AccountType:   cloudAccount.AccountType,
+				CloudProvider: cloudAccount.CloudProvider,
+				Status:        cloudAccount.Status,
+				AccountNumber: cloudAccount.AccountNumber,
+				CreatedAt:     cloudAccount.CreatedAt,
+				SyncedAt:      cloudAccount.SyncedAt,
+				AgentSyncedAt: cloudAccount.AgentSyncedAt,
 				Agents:        agents,
 				Features:      features,
 				ScheduledJobs: scheduledJobs,
@@ -281,7 +294,7 @@ var accountsGetCmd = &cobra.Command{
 				Spends          string
 			}
 
-			for _, agent := range respData.CloudAccount.Agents {
+			for _, agent := range agentsRows {
 				var connectionStatus struct {
 					Events struct {
 						End string `json:"end"`
@@ -297,8 +310,10 @@ var accountsGetCmd = &cobra.Command{
 					} `json:"spends"`
 				}
 
-				if err := json.Unmarshal(agent.ConnectionStatus, &connectionStatus); err != nil {
-					return err
+				if agent.ConnectionStatus != "" {
+					if err := json.Unmarshal([]byte(agent.ConnectionStatus), &connectionStatus); err != nil {
+						return err
+					}
 				}
 
 				cloudFeatures.Events = "Disconnected"
@@ -327,7 +342,6 @@ var accountsGetCmd = &cobra.Command{
 				Status        string
 				AccountNumber string
 				CreatedAt     string
-				UpdatedAt     string
 				SyncedAt      string
 				AgentSyncedAt string
 				CloudFeatures struct {
@@ -337,16 +351,15 @@ var accountsGetCmd = &cobra.Command{
 					Spends          string
 				}
 			}{
-				ID:            respData.CloudAccount.ID,
-				AccountName:   respData.CloudAccount.AccountName,
-				AccountType:   respData.CloudAccount.AccountType,
-				CloudProvider: respData.CloudAccount.CloudProvider,
-				Status:        respData.CloudAccount.Status,
-				AccountNumber: respData.CloudAccount.AccountNumber,
-				CreatedAt:     respData.CloudAccount.CreatedAt,
-				UpdatedAt:     respData.CloudAccount.UpdatedAt,
-				SyncedAt:      respData.CloudAccount.SyncedAt,
-				AgentSyncedAt: respData.CloudAccount.AgentSyncedAt,
+				ID:            cloudAccount.ID,
+				AccountName:   cloudAccount.AccountName,
+				AccountType:   cloudAccount.AccountType,
+				CloudProvider: cloudAccount.CloudProvider,
+				Status:        cloudAccount.Status,
+				AccountNumber: cloudAccount.AccountNumber,
+				CreatedAt:     cloudAccount.CreatedAt,
+				SyncedAt:      cloudAccount.SyncedAt,
+				AgentSyncedAt: cloudAccount.AgentSyncedAt,
 				CloudFeatures: cloudFeatures,
 			}
 

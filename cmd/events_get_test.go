@@ -8,14 +8,16 @@ import (
 
 func TestEventsGet_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"events": []map[string]any{
-			{
-				"id":           "00000000-0000-0000-0000-000000000001",
-				"title":        "Event 1",
-				"priority":     "high",
-				"status":       "new",
-				"subject_name": "subj1",
-				"created_at":   "2025-10-15T10:00:00Z",
+		"events": map[string]any{
+			"rows": []map[string]any{
+				{
+					"id":           "00000000-0000-0000-0000-000000000001",
+					"title":        "Event 1",
+					"priority":     "high",
+					"status":       "new",
+					"subject_name": "subj1",
+					"created_at":   "2025-10-15T10:00:00Z",
+				},
 			},
 		},
 	}

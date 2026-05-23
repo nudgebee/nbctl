@@ -23,26 +23,17 @@ var accountsListCmd = &cobra.Command{
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
-			query GetCloudAccounts($where: cloud_accounts_bool_exp) {
-				cloud_accounts(where: $where) {
-					cloud_provider
-					account_type
-					id
-					account_name
-					status
-					created_at
-					agents {
-						last_connected_at
-						status
-						version
-						connection_status
-						k8s_provider
-						k8s_version
-					}
-					cloud_account_attrs {
-						name
-						value
+			query GetCloudAccounts($where: CloudAccountWhereRequest!) {
+				cloud_accounts: get_cloud_accounts_v2(where: $where) {
+					rows {
 						id
+						account_name
+						account_type
+						cloud_provider
+						status
+						created_at
+						agents
+						cloud_account_attrs
 					}
 				}
 			}
@@ -62,70 +53,56 @@ var accountsListCmd = &cobra.Command{
 		req.Var("where", where)
 
 		var respData struct {
-			CloudAccounts []struct {
-				ID            string `json:"id"`
-				AccountName   string `json:"account_name"`
-				AccountType   string `json:"account_type"`
-				CloudProvider string `json:"cloud_provider"`
-				Status        string `json:"status"`
-				CreatedAt     string `json:"created_at"`
-				Agents        []struct {
-					LastConnectedAt  string          `json:"last_connected_at"`
-					Status           string          `json:"status"`
-					Version          string          `json:"version"`
-					ConnectionStatus json.RawMessage `json:"connection_status"`
-					K8sProvider      string          `json:"k8s_provider"`
-					K8sVersion       string          `json:"k8s_version"`
-				} `json:"agents"`
-				CloudAccountAttrs []struct {
-					Name  string `json:"name"`
-					Value string `json:"value"`
-					ID    string `json:"id"`
-				} `json:"cloud_account_attrs"`
+			CloudAccounts struct {
+				Rows []struct {
+					ID                string          `json:"id"`
+					AccountName       string          `json:"account_name"`
+					AccountType       string          `json:"account_type"`
+					CloudProvider     string          `json:"cloud_provider"`
+					Status            string          `json:"status"`
+					CreatedAt         string          `json:"created_at"`
+					Agents            json.RawMessage `json:"agents"`
+					CloudAccountAttrs json.RawMessage `json:"cloud_account_attrs"`
+				} `json:"rows"`
 			} `json:"cloud_accounts"`
 		}
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
-		var outputData []struct {
+		type row struct {
 			ID            string
 			AccountName   string
 			AccountType   string
 			CloudProvider string
 			Status        string
+			CreatedAt     string
 			Agents        int
 			Attributes    int
 		}
-
-		for _, acc := range respData.CloudAccounts {
-			outputData = append(outputData, struct {
-				ID            string
-				AccountName   string
-				AccountType   string
-				CloudProvider string
-				Status        string
-				Agents        int
-				Attributes    int
-			}{
-				ID:            acc.ID,
-				AccountName:   acc.AccountName,
-				AccountType:   acc.AccountType,
-				CloudProvider: acc.CloudProvider,
-				Status:        acc.Status,
-				Agents:        len(acc.Agents),
-				Attributes:    len(acc.CloudAccountAttrs),
+		var rows []row
+		for _, r := range respData.CloudAccounts.Rows {
+			rows = append(rows, row{
+				ID:            r.ID,
+				AccountName:   r.AccountName,
+				AccountType:   r.AccountType,
+				CloudProvider: r.CloudProvider,
+				Status:        r.Status,
+				CreatedAt:     r.CreatedAt,
+				Agents:        countJSONArray(r.Agents),
+				Attributes:    countJSONArray(r.CloudAccountAttrs),
 			})
 		}
 
 		table := format.TabularData{
-			Data: outputData,
+			Data: rows,
 			Fields: []format.TableField{
 				{Header: "ID", Field: "ID"},
 				{Header: "Account Name", Field: "AccountName"},
 				{Header: "Account Type", Field: "AccountType"},
 				{Header: "Cloud Provider", Field: "CloudProvider"},
 				{Header: "Status", Field: "Status"},
+				{Header: "Created At", Field: "CreatedAt"},
 				{Header: "Agents", Field: "Agents"},
 				{Header: "Attributes", Field: "Attributes"},
 			},
@@ -141,4 +118,23 @@ func init() {
 	accountsListCmd.Flags().StringVar(&listStatus, "status", "", "Filter by status")
 	accountsListCmd.Flags().StringVar(&listCloudProvider, "cloud-provider", "", "Filter by cloud provider")
 	accountsListCmd.Flags().StringVar(&listName, "name", "", "Filter by name (like match)")
+}
+
+func countJSONArray(raw json.RawMessage) int {
+	if len(raw) == 0 {
+		return 0
+	}
+	payload := []byte(raw)
+	// jsonb fields are sometimes returned as a JSON-encoded string; peel one layer.
+	if len(payload) > 0 && payload[0] == '"' {
+		var s string
+		if err := json.Unmarshal(payload, &s); err == nil {
+			payload = []byte(s)
+		}
+	}
+	var arr []any
+	if err := json.Unmarshal(payload, &arr); err != nil {
+		return 0
+	}
+	return len(arr)
 }

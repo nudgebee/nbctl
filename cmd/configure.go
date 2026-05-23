@@ -105,15 +105,17 @@ var configureAddCmd = &cobra.Command{
 		gqlClient := client.NewClient(client.WithApiKey(apiKey), client.WithEndpoint(endpoint), client.WithUsername(username))
 		req := client.NewRequest(`
 			query {
-				cloud_accounts(limit: 1) {
-					id
-					tenant
+				cloud_accounts: get_cloud_accounts_v2(where: {}, limit: 1, offset: 0) {
+					rows {
+						id
+					}
 				}
 			}`)
 		var respData struct {
-			CloudAccounts []struct {
-				ID     string `json:"id"`
-				Tenant string `json:"tenant"`
+			CloudAccounts struct {
+				Rows []struct {
+					ID string `json:"id"`
+				} `json:"rows"`
 			} `json:"cloud_accounts"`
 		}
 		if err := gqlClient.Run(context.Background(), req, &respData); err != nil {

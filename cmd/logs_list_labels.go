@@ -52,7 +52,7 @@ var logsListLabelsCmd = &cobra.Command{
 		query := fmt.Sprintf("start=%d&end=%d", startTime.UnixNano(), endTime.UnixNano())
 
 		req := client.NewRequest(`
-			mutation FetchLogLabels($accountId: String!, $query: String!) {
+			query FetchLogLabels($accountId: String!, $query: String!) {
 			  logs_list_labels(request: {account_id: $accountId, request: {query: $query}}) {
 				label
 			  }

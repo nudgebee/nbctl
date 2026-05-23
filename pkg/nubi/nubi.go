@@ -38,58 +38,75 @@ type ConversationMessage struct {
 
 func (c *NubiClient) GetConversationMessages(conversationID string) ([]ConversationMessage, error) {
 	req := client.NewRequest(`
-		query GetLlmConversationMessages($conversationId: uuid!) {
-		  llm_conversation_messages(where: {conversation_id: {_eq: $conversationId}, message_type: {_in: ["generation", "followup"]}}, order_by: {created_at: asc}) {
-			role
-			response
-			message
-			message_type
+		query GetLlmConversationMessages($accountId: String!, $conversationId: String!) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, conversation_id: $conversationId}) {
+			messages {
+			  role
+			  response
+			  message
+			  message_type
+			}
 		  }
 		}
 	`)
+	req.Var("accountId", c.AccountID)
 	req.Var("conversationId", conversationID)
 
 	var respData struct {
-		LlmConversationMessages []ConversationMessage `json:"llm_conversation_messages"`
+		AiGetConversationV3 struct {
+			Messages []ConversationMessage `json:"messages"`
+		} `json:"ai_get_conversation_v3"`
 	}
 
 	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
 		return nil, err
 	}
 
-	return respData.LlmConversationMessages, nil
+	return respData.AiGetConversationV3.Messages, nil
 }
 
 func (c *NubiClient) SwitchToConversation(conversationID string) ([]ConversationMessage, error) {
 	req := client.NewRequest(`
-		query GetLlmConversationDetails($id: uuid!) {
-		  llm_conversations_by_pk(id: $id) {
-			id
-			session_id
+		query GetLlmConversationDetails($accountId: String!, $id: String!) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, conversation_id: $id}) {
+			conversation {
+			  id
+			  session_id
+			}
+			messages {
+			  role
+			  response
+			  message
+			  message_type
+			}
 		  }
 		}
 	`)
+	req.Var("accountId", c.AccountID)
 	req.Var("id", conversationID)
 
 	var respData struct {
-		LlmConversationsByPk struct {
-			ID        string `json:"id"`
-			SessionID string `json:"session_id"`
-		} `json:"llm_conversations_by_pk"`
+		AiGetConversationV3 struct {
+			Conversation struct {
+				ID        string `json:"id"`
+				SessionID string `json:"session_id"`
+			} `json:"conversation"`
+			Messages []ConversationMessage `json:"messages"`
+		} `json:"ai_get_conversation_v3"`
 	}
 
 	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
 		return nil, err
 	}
 
-	if respData.LlmConversationsByPk.ID == "" {
+	if respData.AiGetConversationV3.Conversation.ID == "" {
 		return nil, fmt.Errorf("conversation not found")
 	}
 
-	c.ConversationID = respData.LlmConversationsByPk.ID
-	c.SessionID = respData.LlmConversationsByPk.SessionID
+	c.ConversationID = respData.AiGetConversationV3.Conversation.ID
+	c.SessionID = respData.AiGetConversationV3.Conversation.SessionID
 
-	return c.GetConversationMessages(conversationID)
+	return respData.AiGetConversationV3.Messages, nil
 }
 
 type ConversationHistoryItem struct {
@@ -100,31 +117,30 @@ type ConversationHistoryItem struct {
 
 func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
 	req := client.NewRequest(`
-		query LlmConversationHistory($limit: Int!, $accountId: uuid!, $username: citext!) {
-		  llm_conversations(
-			where: {
-			  account_id: {_eq: $accountId},
-			  source: {_eq: "UserInvestigation"},
-			  user: {username: {_eq: $username}}
-			},
-			order_by: {updated_at: desc},
-			limit: $limit
-		  ) {
-			id
-			title
-			updated_at
+		query LlmConversationHistory($limit: Int!, $where: LlmConversationListWhereRequest!) {
+		  llm_conversations: llm_conversation_list_v2(where: $where, limit: $limit, offset: 0, order_by: [{column: "updated_at", order: desc}]) {
+			rows {
+			  id
+			  title
+			  updated_at
+			}
 		  }
 		}
 	`)
 	req.Var("limit", limit)
-	req.Var("accountId", c.AccountID)
-	req.Var("username", c.Username)
+	req.Var("where", map[string]any{
+		"account_id":    map[string]any{"_eq": c.AccountID},
+		"source":        map[string]any{"_eq": "UserInvestigation"},
+		"user_username": map[string]any{"_eq": c.Username},
+	})
 
 	var respData struct {
-		LlmConversations []struct {
-			ID        string `json:"id"`
-			Title     string `json:"title"`
-			UpdatedAt string `json:"updated_at"`
+		LlmConversations struct {
+			Rows []struct {
+				ID        string `json:"id"`
+				Title     string `json:"title"`
+				UpdatedAt string `json:"updated_at"`
+			} `json:"rows"`
 		} `json:"llm_conversations"`
 	}
 
@@ -133,7 +149,7 @@ func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
 	}
 
 	var history []ConversationHistoryItem
-	for _, conv := range respData.LlmConversations {
+	for _, conv := range respData.LlmConversations.Rows {
 		updatedAt, err := time.Parse("2006-01-02T15:04:05.999999", conv.UpdatedAt)
 		if err != nil {
 			return nil, err
@@ -151,7 +167,7 @@ func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
 func (c *NubiClient) TriggerInvestigation(ctx context.Context, query string) error {
 	req := client.NewRequest(`
 		mutation AiTriggerInvestigateResponse($accountId: String!, $query: String!, $sessionId: String!) {
-		  ai_trigger_investigation(request: {account_id: $accountId, query: $query, user_id: "", session_id: $sessionId, async: true}) {
+		  ai_trigger_investigation(request: {account_id: $accountId, query: $query, session_id: $sessionId, async: true}) {
 			data {
 			  agent_step_response
 			  response
@@ -171,116 +187,161 @@ func (c *NubiClient) TriggerInvestigation(ctx context.Context, query string) err
 }
 
 func (c *NubiClient) GetConversation(ctx context.Context) (string, string, string, string, string, string, error) {
+	// ai_get_conversation_v3 returns a "conversation shell + flat messages/agents/tool_calls deltas".
+	// We re-correlate the flat lists by ID to preserve the previous nested-traversal behavior.
 	req := client.NewRequest(`
-		query GetLlmConversation($sessionId: String!) {
-		  llm_conversations(where: {session_id: {_eq: $sessionId}}, order_by: {created_at: desc}, limit: 1) {
-			id
-			status
-			llm_conversation_messages(where: {message_type: {_in: ["generation", "followup"]}}, order_by: {created_at: asc}) {
+		query GetLlmConversation($accountId: String!, $sessionId: String!) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, session_id: $sessionId}) {
+			conversation {
+			  id
+			  status
+			}
+			messages {
 			  id
 			  status
 			  response
 			  message_type
 			  message_config
 			  parent_agent_id
-			  llm_conversation_agents(order_by: {created_at: asc}) {
-			    id
-				response
-				agent_name
-				status
-				llm_conversation_tool_calls(order_by: {created_at: asc}) {
-				  tool_name
-				  parameters
-				}
-			  }
+			}
+			agents {
+			  id
+			  message_id
+			  agent_name
+			  status
+			  response
+			}
+			tool_calls {
+			  agent_id
+			  tool_name
+			  parameters
 			}
 		  }
 		}
 	`)
 
+	req.Var("accountId", c.AccountID)
 	req.Var("sessionId", c.SessionID)
 
 	var respData struct {
-		LlmConversations []struct {
-			ID                      string `json:"id"`
-			Status                  string `json:"status"`
-			LlmConversationMessages []struct {
-				ID                    string `json:"id"`
-				Status                string `json:"status"`
-				Response              string `json:"response"`
-				MessageType           string `json:"message_type"`
-				MessageConfig         string `json:"message_config"`
-				ParentAgentID         string `json:"parent_agent_id"`
-				LlmConversationAgents []struct {
-					ID                       string `json:"id"`
-					AgentName                string `json:"agent_name"`
-					Status                   string `json:"status"`
-					Response                 string `json:"response"`
-					LlmConversationToolCalls []struct {
-						ToolName   string `json:"tool_name"`
-						Parameters string `json:"parameters"`
-					} `json:"llm_conversation_tool_calls"`
-				} `json:"llm_conversation_agents"`
-			} `json:"llm_conversation_messages"`
-		} `json:"llm_conversations"`
+		AiGetConversationV3 struct {
+			Conversation struct {
+				ID     string `json:"id"`
+				Status string `json:"status"`
+			} `json:"conversation"`
+			Messages []struct {
+				ID            string `json:"id"`
+				Status        string `json:"status"`
+				Response      string `json:"response"`
+				MessageType   string `json:"message_type"`
+				MessageConfig string `json:"message_config"`
+				ParentAgentID string `json:"parent_agent_id"`
+			} `json:"messages"`
+			Agents []struct {
+				ID        string `json:"id"`
+				MessageID string `json:"message_id"`
+				AgentName string `json:"agent_name"`
+				Status    string `json:"status"`
+				Response  string `json:"response"`
+			} `json:"agents"`
+			ToolCalls []struct {
+				AgentID    string `json:"agent_id"`
+				ToolName   string `json:"tool_name"`
+				Parameters string `json:"parameters"`
+			} `json:"tool_calls"`
+		} `json:"ai_get_conversation_v3"`
 	}
 
 	if err := c.Client.Run(ctx, req, &respData); err != nil {
 		return "", "", "", "", "", "", err
 	}
 
-	if len(respData.LlmConversations) == 0 {
+	conv := respData.AiGetConversationV3
+	if conv.Conversation.ID == "" {
 		return "", "IN_PROGRESS", "", "", "", "", nil // Not ready yet
 	}
 
-	c.ConversationID = respData.LlmConversations[0].ID
+	c.ConversationID = conv.Conversation.ID
 
-	if len(respData.LlmConversations[0].LlmConversationMessages) == 0 {
-		return "", respData.LlmConversations[0].Status, "", "", "", "", nil
+	// Filter messages to generation/followup, matching the prior query.
+	type msgT = struct {
+		ID            string
+		Status        string
+		Response      string
+		MessageType   string
+		MessageConfig string
+		ParentAgentID string
+	}
+	var messages []msgT
+	for _, m := range conv.Messages {
+		if m.MessageType == "generation" || m.MessageType == "followup" {
+			messages = append(messages, msgT{m.ID, m.Status, m.Response, m.MessageType, m.MessageConfig, m.ParentAgentID})
+		}
+	}
+	if len(messages) == 0 {
+		return "", conv.Conversation.Status, "", "", "", "", nil
 	}
 
-	// Find the latest agent and tool call
+	// Index agents by message_id and tool_calls by agent_id.
+	agentsByMsg := map[string][]struct {
+		ID        string
+		AgentName string
+		Status    string
+		Response  string
+	}{}
+	for _, a := range conv.Agents {
+		agentsByMsg[a.MessageID] = append(agentsByMsg[a.MessageID], struct {
+			ID        string
+			AgentName string
+			Status    string
+			Response  string
+		}{a.ID, a.AgentName, a.Status, a.Response})
+	}
+	toolsByAgent := map[string][]struct {
+		ToolName   string
+		Parameters string
+	}{}
+	for _, t := range conv.ToolCalls {
+		toolsByAgent[t.AgentID] = append(toolsByAgent[t.AgentID], struct {
+			ToolName   string
+			Parameters string
+		}{t.ToolName, t.Parameters})
+	}
+
 	var latestAgentName, latestToolName, latestToolParams string
 	var waitingMessageID, waitingAgentID string
-	messages := respData.LlmConversations[0].LlmConversationMessages
 	finalResponse := ""
-	if len(messages) > 0 {
-		// Find the latest "generation" message for finalResponse
-		for i := len(messages) - 1; i >= 0; i-- {
-			msg := messages[i]
-			if msg.MessageType == "generation" {
-				finalResponse = msg.Response
-				if msg.Status == "WAITING" {
-					waitingMessageID = msg.ID
-					for _, a := range msg.LlmConversationAgents {
-						if strings.EqualFold(a.Status, "waiting") {
-							waitingAgentID = a.ID
-						}
+
+	// Find the latest "generation" message for finalResponse
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if msg.MessageType == "generation" {
+			finalResponse = msg.Response
+			if msg.Status == "WAITING" {
+				waitingMessageID = msg.ID
+				for _, a := range agentsByMsg[msg.ID] {
+					if strings.EqualFold(a.Status, "waiting") {
+						waitingAgentID = a.ID
 					}
 				}
-				break
 			}
+			break
 		}
+	}
 
-		// If finalResponse is still empty, try to get it from the last agent's response
-		// This ensures we don't miss a response if it's not explicitly a "generation" message
-		// but is part of the agent's final output.
-		// This part should only execute if no generation message was found.
-		if finalResponse == "" {
-			lastMessage := messages[len(messages)-1] // Get the actual last message for agent info
-			agents := lastMessage.LlmConversationAgents
-			if len(agents) > 0 {
-				latestAgent := agents[len(agents)-1]
-				latestAgentName = latestAgent.AgentName
-				if finalResponse == "" { // Only set if still empty
-					finalResponse = latestAgent.Response
-				}
-				toolCalls := latestAgent.LlmConversationToolCalls
-				if len(toolCalls) > 0 {
-					latestTool := toolCalls[len(toolCalls)-1]
-					latestToolName = latestTool.ToolName
-					latestToolParams = latestTool.Parameters
-				}
+	// Fallback: if no generation response, use the last agent of the last message.
+	if finalResponse == "" {
+		lastMessage := messages[len(messages)-1]
+		agents := agentsByMsg[lastMessage.ID]
+		if len(agents) > 0 {
+			latestAgent := agents[len(agents)-1]
+			latestAgentName = latestAgent.AgentName
+			finalResponse = latestAgent.Response
+			toolCalls := toolsByAgent[latestAgent.ID]
+			if len(toolCalls) > 0 {
+				latestTool := toolCalls[len(toolCalls)-1]
+				latestToolName = latestTool.ToolName
+				latestToolParams = latestTool.Parameters
 			}
 		}
 	}
@@ -297,13 +358,13 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 
 	statusText := fmt.Sprintf("Agent: %s, Tool: %s, Action: %s", latestAgentName, latestToolName, latestToolParams)
 
-	return finalResponse, respData.LlmConversations[0].Status, statusText, followupMessageConfig, waitingMessageID, waitingAgentID, nil
+	return finalResponse, conv.Conversation.Status, statusText, followupMessageConfig, waitingMessageID, waitingAgentID, nil
 }
 
 func (c *NubiClient) SendFollowupResponse(ctx context.Context, query, agentID, messageID string) error {
 	req := client.NewRequest(`
-		mutation AiFollowupResponse($accountId: String!, $query: String!, $userId: String!, $conversationId: String!, $agentId: String!, $messageId: String!) {
-		  ai_followup_response(request: {account_id: $accountId, query: $query, user_id: $userId, conversation_id: $conversationId, agent_id: $agentId, message_id: $messageId, async: true}) {
+		mutation AiFollowupResponse($accountId: String!, $query: String!, $conversationId: String!, $agentId: String!, $messageId: String!) {
+		  ai_followup_response(request: {account_id: $accountId, query: $query, conversation_id: $conversationId, agent_id: $agentId, message_id: $messageId, async: true}) {
 			data {
 			  response
 			}
@@ -313,7 +374,6 @@ func (c *NubiClient) SendFollowupResponse(ctx context.Context, query, agentID, m
 
 	req.Var("accountId", c.AccountID)
 	req.Var("query", query)
-	req.Var("userId", "")
 	req.Var("conversationId", c.ConversationID)
 	req.Var("agentId", agentID)
 	req.Var("messageId", messageID)
@@ -328,8 +388,8 @@ func (c *NubiClient) StopConversation() {
 	}
 
 	req := client.NewRequest(`
-		mutation AIStopInvestigationRequest($accountId: String!, $conversationId: String!, $username: String!) {
-		  ai_stop_investigation(request: {account_id: $accountId, conversation_id: $conversationId, user_id: $username}) {
+		mutation AiStopInvestigation($accountId: String!, $conversationId: String!) {
+		  ai_stop_investigation(request: {account_id: $accountId, conversation_id: $conversationId}) {
 			data
 		  }
 		}
@@ -337,7 +397,6 @@ func (c *NubiClient) StopConversation() {
 
 	req.Var("accountId", c.AccountID)
 	req.Var("conversationId", c.ConversationID)
-	req.Var("username", c.Username)
 
 	go func() {
 		if err := c.Client.Run(context.Background(), req, nil); err != nil {
@@ -404,14 +463,22 @@ func (c *NubiClient) AddBookmark(conversationID string) error {
 
 func (c *NubiClient) RemoveBookmark(conversationID string) error {
 	req := client.NewRequest(`
-		mutation RemoveBookmark($conversationId: uuid!, $username: String!) {
-		  delete_llm_conversation_saveds_by_pk(conversation_id: $conversationId, user_id: $username) {
-			conversation_id
+		mutation DeleteSavedConversation($data: DeleteLLMConversationRequest!) {
+		  ai_delete_saved_conversation(request: $data) {
+			data {
+			  success
+			}
 		  }
 		}
 	`)
-	req.Var("conversationId", conversationID)
-	req.Var("username", c.Username)
+
+	type DeleteLLMConversationRequest struct {
+		ConversationID string `json:"conversation_id"`
+	}
+
+	req.Var("data", DeleteLLMConversationRequest{
+		ConversationID: conversationID,
+	})
 	return c.Client.Run(context.Background(), req, nil)
 }
 
@@ -422,33 +489,33 @@ type BookmarkItem struct {
 
 func (c *NubiClient) ListBookmarks() ([]BookmarkItem, error) {
 	req := client.NewRequest(`
-		query ListBookmarks($username: citext!, $accountId: uuid!) {
-		  llm_conversations(
-			where: {
-			  account_id: {_eq: $accountId},
-			  source: {_eq: "UserInvestigation"},
-			  llm_conversation_messages: {message_type: {_eq: "generation"}, role: {_eq: "human"}},
-			  llm_conversation_saveds: {user: {username: {_eq: $username}}}
-			},
-			order_by: {updated_at: desc}
-		  ) {
-			id
-			title
+		query ListBookmarks($where: LlmConversationListWhereRequest!) {
+		  llm_conversations: llm_conversation_list_v2(where: $where, order_by: [{column: "updated_at", order: desc}]) {
+			rows {
+			  id
+			  title
+			}
 		  }
 		}
 	`)
-	req.Var("username", c.Username)
-	req.Var("accountId", c.AccountID)
+	req.Var("where", map[string]any{
+		"account_id":    map[string]any{"_eq": c.AccountID},
+		"source":        map[string]any{"_eq": "UserInvestigation"},
+		"user_username": map[string]any{"_eq": c.Username},
+		"is_saved":      map[string]any{"_eq": true},
+	})
 
 	var respData struct {
-		LlmConversations []BookmarkItem `json:"llm_conversations"`
+		LlmConversations struct {
+			Rows []BookmarkItem `json:"rows"`
+		} `json:"llm_conversations"`
 	}
 
 	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
 		return nil, err
 	}
 
-	return respData.LlmConversations, nil
+	return respData.LlmConversations.Rows, nil
 }
 
 type AgentItem struct {
@@ -520,25 +587,31 @@ type FunctionItem struct {
 
 func (c *NubiClient) ListFunctions() ([]FunctionItem, error) {
 	req := client.NewRequest(`
-		query GetFunctions($accountId: uuid!) {
-		  llm_functions(where: {account_id: {_eq: $accountId}}) {
-			id
-			name
-			description
-			status
-			variables
+		query GetFunctions($where: LlmFunctionsWhereRequest!) {
+		  llm_functions: llm_functions_v2(where: $where) {
+			rows {
+			  id
+			  name
+			  description
+			  status
+			  variables
+			}
 		  }
 		}
 	`)
-	req.Var("accountId", c.AccountID)
+	req.Var("where", map[string]any{
+		"account_id": map[string]any{"_eq": c.AccountID},
+	})
 
 	var respData struct {
-		LlmFunctions []FunctionItem `json:"llm_functions"`
+		LlmFunctions struct {
+			Rows []FunctionItem `json:"rows"`
+		} `json:"llm_functions"`
 	}
 
 	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
 		return nil, err
 	}
 
-	return respData.LlmFunctions, nil
+	return respData.LlmFunctions.Rows, nil
 }

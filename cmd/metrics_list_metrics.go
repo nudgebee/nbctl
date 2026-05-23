@@ -25,7 +25,7 @@ var metricsListMetricsCmd = &cobra.Command{
 		}
 
 		req := client.NewRequest(`
-			mutation MetricsList($accountId: String!) {
+			query MetricsList($accountId: String!) {
 			  metrics_list(request: {account_id: $accountId}) {
 				metric
 			  }
