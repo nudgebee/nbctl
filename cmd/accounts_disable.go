@@ -19,30 +19,36 @@ var accountsDisableCmd = &cobra.Command{
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
-			mutation UpdateCloudAccount($id: uuid!, $status: cloud_account_status_type_enum!) {
-				update_cloud_accounts(where: {id:{_eq:$id}}, _set: {status:$status}) {
+			mutation UpdateCloudAccount($object: cloud_account_update_input!) {
+				cloud_account_update(object: $object) {
 					affected_rows
 				}
 			}
 		`)
 
-		req.Var("id", accountID)
-		req.Var("status", "disabled")
+		req.Var("object", map[string]any{
+			"id":     accountID,
+			"status": "disabled",
+		})
 
 		var respData struct {
-			UpdateCloudAccounts struct {
+			CloudAccountUpdate struct {
 				AffectedRows int `json:"affected_rows"`
-			} `json:"update_cloud_accounts"`
+			} `json:"cloud_account_update"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return fmt.Errorf("failed to disable account: %w", err)
 		}
 
+		if respData.CloudAccountUpdate.AffectedRows == 0 {
+			return fmt.Errorf("account %s not found or not updated", accountID)
+		}
+
 		output := struct {
 			Message string `json:"message"`
 		}{
-			Message: fmt.Sprintf("Account %s disabled. Affected rows: %d", accountID, respData.UpdateCloudAccounts.AffectedRows),
+			Message: fmt.Sprintf("Account %s disabled", accountID),
 		}
 
 		format.GetFormat().Print(output)

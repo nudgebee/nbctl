@@ -76,7 +76,7 @@ var tracesQueryCmd = &cobra.Command{
 
 		req := client.NewRequest(fmt.Sprintf(`
 			query TraceV3($account_id: String!) {
-				traces_v3(request: {account_id: $account_id, query:"",start_time:0,end_time:0,query_request:{where:{_binary:{%s}},having:{},limit:50,offset:0,order_by:[{column:"timestamp",order:"desc"}]}}) {
+				traces_query(request: {account_id: $account_id, query:"",start_time:0,end_time:0,query_request:{where:{_binary:{%s}},having:{},limit:50,offset:0,order_by:[{column:"timestamp",order:"desc"}]}}) {
 					trace_id
 					span_id
 					parent_span_id
@@ -103,7 +103,7 @@ var tracesQueryCmd = &cobra.Command{
 		req.Var("account_id", accountId)
 
 		var respData struct {
-			TracesV3 []struct {
+			TracesQuery []struct {
 				TraceID                      string         `json:"trace_id"`
 				SpanID                       string         `json:"span_id"`
 				ParentSpanID                 string         `json:"parent_span_id"`
@@ -123,7 +123,7 @@ var tracesQueryCmd = &cobra.Command{
 				HTTPResponse                 any            `json:"http_response"`
 				TraceSource                  string         `json:"trace_source"`
 				SpanAttributes               map[string]any `json:"span_attributes"`
-			} `json:"traces_v3"`
+			} `json:"traces_query"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
@@ -131,7 +131,7 @@ var tracesQueryCmd = &cobra.Command{
 		}
 
 		table := format.TabularData{
-			Data: respData.TracesV3,
+			Data: respData.TracesQuery,
 			Fields: []format.TableField{
 				{Header: "Trace ID", Field: "TraceID"},
 				{Header: "Span ID", Field: "SpanID"},

@@ -9,7 +9,9 @@ import (
 func TestAdminUsersList(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mockData := map[string]any{
-			"users": []any{},
+			"users": map[string]any{
+				"rows": []any{},
+			},
 		}
 		cmd := adminUsersListCmd
 		args := []string{"admin", "users", "list"}

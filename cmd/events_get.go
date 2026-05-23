@@ -18,8 +18,9 @@ var eventsGetCmd = &cobra.Command{
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
-			query ResolveEventRecord($id:uuid!) {
-			  events(where: {id: {_eq:$id}}) {
+			query ResolveEventRecord($where: EventsWhereRequest!) {
+			  events: events_v2(where: $where, limit: 1, offset: 0) {
+			    rows {
 				evidences
 				id
 				subject_name
@@ -34,40 +35,45 @@ var eventsGetCmd = &cobra.Command{
 				description
 				aggregation_key
 				service_key
-				cloud_resource_id
-				cloud_account_id
+				resource_id
+				account_id
 				status
 				fingerprint
 				source
 				labels
+			    }
 			  }
 			}
 		`)
 
-		req.Var("id", args[0])
+		req.Var("where", map[string]any{
+			"id": map[string]any{"_eq": args[0]},
+		})
 
 		var respData struct {
-			Events []struct {
-				Evidences        json.RawMessage `json:"evidences"`
-				ID               string          `json:"id"`
-				SubjectName      string          `json:"subject_name"`
-				StartsAt         string          `json:"starts_at"`
-				SubjectNamespace string          `json:"subject_namespace"`
-				Cluster          string          `json:"cluster"`
-				SubjectNode      string          `json:"subject_node"`
-				SubjectOwner     string          `json:"subject_owner"`
-				SubjectType      string          `json:"subject_type"`
-				Title            string          `json:"title"`
-				Priority         string          `json:"priority"`
-				Description      string          `json:"description"`
-				AggregationKey   string          `json:"aggregation_key"`
-				ServiceKey       string          `json:"service_key"`
-				CloudResourceID  string          `json:"cloud_resource_id"`
-				CloudAccountID   string          `json:"cloud_account_id"`
-				Status           string          `json:"status"`
-				Fingerprint      string          `json:"fingerprint"`
-				Source           string          `json:"source"`
-				Labels           json.RawMessage `json:"labels"`
+			Events struct {
+				Rows []struct {
+					Evidences        json.RawMessage `json:"evidences"`
+					ID               string          `json:"id"`
+					SubjectName      string          `json:"subject_name"`
+					StartsAt         string          `json:"starts_at"`
+					SubjectNamespace string          `json:"subject_namespace"`
+					Cluster          string          `json:"cluster"`
+					SubjectNode      string          `json:"subject_node"`
+					SubjectOwner     string          `json:"subject_owner"`
+					SubjectType      string          `json:"subject_type"`
+					Title            string          `json:"title"`
+					Priority         string          `json:"priority"`
+					Description      string          `json:"description"`
+					AggregationKey   string          `json:"aggregation_key"`
+					ServiceKey       string          `json:"service_key"`
+					ResourceID       string          `json:"resource_id"`
+					AccountID        string          `json:"account_id"`
+					Status           string          `json:"status"`
+					Fingerprint      string          `json:"fingerprint"`
+					Source           string          `json:"source"`
+					Labels           json.RawMessage `json:"labels"`
+				} `json:"rows"`
 			} `json:"events"`
 		}
 
@@ -75,12 +81,12 @@ var eventsGetCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.Events) == 0 {
+		if len(respData.Events.Rows) == 0 {
 			fmt.Println("Event not found.")
 			return nil
 		}
 
-		format.GetFormat().Print(respData.Events[0])
+		format.GetFormat().Print(respData.Events.Rows[0])
 
 		return nil
 	},

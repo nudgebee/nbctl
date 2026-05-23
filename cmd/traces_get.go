@@ -7,6 +7,7 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var tracesGetCmd = &cobra.Command{
@@ -15,43 +16,55 @@ var tracesGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
+		accountId := viper.GetString("account-id")
 
 		req := client.NewRequest(`
-			query($traceId: String!) {
-				traces_by_pk(trace_id: $traceId) {
+			query TraceGet($account_id: String!, $trace_id: String!) {
+				traces_query(request: {account_id: $account_id, query:"", start_time:0, end_time:0, query_request:{where:{_binary:{trace_id:{_eq:$trace_id}}}, having:{}, limit:1, offset:0, order_by:[{column:"timestamp", order:"desc"}]}}) {
 					trace_id
-					service_name
-					operation_name
-					start_time
-					duration
+					span_id
+					parent_span_id
+					workload_name
+					workload_namespace
+					timestamp
 					status_code
+					span_name
+					resource
+					duration_ns
+					http_status_code
 				}
 			}
 		`)
 
-		req.Var("traceId", args[0])
+		req.Var("account_id", accountId)
+		req.Var("trace_id", args[0])
 
 		var respData struct {
-			Trace struct {
-				TraceID       string `json:"trace_id"`
-				ServiceName   string `json:"service_name"`
-				OperationName string `json:"operation_name"`
-				StartTime     string `json:"start_time"`
-				Duration      int    `json:"duration"`
-				StatusCode    string `json:"status_code"`
-			} `json:"traces_by_pk"`
+			TracesQuery []struct {
+				TraceID           string `json:"trace_id"`
+				SpanID            string `json:"span_id"`
+				ParentSpanID      string `json:"parent_span_id"`
+				WorkloadName      string `json:"workload_name"`
+				WorkloadNamespace string `json:"workload_namespace"`
+				Timestamp         string `json:"timestamp"`
+				StatusCode        string `json:"status_code"`
+				SpanName          string `json:"span_name"`
+				Resource          string `json:"resource"`
+				DurationNs        int    `json:"duration_ns"`
+				HTTPStatusCode    string `json:"http_status_code"`
+			} `json:"traces_query"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
-		if respData.Trace.TraceID == "" {
+		if len(respData.TracesQuery) == 0 {
 			fmt.Println("Trace not found.")
 			return nil
 		}
 
-		format.GetFormat().Print(respData.Trace)
+		format.GetFormat().Print(respData.TracesQuery[0])
 
 		return nil
 	},

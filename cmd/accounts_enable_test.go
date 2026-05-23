@@ -10,7 +10,7 @@ import (
 func TestAccountsEnable(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mockData := map[string]any{
-			"update_cloud_accounts": map[string]any{
+			"cloud_account_update": map[string]any{
 				"affected_rows": 1,
 			},
 		}

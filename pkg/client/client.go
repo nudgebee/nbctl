@@ -580,7 +580,7 @@ func (c *Client) handleGraphQLErrors(errorsVal []interface{}) error {
 										for _, be := range bodyErrs {
 											if beMap, ok := be.(map[string]interface{}); ok {
 												if beMsg, ok := beMap["message"].(string); ok {
-													sb.WriteString(fmt.Sprintf("- %s\n", beMsg))
+													fmt.Fprintf(&sb, "- %s\n", beMsg)
 												}
 											}
 										}

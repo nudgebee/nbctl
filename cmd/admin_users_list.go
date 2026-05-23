@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
-	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 )
 
@@ -27,43 +27,17 @@ var adminUsersListCmd = &cobra.Command{
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
-			query GetUsersByTenant($offset: Int, $limit: Int, $where: users_bool_exp) {
-				users(limit: $limit, offset: $offset, order_by: {display_name:asc}, where: $where) {
-					display_name
-					id
-					status
-					username
-					created_at
-					user_roles(where: {}) {
+			query GetUsersByTenant($offset: Int, $limit: Int, $where: UsersByTenantWhereRequest!) {
+				users: admin_get_users_by_tenant_v2(where: $where, limit: $limit, offset: $offset, order_by: [{column: "username", order: asc}]) {
+					rows {
+						display_name
 						id
-						role
-						entity_type
-						entity_id
-						roleByRole {
-							display_name
-						}
-					}
-					tenants:tenantUsersByUser(where: {}) {
-						id:tenant
+						status
+						username
 						created_at
-					}
-					usergroupUsersByUser {
-						user_group {
-							name
-							id
-							group_roles {
-								role
-							}
-						}
-					}
-					user_auths(limit: 1, order_by: {accessed_at: desc},where: {}) {
-						accessed_at
-						tenant_id
-					}
-				}
-				users_aggregate(where: $where) {
-					aggregate {
-						count
+						last_accessed_at
+						user_roles
+						user_groups
 					}
 				}
 			}
@@ -88,96 +62,49 @@ var adminUsersListCmd = &cobra.Command{
 		req.Var("where", where)
 
 		var respData struct {
-			Users []struct {
-				DisplayName string `json:"display_name"`
-				ID          string `json:"id"`
-				Status      string `json:"status"`
-				Username    string `json:"username"`
-				CreatedAt   string `json:"created_at"`
-				UserRoles   []struct {
-					ID         string `json:"id"`
-					Role       string `json:"role"`
-					EntityType string `json:"entity_type"`
-					EntityID   string `json:"entity_id"`
-					RoleByRole struct {
-						DisplayName string `json:"display_name"`
-					} `json:"roleByRole"`
-				} `json:"user_roles"`
-				Tenants []struct {
-					ID        string `json:"id"`
-					CreatedAt string `json:"created_at"`
-				} `json:"tenants"`
-				UsergroupUsersByUser []struct {
-					UserGroup struct {
-						Name       string `json:"name"`
-						ID         string `json:"id"`
-						GroupRoles []struct {
-							Role string `json:"role"`
-						} `json:"group_roles"`
-					} `json:"user_group"`
-				} `json:"usergroupUsersByUser"`
-				UserAuths []struct {
-					AccessedAt string `json:"accessed_at"`
-					TenantID   string `json:"tenant_id"`
-				} `json:"user_auths"`
+			Users struct {
+				Rows []struct {
+					DisplayName    string          `json:"display_name"`
+					ID             string          `json:"id"`
+					Status         string          `json:"status"`
+					Username       string          `json:"username"`
+					CreatedAt      string          `json:"created_at"`
+					LastAccessedAt string          `json:"last_accessed_at"`
+					UserRoles      json.RawMessage `json:"user_roles"`
+					UserGroups     json.RawMessage `json:"user_groups"`
+				} `json:"rows"`
 			} `json:"users"`
-			UsersAggregate struct {
-				Aggregate struct {
-					Count int `json:"count"`
-				} `json:"aggregate"`
-			} `json:"users_aggregate"`
 		}
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
-		var outputData []struct {
-			ID          string
-			DisplayName string
-			Username    string
-			Status      string
-			Roles       string
-			Groups      string
-			LastLogin   string
+		type row struct {
+			ID             string
+			DisplayName    string
+			Username       string
+			Status         string
+			CreatedAt      string
+			LastAccessedAt string
+			Roles          string
+			Groups         string
 		}
-
-		for _, user := range respData.Users {
-			var roles []string
-			for _, r := range user.UserRoles {
-				roles = append(roles, r.RoleByRole.DisplayName)
-			}
-
-			var groups []string
-			for _, g := range user.UsergroupUsersByUser {
-				groups = append(groups, g.UserGroup.Name)
-			}
-
-			lastLogin := "never"
-			if len(user.UserAuths) > 0 {
-				lastLogin = user.UserAuths[0].AccessedAt
-			}
-
-			outputData = append(outputData, struct {
-				ID          string
-				DisplayName string
-				Username    string
-				Status      string
-				Roles       string
-				Groups      string
-				LastLogin   string
-			}{
-				ID:          user.ID,
-				DisplayName: user.DisplayName,
-				Username:    user.Username,
-				Status:      user.Status,
-				Roles:       strings.Join(lo.Uniq(roles), ","),
-				Groups:      strings.Join(lo.Uniq(groups), ","),
-				LastLogin:   lastLogin,
+		var rows []row
+		for _, r := range respData.Users.Rows {
+			rows = append(rows, row{
+				ID:             r.ID,
+				DisplayName:    r.DisplayName,
+				Username:       r.Username,
+				Status:         r.Status,
+				CreatedAt:      r.CreatedAt,
+				LastAccessedAt: r.LastAccessedAt,
+				Roles:          joinJSONNames(r.UserRoles, "role"),
+				Groups:         joinJSONNames(r.UserGroups, "name"),
 			})
 		}
 
 		table := format.TabularData{
-			Data: outputData,
+			Data: rows,
 			Fields: []format.TableField{
 				{Header: "ID", Field: "ID"},
 				{Header: "Display Name", Field: "DisplayName"},
@@ -185,12 +112,10 @@ var adminUsersListCmd = &cobra.Command{
 				{Header: "Status", Field: "Status"},
 				{Header: "Roles", Field: "Roles"},
 				{Header: "Groups", Field: "Groups"},
-				{Header: "Last Login", Field: "LastLogin"},
+				{Header: "Last Login", Field: "LastAccessedAt"},
 			},
 		}
 		format.GetFormat().Print(table)
-
-		fmt.Printf("\nTotal users: %d\n", respData.UsersAggregate.Aggregate.Count)
 
 		return nil
 	},
@@ -204,4 +129,31 @@ func init() {
 	adminUsersListCmd.Flags().StringVar(&username, "username", "", "Filter by username (ilike)")
 	adminUsersListCmd.Flags().StringVar(&status, "status", "", "Filter by status (eq)")
 	adminUsersListCmd.Flags().StringVar(&id, "id", "", "Filter by id (eq)")
+}
+
+func joinJSONNames(raw json.RawMessage, key string) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	payload := []byte(raw)
+	// jsonb fields are sometimes returned as a JSON-encoded string; peel one layer.
+	if len(payload) > 0 && payload[0] == '"' {
+		var s string
+		if err := json.Unmarshal(payload, &s); err == nil {
+			payload = []byte(s)
+		}
+	}
+	var items []map[string]any
+	if err := json.Unmarshal(payload, &items); err != nil {
+		return ""
+	}
+	var names []string
+	for _, it := range items {
+		if v, ok := it[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				names = append(names, s)
+			}
+		}
+	}
+	return strings.Join(names, ",")
 }

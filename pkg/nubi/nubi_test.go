@@ -35,9 +35,11 @@ func TestNubiClient_GetConversationMessages(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"llm_conversation_messages": []map[string]any{
-					{"role": "user", "message": "hello"},
-					{"role": "assistant", "response": "hi there"},
+				"ai_get_conversation_v3": map[string]any{
+					"messages": []map[string]any{
+						{"role": "user", "message": "hello"},
+						{"role": "assistant", "response": "hi there"},
+					},
 				},
 			},
 		}
@@ -60,9 +62,11 @@ func TestNubiClient_ShowHistory(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"llm_conversations": []map[string]any{
-					{"id": "1", "title": "conv 1", "updated_at": "2023-01-01T12:00:00.000000"},
-					{"id": "2", "title": "conv 2", "updated_at": "2023-01-02T12:00:00.000000"},
+				"llm_conversations": map[string]any{
+					"rows": []map[string]any{
+						{"id": "1", "title": "conv 1", "updated_at": "2023-01-01T12:00:00.000000"},
+						{"id": "2", "title": "conv 2", "updated_at": "2023-01-02T12:00:00.000000"},
+					},
 				},
 			},
 		}
@@ -104,11 +108,13 @@ func TestNubiClient_SwitchToConversation(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"llm_conversations_by_pk": map[string]any{
-					"id":         "test-conv",
-					"session_id": "test-sess",
+				"ai_get_conversation_v3": map[string]any{
+					"conversation": map[string]any{
+						"id":         "test-conv",
+						"session_id": "test-sess",
+					},
+					"messages": []map[string]any{},
 				},
-				"llm_conversation_messages": []map[string]any{},
 			},
 		}
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
@@ -128,19 +134,21 @@ func TestNubiClient_GetConversation(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"llm_conversations": []map[string]any{
-					{
+				"ai_get_conversation_v3": map[string]any{
+					"conversation": map[string]any{
 						"id":     "test-conv",
 						"status": "COMPLETED",
-						"llm_conversation_messages": []map[string]any{
-							{
-								"id":           "msg-1",
-								"status":       "COMPLETED",
-								"response":     "Final Response",
-								"message_type": "generation",
-							},
+					},
+					"messages": []map[string]any{
+						{
+							"id":           "msg-1",
+							"status":       "COMPLETED",
+							"response":     "Final Response",
+							"message_type": "generation",
 						},
 					},
+					"agents":     []map[string]any{},
+					"tool_calls": []map[string]any{},
 				},
 			},
 		}
@@ -247,8 +255,8 @@ func TestNubiClient_RemoveBookmark(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"delete_llm_conversation_saveds_by_pk": map[string]any{
-					"conversation_id": "test-conv",
+				"ai_delete_saved_conversation": map[string]any{
+					"data": "{}",
 				},
 			},
 		}
@@ -266,9 +274,11 @@ func TestNubiClient_ListBookmarks(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"llm_conversations": []map[string]any{
-					{"id": "1", "title": "bookmark 1"},
-					{"id": "2", "title": "bookmark 2"},
+				"llm_conversations": map[string]any{
+					"rows": []map[string]any{
+						{"id": "1", "title": "bookmark 1"},
+						{"id": "2", "title": "bookmark 2"},
+					},
 				},
 			},
 		}
@@ -333,8 +343,10 @@ func TestNubiClient_ListFunctions(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"llm_functions": []map[string]any{
-					{"name": "func1", "description": "desc1"},
+				"llm_functions": map[string]any{
+					"rows": []map[string]any{
+						{"name": "func1", "description": "desc1"},
+					},
 				},
 			},
 		}
