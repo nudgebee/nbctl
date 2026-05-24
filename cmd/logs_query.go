@@ -52,9 +52,6 @@ var logsQueryCmd = &cobra.Command{
 		startTimeMs := startTime.UnixNano() / int64(time.Millisecond)
 		endTimeMs := endTime.UnixNano() / int64(time.Millisecond)
 
-		// Construct the inner query string
-		innerQuery := fmt.Sprintf("query=%s&start=%d&end=%d&limit=%d", queryStr, startTime.UnixNano(), endTime.UnixNano(), limit)
-
 		req := client.NewRequest(`
 			query FetchLogs($request: FetchLogRequest!) {
 				logs_query(request: $request) {
@@ -70,27 +67,32 @@ var logsQueryCmd = &cobra.Command{
 			"account_id": accountId,
 			"end_time":   endTimeMs,
 			"start_time": startTimeMs,
-			"query":      innerQuery,
+			"query":      queryStr,
 			"limit":      limit,
 			"offset":     offset,
 		}
 		req.Var("request", requestVars)
 
 		var respData struct {
-			LogsList []struct {
+			LogsQuery []struct {
 				Timestamp string          `json:"timestamp"`
 				Severity  string          `json:"severity"`
 				Message   string          `json:"message"`
 				Labels    json.RawMessage `json:"labels"`
-			} `json:"logs_list"`
+			} `json:"logs_query"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
+		if len(respData.LogsQuery) == 0 {
+			fmt.Println("No logs found.")
+			return nil
+		}
+
 		table := format.TabularData{
-			Data: respData.LogsList,
+			Data: respData.LogsQuery,
 			Fields: []format.TableField{
 				{Header: "Timestamp", Field: "Timestamp"},
 				{Header: "Severity", Field: "Severity"},

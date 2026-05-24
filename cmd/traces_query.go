@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -31,29 +29,6 @@ var tracesQueryCmd = &cobra.Command{
 
 		accountId := viper.GetString("account-id")
 
-		// Build the where clause
-		var whereClause []string
-		if len(workloadName) == 1 {
-			whereClause = append(whereClause, fmt.Sprintf(`workload_name:{_ilike:"%%%s%%"}`, workloadName[0]))
-		} else if len(workloadName) > 1 {
-			whereClause = append(whereClause, fmt.Sprintf(`workload_name:{_in:["%s"]}`, strings.Join(workloadName, `","`)))
-		}
-		if len(spanName) > 0 {
-			whereClause = append(whereClause, fmt.Sprintf(`span_name:{_in:["%s"]}`, strings.Join(spanName, `","`)))
-		}
-		if len(traceId) > 0 {
-			whereClause = append(whereClause, fmt.Sprintf(`trace_id:{_in:["%s"]}`, strings.Join(traceId, `","`)))
-		}
-		if resource != "" {
-			whereClause = append(whereClause, fmt.Sprintf(`resource:{_like:"%%%s%%"}`, resource))
-		}
-		if statusCode != "" {
-			whereClause = append(whereClause, fmt.Sprintf(`status_code:{_eq:"%s"}`, statusCode))
-		}
-		if len(httpStatusCode) > 0 {
-			whereClause = append(whereClause, fmt.Sprintf(`http_status_code:{_in:["%s"]}`, strings.Join(httpStatusCode, `","`)))
-		}
-
 		st := time.Now().Add(-24 * time.Hour)
 		if startTime != "" {
 			parsed, err := time.Parse(time.RFC3339, startTime)
@@ -72,11 +47,40 @@ var tracesQueryCmd = &cobra.Command{
 			et = parsed
 		}
 
-		whereClause = append(whereClause, fmt.Sprintf(`timestamp:{_between:{_gte:"%s",_lte:"%s"}}`, st.Format(time.RFC3339), et.Format(time.RFC3339)))
+		binary := map[string]any{
+			"timestamp": map[string]any{
+				"_between": map[string]any{
+					"_gte": st.Format(time.RFC3339),
+					"_lte": et.Format(time.RFC3339),
+				},
+			},
+		}
+		switch len(workloadName) {
+		case 0:
+		case 1:
+			binary["workload_name"] = map[string]any{"_ilike": "%" + workloadName[0] + "%"}
+		default:
+			binary["workload_name"] = map[string]any{"_in": workloadName}
+		}
+		if len(spanName) > 0 {
+			binary["span_name"] = map[string]any{"_in": spanName}
+		}
+		if len(traceId) > 0 {
+			binary["trace_id"] = map[string]any{"_in": traceId}
+		}
+		if resource != "" {
+			binary["resource"] = map[string]any{"_like": "%" + resource + "%"}
+		}
+		if statusCode != "" {
+			binary["status_code"] = map[string]any{"_eq": statusCode}
+		}
+		if len(httpStatusCode) > 0 {
+			binary["http_status_code"] = map[string]any{"_in": httpStatusCode}
+		}
 
-		req := client.NewRequest(fmt.Sprintf(`
-			query TraceV3($account_id: String!) {
-				traces_query(request: {account_id: $account_id, query:"",start_time:0,end_time:0,query_request:{where:{_binary:{%s}},having:{},limit:50,offset:0,order_by:[{column:"timestamp",order:"desc"}]}}) {
+		req := client.NewRequest(`
+			query TraceV3($request: TracesV3Input!) {
+				traces_query(request: $request) {
 					trace_id
 					span_id
 					parent_span_id
@@ -98,9 +102,21 @@ var tracesQueryCmd = &cobra.Command{
 					span_attributes
 				}
 			}
-		`, strings.Join(whereClause, ",")))
+		`)
 
-		req.Var("account_id", accountId)
+		req.Var("request", map[string]any{
+			"account_id": accountId,
+			"query":      "",
+			"start_time": 0,
+			"end_time":   0,
+			"query_request": map[string]any{
+				"where":    map[string]any{"_binary": binary},
+				"having":   map[string]any{},
+				"limit":    50,
+				"offset":   0,
+				"order_by": []map[string]any{{"column": "timestamp", "order": "desc"}},
+			},
+		})
 
 		var respData struct {
 			TracesQuery []struct {

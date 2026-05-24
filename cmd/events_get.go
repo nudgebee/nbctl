@@ -10,6 +10,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// peelJSONString returns the inner JSON payload when the server has
+// double-encoded a jsonb field as a JSON-quoted string ("{...}"); otherwise
+// it returns the input unchanged.
+func peelJSONString(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || raw[0] != '"' {
+		return raw
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return raw
+	}
+	return json.RawMessage(s)
+}
+
 var eventsGetCmd = &cobra.Command{
 	Use:   "get [id]",
 	Short: "Get an event by ID",
@@ -86,7 +100,10 @@ var eventsGetCmd = &cobra.Command{
 			return nil
 		}
 
-		format.GetFormat().Print(respData.Events.Rows[0])
+		row := respData.Events.Rows[0]
+		row.Evidences = peelJSONString(row.Evidences)
+		row.Labels = peelJSONString(row.Labels)
+		format.GetFormat().Print(row)
 
 		return nil
 	},
