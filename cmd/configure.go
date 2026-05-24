@@ -140,6 +140,10 @@ var configureAddCmd = &cobra.Command{
 		if err := writerViper.WriteConfigAs(configFile); err != nil {
 			return fmt.Errorf("writing config file: %w", err)
 		}
+		// Config stores plaintext API keys; restrict to the owner.
+		if err := os.Chmod(configFile, 0o600); err != nil {
+			return fmt.Errorf("restricting config file permissions: %w", err)
+		}
 
 		// If this is the first profile, or if current-profile is not set, make it current
 		if viper.GetString("current-profile") == "" || viper.GetString("current-profile") == profileName {
@@ -148,6 +152,9 @@ var configureAddCmd = &cobra.Command{
 			writerViper.Set("current-profile", profileName)
 			if err := writerViper.WriteConfigAs(configFile); err != nil {
 				return fmt.Errorf("setting current profile: %w", err)
+			}
+			if err := os.Chmod(configFile, 0o600); err != nil {
+				return fmt.Errorf("restricting config file permissions: %w", err)
 			}
 		}
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Profile '", profileName, "' saved to", configFile); err != nil {
@@ -181,6 +188,9 @@ var configureSetCurrentCmd = &cobra.Command{
 
 		if err := writerViper.WriteConfigAs(configFile); err != nil {
 			return fmt.Errorf("writing config file: %w", err)
+		}
+		if err := os.Chmod(configFile, 0o600); err != nil {
+			return fmt.Errorf("restricting config file permissions: %w", err)
 		}
 		fmt.Printf("Current profile set to '%s'.\n", profileName)
 		return nil
