@@ -607,16 +607,45 @@ Example:
 nbctl traces get 123e4567-e89b-12d3-a456-426614174000
 ```
 
-##### `nbctl traces list`
+##### `nbctl traces query`
 
-Lists Nudgebee traces.
+Queries Nudgebee traces over a time range with optional filters. Defaults to the last 24 hours and returns up to 50 spans ordered by timestamp (descending).
 
-*   **Flags**: None currently defined in the code.
+*   **Flags**:
+    *   `--workload-name <strings>`: Filter by workload name. A single value matches as an `ilike` substring; pass the flag multiple times for an `in` match.
+    *   `--span-name <strings>`: Filter by span name (`in` match).
+    *   `--trace-id <strings>`: Filter by trace id (`in` match).
+    *   `--resource <string>`: Filter by resource (`like` substring).
+    *   `--status-code <string>`: Filter by status code (exact match).
+    *   `--http-status-code <strings>`: Filter by HTTP status code (`in` match).
+    *   `--start-time <RFC3339>`: Start time. Defaults to 24 hours ago.
+    *   `--end-time <RFC3339>`: End time. Defaults to the current time.
 
 Example:
 
 ```bash
-nbctl traces list
+nbctl traces query --workload-name traefik --start-time 2026-05-24T00:00:00Z
+```
+
+#### `nbctl integrations`
+
+Lists tenant integrations (Jira, Slack, PagerDuty, webhooks, etc.).
+
+##### `nbctl integrations list`
+
+Lists configured integrations.
+
+*   **Flags**:
+    *   `--status <string>`: Filter by status (exact match).
+    *   `--type <string>`: Filter by integration type (exact match, e.g. `jira`, `pagerduty_webhook`).
+    *   `--name <string>`: Filter by name (`ilike` substring).
+    *   `--limit <int>`: Pagination limit. Default is 20.
+    *   `--offset <int>`: Pagination offset. Default is 0.
+
+Example:
+
+```bash
+nbctl integrations list --type jira --status enabled
 ```
 
 ## Testing
@@ -637,3 +666,20 @@ export NUDGEBEE_ENDPOINT=https://app.nudgebee.com
 export NUDGEBEE_API_KEY=<your_api_key>
 go test ./... -run Integration
 ```
+
+## Contributing
+
+We welcome contributions. See [CONTRIBUTING.md](./CONTRIBUTING.md)
+for the development setup, commit conventions, and pull-request
+workflow. All participants are expected to follow our
+[Code of Conduct](./CODE_OF_CONDUCT.md).
+
+## Security
+
+For vulnerability reporting, see [SECURITY.md](./SECURITY.md).
+**Do not open public issues for security problems.**
+
+## License
+
+`nbctl` is released under the Apache License 2.0. See
+[LICENSE](./LICENSE).
