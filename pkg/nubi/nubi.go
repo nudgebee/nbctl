@@ -118,7 +118,7 @@ type ConversationHistoryItem struct {
 func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
 	req := client.NewRequest(`
 		query LlmConversationHistory($limit: Int!, $where: LlmConversationListWhereRequest!) {
-		  llm_conversations: llm_conversation_list_v2(where: $where, limit: $limit, offset: 0, order_by: [{column: "updated_at", order: desc}]) {
+		  llm_conversations: ai_list_conversations(where: $where, limit: $limit, offset: 0, order_by: [{column: "updated_at", order: desc}]) {
 			rows {
 			  id
 			  title
@@ -167,7 +167,7 @@ func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
 func (c *NubiClient) TriggerInvestigation(ctx context.Context, query string) error {
 	req := client.NewRequest(`
 		mutation AiTriggerInvestigateResponse($accountId: String!, $query: String!, $sessionId: String!) {
-		  ai_trigger_investigation(request: {account_id: $accountId, query: $query, session_id: $sessionId, async: true}) {
+		  ai_execute_investigation(request: {account_id: $accountId, query: $query, session_id: $sessionId, async: true}) {
 			data {
 			  agent_step_response
 			  response
@@ -364,7 +364,7 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 func (c *NubiClient) SendFollowupResponse(ctx context.Context, query, agentID, messageID string) error {
 	req := client.NewRequest(`
 		mutation AiFollowupResponse($accountId: String!, $query: String!, $conversationId: String!, $agentId: String!, $messageId: String!) {
-		  ai_followup_response(request: {account_id: $accountId, query: $query, conversation_id: $conversationId, agent_id: $agentId, message_id: $messageId, async: true}) {
+		  ai_get_followup_response(request: {account_id: $accountId, query: $query, conversation_id: $conversationId, agent_id: $agentId, message_id: $messageId, async: true}) {
 			data {
 			  response
 			}
@@ -389,7 +389,7 @@ func (c *NubiClient) StopConversation() {
 
 	req := client.NewRequest(`
 		mutation AiStopInvestigation($accountId: String!, $conversationId: String!) {
-		  ai_stop_investigation(request: {account_id: $accountId, conversation_id: $conversationId}) {
+		  ai_cancel_investigation(request: {account_id: $accountId, conversation_id: $conversationId}) {
 			data
 		  }
 		}
@@ -442,7 +442,7 @@ func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
 func (c *NubiClient) AddBookmark(conversationID string) error {
 	req := client.NewRequest(`
 		mutation SaveConversation($data: SaveLLMConversationRequest!) {
-		  ai_save_conversation(request: $data) {
+		  ai_create_saved_conversation(request: $data) {
 			data {
 			  success
 			}
@@ -490,7 +490,7 @@ type BookmarkItem struct {
 func (c *NubiClient) ListBookmarks() ([]BookmarkItem, error) {
 	req := client.NewRequest(`
 		query ListBookmarks($where: LlmConversationListWhereRequest!) {
-		  llm_conversations: llm_conversation_list_v2(where: $where, order_by: [{column: "updated_at", order: desc}]) {
+		  llm_conversations: ai_list_conversations(where: $where, order_by: [{column: "updated_at", order: desc}]) {
 			rows {
 			  id
 			  title
@@ -588,7 +588,7 @@ type FunctionItem struct {
 func (c *NubiClient) ListFunctions() ([]FunctionItem, error) {
 	req := client.NewRequest(`
 		query GetFunctions($where: LlmFunctionsWhereRequest!) {
-		  llm_functions: llm_functions_v2(where: $where) {
+		  llm_functions: ai_list_functions(where: $where) {
 			rows {
 			  id
 			  name

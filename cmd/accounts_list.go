@@ -24,7 +24,7 @@ var accountsListCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query GetCloudAccounts($where: CloudAccountWhereRequest!) {
-				cloud_accounts: get_cloud_accounts_v2(where: $where) {
+				cloud_accounts: accounts_list(where: $where) {
 					rows {
 						id
 						account_name

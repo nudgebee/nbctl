@@ -80,7 +80,7 @@ var tracesQueryCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query TraceV3($request: TracesV3Input!) {
-				traces_query(request: $request) {
+				traces_list(request: $request) {
 					trace_id
 					span_id
 					parent_span_id
@@ -139,7 +139,7 @@ var tracesQueryCmd = &cobra.Command{
 				HTTPResponse                 any            `json:"http_response"`
 				TraceSource                  string         `json:"trace_source"`
 				SpanAttributes               map[string]any `json:"span_attributes"`
-			} `json:"traces_query"`
+			} `json:"traces_list"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {

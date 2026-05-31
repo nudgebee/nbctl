@@ -53,7 +53,7 @@ var accountsCreateCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			mutation CreateAccount($object: cloud_accounts_insert_one_input!) {
-				cloud_accounts_insert_one(object: $object) {
+				accounts_create(object: $object) {
 					id
 					access_key
 					access_secret
@@ -68,7 +68,7 @@ var accountsCreateCmd = &cobra.Command{
 				ID           string `json:"id"`
 				AccessKey    string `json:"access_key"`
 				AccessSecret string `json:"access_secret"`
-			} `json:"cloud_accounts_insert_one"`
+			} `json:"accounts_create"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {

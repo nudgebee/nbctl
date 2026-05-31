@@ -27,7 +27,7 @@ var adminUsersGetCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query GetUsersByTenant($where: UsersByTenantWhereRequest!) {
-				users: admin_get_users_by_tenant_v2(where: $where, limit: 1, offset: 0) {
+				users: users_list_by_tenant(where: $where, limit: 1, offset: 0) {
 					rows {
 						display_name
 						id

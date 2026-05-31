@@ -30,7 +30,7 @@ func renderChart(payload []MetricsResult) {
 type MetricsQueryResponse struct {
 	MetricsQuery struct {
 		Results []MetricsResponse `json:"results"`
-	} `json:"metrics_query"`
+	} `json:"metrics_list"`
 }
 
 type MetricsResponse struct {
@@ -106,7 +106,7 @@ var metricsQueryCmd = &cobra.Command{
 				$start_time: Float!
 				$end_time: Float!
 			) {
-				metrics_query(
+				metrics_list(
 					request: {
 						account_id: $account_id
 						queries: $queries

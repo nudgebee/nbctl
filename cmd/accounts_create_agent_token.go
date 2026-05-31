@@ -20,7 +20,7 @@ var accountsCreateAgentTokenCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			mutation CreateAgentToken($accountId: String!) {
-				agent_token_create(object: {account_id: $accountId}) {
+				agents_create_token(object: {account_id: $accountId}) {
 					access_secret
 					account_id
 					access_key
@@ -35,7 +35,7 @@ var accountsCreateAgentTokenCmd = &cobra.Command{
 				AccessSecret string `json:"access_secret"`
 				AccountID    string `json:"account_id"`
 				AccessKey    string `json:"access_key"`
-			} `json:"agent_token_create"`
+			} `json:"agents_create_token"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {

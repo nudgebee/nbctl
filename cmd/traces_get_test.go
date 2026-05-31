@@ -8,15 +8,15 @@ import (
 
 func TestTracesGet_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"traces_query": []map[string]any{
+		"traces_list": []map[string]any{
 			{
-				"trace_id":     "1",
-				"span_id":      "s1",
+				"trace_id":      "1",
+				"span_id":       "s1",
 				"workload_name": "test-workload",
-				"timestamp":    "2025-10-15T10:00:00Z",
-				"duration_ns":  100,
-				"status_code":  "OK",
-				"span_name":    "test-span",
+				"timestamp":     "2025-10-15T10:00:00Z",
+				"duration_ns":   100,
+				"status_code":   "OK",
+				"span_name":     "test-span",
 			},
 		},
 	}

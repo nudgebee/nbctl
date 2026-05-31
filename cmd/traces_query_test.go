@@ -8,7 +8,7 @@ import (
 
 func TestTracesQuery_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"traces_query": []map[string]any{
+		"traces_list": []map[string]any{
 			{
 				"trace_id":      "1",
 				"span_id":       "s1",

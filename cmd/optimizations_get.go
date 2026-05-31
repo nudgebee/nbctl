@@ -21,7 +21,7 @@ var optimizationsGetCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query GetRecommendationById($id: String!) {
-			  recommendations_v2(where: {id: {_eq: $id}}) {
+			  recommendations_list(where: {id: {_eq: $id}}) {
 				rows {
 					account_object_id
 					category
@@ -88,7 +88,7 @@ var optimizationsGetCmd = &cobra.Command{
 					UpdatedBy            string          `json:"updated_by"`
 					Evidence             string          `json:"recommendation"`
 				} `json:"rows"`
-			} `json:"recommendations_v2"`
+			} `json:"recommendations_list"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
