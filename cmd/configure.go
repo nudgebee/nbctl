@@ -105,7 +105,7 @@ var configureAddCmd = &cobra.Command{
 		gqlClient := client.NewClient(client.WithApiKey(apiKey), client.WithEndpoint(endpoint), client.WithUsername(username))
 		req := client.NewRequest(`
 			query {
-				cloud_accounts: get_cloud_accounts_v2(where: {}, limit: 1, offset: 0) {
+				cloud_accounts: accounts_list(where: {}, limit: 1, offset: 0) {
 					rows {
 						id
 					}

@@ -10,7 +10,7 @@ import (
 func TestAccountsCreate(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mockData := map[string]any{
-			"cloud_accounts_insert_one": map[string]any{
+			"accounts_create": map[string]any{
 				"id": "new-account-id",
 			},
 		}

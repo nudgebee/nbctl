@@ -47,7 +47,7 @@ var optimizationsListCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query list_k8_recommendation($where: RecommendationWhereRequest!, $limit: Int, $offset: Int) {
-			  recommendation: recommendations_v2(where: $where, limit: $limit, offset: $offset, order_by: {column: "estimated_savings", order: desc}) {
+			  recommendation: recommendations_list(where: $where, limit: $limit, offset: $offset, order_by: {column: "estimated_savings", order: desc}) {
 				rows{
 				  resource_k8s_namespace
 				  resource_meta

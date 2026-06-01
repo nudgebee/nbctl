@@ -20,7 +20,7 @@ var tracesGetCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query TraceGet($account_id: String!, $trace_id: String!) {
-				traces_query(request: {account_id: $account_id, query:"", start_time:0, end_time:0, query_request:{where:{_binary:{trace_id:{_eq:$trace_id}}}, having:{}, limit:1, offset:0, order_by:[{column:"timestamp", order:"desc"}]}}) {
+				traces_list(request: {account_id: $account_id, query:"", start_time:0, end_time:0, query_request:{where:{_binary:{trace_id:{_eq:$trace_id}}}, having:{}, limit:1, offset:0, order_by:[{column:"timestamp", order:"desc"}]}}) {
 					trace_id
 					span_id
 					parent_span_id
@@ -52,7 +52,7 @@ var tracesGetCmd = &cobra.Command{
 				Resource          string `json:"resource"`
 				DurationNs        int    `json:"duration_ns"`
 				HTTPStatusCode    string `json:"http_status_code"`
-			} `json:"traces_query"`
+			} `json:"traces_list"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {

@@ -89,7 +89,7 @@ func TestNubiClient_TriggerInvestigation(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"ai_trigger_investigation": map[string]any{
+				"ai_execute_investigation": map[string]any{
 					"data": "{}",
 				},
 			},
@@ -168,7 +168,7 @@ func TestNubiClient_SendFollowupResponse(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"ai_followup_response": map[string]any{
+				"ai_get_followup_response": map[string]any{
 					"data": "{}",
 				},
 			},
@@ -188,7 +188,7 @@ func TestNubiClient_StopConversation(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"ai_stop_investigation": map[string]any{
+				"ai_cancel_investigation": map[string]any{
 					"data": "{}",
 				},
 			},
@@ -234,7 +234,7 @@ func TestNubiClient_AddBookmark(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
 			"data": map[string]any{
-				"ai_save_conversation": map[string]any{
+				"ai_create_saved_conversation": map[string]any{
 					"data": map[string]any{
 						"success": true,
 					},

@@ -33,7 +33,7 @@ var eventsGetCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query ResolveEventRecord($where: EventsWhereRequest!) {
-			  events: events_v2(where: $where, limit: 1, offset: 0) {
+			  events: events_list(where: $where, limit: 1, offset: 0) {
 			    rows {
 				evidences
 				id

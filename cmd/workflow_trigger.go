@@ -23,7 +23,7 @@ var workflowTriggerCmd = &cobra.Command{
 
 		query := `
 mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
-  workflow_trigger(request: $request) {
+  workflow_execute(request: $request) {
     id
     execution_id
   }
@@ -57,7 +57,7 @@ mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
 			WorkflowTrigger struct {
 				ID          string `json:"id"`
 				ExecutionID string `json:"execution_id"`
-			} `json:"workflow_trigger"`
+			} `json:"workflow_execute"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {

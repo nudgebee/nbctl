@@ -10,7 +10,7 @@ import (
 func TestAccountsCreateAgentToken(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mockData := map[string]any{
-			"agent_token_create": map[string]any{
+			"agents_create_token": map[string]any{
 				"access_key": "new-agent-token",
 			},
 		}

@@ -36,7 +36,7 @@ var workflowValidateCmd = &cobra.Command{
 
 		query := `
 mutation ValidateWorkflow($request: WorkflowCreateRequest!) {
-  workflow_validate(request: $request) {
+  workflow_check(request: $request) {
     message
   }
 }
@@ -52,7 +52,7 @@ mutation ValidateWorkflow($request: WorkflowCreateRequest!) {
 		var respData struct {
 			WorkflowValidate struct {
 				Message string `json:"message"`
-			} `json:"workflow_validate"`
+			} `json:"workflow_check"`
 		}
 
 		if err := client.Run(context.Background(), req, &respData); err != nil {

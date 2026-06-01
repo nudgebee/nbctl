@@ -31,7 +31,7 @@ var accountsGetCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query GetCloudAccountById($where: CloudAccountWhereRequest!, $agentWhere: AgentHealthWhereRequest!) {
-				cloud_accounts: get_cloud_accounts_v2(where: $where, limit: 1, offset: 0) {
+				cloud_accounts: accounts_list(where: $where, limit: 1, offset: 0) {
 					rows {
 						id
 						account_name
@@ -44,7 +44,7 @@ var accountsGetCmd = &cobra.Command{
 						agent_synced_at
 					}
 				}
-				agents: get_agent_health_v2(where: $agentWhere) {
+				agents: agents_list_health(where: $agentWhere) {
 					rows {
 						last_connected_at
 						status

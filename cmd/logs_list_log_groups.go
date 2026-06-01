@@ -67,7 +67,7 @@ var logsListLogGroupsCmd = &cobra.Command{
 				$start_time: Float!
 				$end_time: Float!
 			) {
-				metrics_query(
+				metrics_list(
 					request: {
 						account_id: $account_id
 						queries: $queries

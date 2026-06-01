@@ -10,7 +10,7 @@ import (
 
 func TestMetricsQueryCmd(t *testing.T) {
 	mockData := map[string]any{
-		"metrics_query": map[string]any{
+		"metrics_list": map[string]any{
 			"results": []map[string]any{
 				{
 					"query_key": "test_query",

@@ -11,7 +11,7 @@ import (
 
 func TestWorkflowTriggerCmd(t *testing.T) {
 	mockResponse := map[string]interface{}{
-		"workflow_trigger": map[string]interface{}{
+		"workflow_execute": map[string]interface{}{
 			"id":           "wf-1",
 			"execution_id": "exec-1",
 		},
@@ -26,7 +26,7 @@ func TestWorkflowTriggerCmd(t *testing.T) {
 
 func TestWorkflowTriggerCmd_JSON(t *testing.T) {
 	mockResponse := map[string]interface{}{
-		"workflow_trigger": map[string]interface{}{
+		"workflow_execute": map[string]interface{}{
 			"id":           "wf-1",
 			"execution_id": "exec-1",
 		},

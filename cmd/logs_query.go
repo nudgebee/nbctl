@@ -54,7 +54,7 @@ var logsQueryCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query FetchLogs($request: FetchLogRequest!) {
-				logs_query(request: $request) {
+				logs_list(request: $request) {
 					timestamp
 					severity
 					message
@@ -79,7 +79,7 @@ var logsQueryCmd = &cobra.Command{
 				Severity  string          `json:"severity"`
 				Message   string          `json:"message"`
 				Labels    json.RawMessage `json:"labels"`
-			} `json:"logs_query"`
+			} `json:"logs_list"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {

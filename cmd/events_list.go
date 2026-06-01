@@ -75,7 +75,7 @@ var eventsListCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query list_k8_issues_data($where: EventsWhereRequest!, $limit: Int, $offset: Int) {
-			  events: events_v2(where: $where, order_by: [{column: "starts_at", order: desc}], limit: $limit, offset: $offset) {
+			  events: events_list(where: $where, order_by: [{column: "starts_at", order: desc}], limit: $limit, offset: $offset) {
 				rows{
 				  account_id
 				  subject_type

@@ -8,7 +8,7 @@ import (
 
 func TestOptimizationsGet_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"recommendations_v2": map[string]any{
+		"recommendations_list": map[string]any{
 			"rows": []map[string]any{
 				{
 					"id":                   "00000000-0000-0000-0000-000000000001",

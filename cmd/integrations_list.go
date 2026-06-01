@@ -25,7 +25,7 @@ var integrationsListCmd = &cobra.Command{
 
 		req := client.NewRequest(`
 			query ListIntegrations($where: IntegrationWhereRequest!, $limit: Int, $offset: Int) {
-				integrations: admin_get_integrations_v2(where: $where, limit: $limit, offset: $offset, order_by: [{column: "name", order: asc}]) {
+				integrations: integrations_list(where: $where, limit: $limit, offset: $offset, order_by: [{column: "name", order: asc}]) {
 					rows {
 						id
 						name

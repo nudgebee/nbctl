@@ -30,7 +30,7 @@ definition:
 	require.NoError(t, tmpFile.Close())
 
 	mockResponse := map[string]interface{}{
-		"workflow_validate": map[string]interface{}{
+		"workflow_check": map[string]interface{}{
 			"message": "Workflow is valid",
 		},
 	}
@@ -116,7 +116,7 @@ definition:
 	require.NoError(t, tmpFile.Close())
 
 	mockResponse := map[string]interface{}{
-		"workflow_validate": map[string]interface{}{
+		"workflow_check": map[string]interface{}{
 			"message": "Success",
 		},
 	}
