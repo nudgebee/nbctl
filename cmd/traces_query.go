@@ -119,7 +119,7 @@ var tracesQueryCmd = &cobra.Command{
 		})
 
 		var respData struct {
-			TracesQuery []struct {
+			TracesList []struct {
 				TraceID                      string         `json:"trace_id"`
 				SpanID                       string         `json:"span_id"`
 				ParentSpanID                 string         `json:"parent_span_id"`
@@ -147,7 +147,7 @@ var tracesQueryCmd = &cobra.Command{
 		}
 
 		table := format.TabularData{
-			Data: respData.TracesQuery,
+			Data: respData.TracesList,
 			Fields: []format.TableField{
 				{Header: "Trace ID", Field: "TraceID"},
 				{Header: "Span ID", Field: "SpanID"},

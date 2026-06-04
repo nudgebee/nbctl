@@ -33,6 +33,7 @@ var accountsListCmd = &cobra.Command{
 						status
 						created_at
 						agents
+						account_access
 						cloud_account_attrs
 					}
 				}

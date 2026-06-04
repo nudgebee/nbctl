@@ -74,7 +74,7 @@ var logsQueryCmd = &cobra.Command{
 		req.Var("request", requestVars)
 
 		var respData struct {
-			LogsQuery []struct {
+			LogsList []struct {
 				Timestamp string          `json:"timestamp"`
 				Severity  string          `json:"severity"`
 				Message   string          `json:"message"`
@@ -86,13 +86,13 @@ var logsQueryCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.LogsQuery) == 0 {
+		if len(respData.LogsList) == 0 {
 			fmt.Println("No logs found.")
 			return nil
 		}
 
 		table := format.TabularData{
-			Data: respData.LogsQuery,
+			Data: respData.LogsList,
 			Fields: []format.TableField{
 				{Header: "Timestamp", Field: "Timestamp"},
 				{Header: "Severity", Field: "Severity"},

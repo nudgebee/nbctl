@@ -27,6 +27,9 @@ var workflowValidateCmd = &cobra.Command{
 		if err := yaml.Unmarshal(yamlContent, &workflowData); err != nil {
 			return fmt.Errorf("failed to parse YAML: %w", err)
 		}
+		if workflowData == nil {
+			return fmt.Errorf("workflow file %q is empty or not a YAML mapping", filePath)
+		}
 
 		// Ensure account_id is set if not present in the file
 		accountId := viper.GetString("account-id")
