@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -36,6 +35,9 @@ var sloListCmd = &cobra.Command{
 			where["workload_namespace"] = map[string]any{"_eq": sloListWorkloadNamespace}
 		}
 		if sloListEnabled != "" {
+			if sloListEnabled != "true" && sloListEnabled != "false" {
+				return fmt.Errorf("invalid value for --enabled: %q (must be true or false)", sloListEnabled)
+			}
 			where["enabled"] = map[string]any{"_eq": sloListEnabled == "true"}
 		}
 
@@ -80,7 +82,7 @@ query ListSLOs($where: SLOConfigWhereRequest!) {
 		}
 
 		c := client.NewClient()
-		if err := c.Run(context.Background(), req, &respData); err != nil {
+		if err := c.Run(cmd.Context(), req, &respData); err != nil {
 			return fmt.Errorf("failed to list SLOs: %w", err)
 		}
 

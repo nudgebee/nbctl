@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"time"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
@@ -80,7 +78,7 @@ query listWorkflowExecutions($accountId:String!, $id:String!, $limit:Int, $next_
 		}
 
 		c := client.NewClient()
-		if err := c.Run(context.Background(), req, &respData); err != nil {
+		if err := c.Run(cmd.Context(), req, &respData); err != nil {
 			return fmt.Errorf("failed to list workflow executions: %w", err)
 		}
 
@@ -133,9 +131,6 @@ query listWorkflowExecutions($accountId:String!, $id:String!, $limit:Int, $next_
 func formatExecutionTime(ts *string) string {
 	if ts == nil || *ts == "" {
 		return "N/A"
-	}
-	if t, err := time.Parse(time.RFC3339, *ts); err == nil {
-		return t.Format(time.RFC3339)
 	}
 	return *ts
 }

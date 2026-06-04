@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -97,7 +96,7 @@ query getWorkflowExecution($request: WorkflowExecutionGetRequest!) {
 		}
 
 		c := client.NewClient()
-		if err := c.Run(context.Background(), req, &respData); err != nil {
+		if err := c.Run(cmd.Context(), req, &respData); err != nil {
 			return fmt.Errorf("failed to get workflow execution: %w", err)
 		}
 

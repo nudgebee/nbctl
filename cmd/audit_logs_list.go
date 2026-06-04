@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -103,7 +102,7 @@ query ListAuditEvents($where: AuditEventWhereRequest!, $limit: Int, $offset: Int
 		}
 
 		c := client.NewClient()
-		if err := c.Run(context.Background(), req, &respData); err != nil {
+		if err := c.Run(cmd.Context(), req, &respData); err != nil {
 			return fmt.Errorf("failed to list audit events: %w", err)
 		}
 

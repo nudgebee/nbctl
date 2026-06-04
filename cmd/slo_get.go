@@ -70,7 +70,7 @@ query GetSLOConfig($where: SLOConfigWhereRequest!) {
 		}
 
 		c := client.NewClient()
-		if err := c.Run(context.Background(), req, &configResp); err != nil {
+		if err := c.Run(cmd.Context(), req, &configResp); err != nil {
 			return fmt.Errorf("failed to get SLO: %w", err)
 		}
 
@@ -82,9 +82,9 @@ query GetSLOConfig($where: SLOConfigWhereRequest!) {
 		var reportRow *sloReportRow
 		if sloGetReport {
 			var reportErr error
-			reportRow, reportErr = fetchLatestSLOReport(c, accountID, id)
+			reportRow, reportErr = fetchLatestSLOReport(cmd.Context(), c, accountID, id)
 			if reportErr != nil {
-				_, _ = fmt.Fprintf(format.GetFormat().GetOutput(), "warning: could not fetch SLO report: %v\n", reportErr)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not fetch SLO report: %v\n", reportErr)
 			}
 		}
 
@@ -137,7 +137,7 @@ type sloReportRow struct {
 	UpdatedAt           string          `json:"updated_at"`
 }
 
-func fetchLatestSLOReport(c *client.Client, accountID, configID string) (*sloReportRow, error) {
+func fetchLatestSLOReport(ctx context.Context, c *client.Client, accountID, configID string) (*sloReportRow, error) {
 	query := `
 query SLOReport($where: SLOReportWhereRequest!) {
   slo_report_v2(where: $where, order_by: [{column: "updated_at", order: desc}], limit: 1) {
@@ -170,7 +170,7 @@ query SLOReport($where: SLOReportWhereRequest!) {
 			Rows []sloReportRow `json:"rows"`
 		} `json:"slo_report_v2"`
 	}
-	if err := c.Run(context.Background(), req, &resp); err != nil {
+	if err := c.Run(ctx, req, &resp); err != nil {
 		return nil, err
 	}
 	if len(resp.SLOReportV2.Rows) == 0 {
