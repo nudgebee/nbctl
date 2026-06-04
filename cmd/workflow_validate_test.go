@@ -130,6 +130,21 @@ definition:
 	assert.Equal(t, "Success", result["message"])
 }
 
+func TestWorkflowValidateCmd_EmptyFile(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "workflow-empty-*.yaml")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	require.NoError(t, tmpFile.Close())
+
+	mockResponse := map[string]interface{}{
+		"workflow_check": map[string]interface{}{"message": "should not be called"},
+	}
+
+	_, err = testutil.RunWithSimpleGraphQL(mockResponse, workflowCmd, []string{"workflow", "validate", tmpFile.Name()})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty or not a YAML mapping")
+}
+
 func TestWorkflowValidateCmd_HasuraDrillDownError(t *testing.T) {
 	// Create a temporary YAML file
 	tmpFile, err := os.CreateTemp("", "workflow-*.yaml")

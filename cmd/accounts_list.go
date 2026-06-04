@@ -33,6 +33,7 @@ var accountsListCmd = &cobra.Command{
 						status
 						created_at
 						agents
+						account_access
 						cloud_account_attrs
 					}
 				}
@@ -62,6 +63,7 @@ var accountsListCmd = &cobra.Command{
 					Status            string          `json:"status"`
 					CreatedAt         string          `json:"created_at"`
 					Agents            json.RawMessage `json:"agents"`
+					AccountAccess     json.RawMessage `json:"account_access"`
 					CloudAccountAttrs json.RawMessage `json:"cloud_account_attrs"`
 				} `json:"rows"`
 			} `json:"cloud_accounts"`

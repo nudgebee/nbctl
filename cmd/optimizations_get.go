@@ -30,21 +30,11 @@ var optimizationsGetCmd = &cobra.Command{
 					estimated_savings
 					id
 					is_dismissed
-											note
-											recommendation_action
-											resource_cloud_service
-											resource_id
-											resource_k8s_namespace
-											resource_meta
-											resource_name
-											resource_type
-											rule_name
-											severity
-											status
-											tenant_id
-											updated_at
-											updated_by
-											recommendation					resource_id
+					note
+					recommendation
+					recommendation_action
+					resource_cloud_service
+					resource_id
 					resource_k8s_namespace
 					resource_meta
 					resource_name

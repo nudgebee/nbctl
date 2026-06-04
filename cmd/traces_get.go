@@ -40,7 +40,7 @@ var tracesGetCmd = &cobra.Command{
 		req.Var("trace_id", args[0])
 
 		var respData struct {
-			TracesQuery []struct {
+			TracesList []struct {
 				TraceID           string `json:"trace_id"`
 				SpanID            string `json:"span_id"`
 				ParentSpanID      string `json:"parent_span_id"`
@@ -59,12 +59,12 @@ var tracesGetCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.TracesQuery) == 0 {
+		if len(respData.TracesList) == 0 {
 			fmt.Println("Trace not found.")
 			return nil
 		}
 
-		format.GetFormat().Print(respData.TracesQuery[0])
+		format.GetFormat().Print(respData.TracesList[0])
 
 		return nil
 	},
