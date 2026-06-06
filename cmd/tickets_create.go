@@ -7,7 +7,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -29,12 +28,9 @@ var ticketsCreateCmd = &cobra.Command{
 	Long: `Create a ticket via a configured ticket integration (Jira, ServiceNow, PagerDuty, etc.).
 Use ` + "`nbctl tickets list-configurations`" + ` to find the --integration-id and --project-key values.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		accountID, _ := cmd.Flags().GetString("account-id")
-		if accountID == "" {
-			accountID = viper.GetString("account-id")
-		}
-		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 		if ticketsCreateIntegrationID == "" {
 			return fmt.Errorf("--integration-id is required")

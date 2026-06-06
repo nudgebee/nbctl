@@ -6,7 +6,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -20,12 +19,9 @@ var sloListCmd = &cobra.Command{
 	Short: "List SLO configurations",
 	Long:  `List Service Level Objective configurations for the current account.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		accountID, _ := cmd.Flags().GetString("account-id")
-		if accountID == "" {
-			accountID = viper.GetString("account-id")
-		}
-		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		where := map[string]any{
