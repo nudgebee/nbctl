@@ -23,7 +23,10 @@ var workflowListExecutionsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowID := args[0]
-		accountID := viper.GetString("account-id")
+		accountID, _ := cmd.Flags().GetString("account-id")
+		if accountID == "" {
+			accountID = viper.GetString("account-id")
+		}
 		if accountID == "" {
 			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
 		}
@@ -137,6 +140,7 @@ func formatExecutionTime(ts *string) string {
 
 func init() {
 	workflowCmd.AddCommand(workflowListExecutionsCmd)
+	workflowListExecutionsCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	workflowListExecutionsCmd.Flags().StringVar(&workflowListExecutionsStatus, "status", "", "Filter by execution status")
 	workflowListExecutionsCmd.Flags().StringVar(&workflowListExecutionsTriggerType, "trigger-type", "", "Filter by trigger type")
 	workflowListExecutionsCmd.Flags().IntVar(&workflowListExecutionsLimit, "limit", 0, "Maximum number of executions to return")

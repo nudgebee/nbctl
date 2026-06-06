@@ -29,9 +29,12 @@ var ticketsCreateCmd = &cobra.Command{
 	Long: `Create a ticket via a configured ticket integration (Jira, ServiceNow, PagerDuty, etc.).
 Use ` + "`nbctl tickets list-configurations`" + ` to find the --integration-id and --project-key values.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		accountID := viper.GetString("account-id")
+		accountID, _ := cmd.Flags().GetString("account-id")
 		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add`")
+			accountID = viper.GetString("account-id")
+		}
+		if accountID == "" {
+			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
 		}
 		if ticketsCreateIntegrationID == "" {
 			return fmt.Errorf("--integration-id is required")
@@ -147,6 +150,7 @@ mutation CreateTicket($assignee: String, $integration_id: String, $reference_id:
 
 func init() {
 	ticketsCmd.AddCommand(ticketsCreateCmd)
+	ticketsCreateCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	ticketsCreateCmd.Flags().StringVar(&ticketsCreateIntegrationID, "integration-id", "", "Ticket integration configuration ID (required)")
 	ticketsCreateCmd.Flags().StringVar(&ticketsCreateTitle, "title", "", "Ticket title (required)")
 	ticketsCreateCmd.Flags().StringVar(&ticketsCreateProjectKey, "project-key", "", "Project/board key in the external system (required)")

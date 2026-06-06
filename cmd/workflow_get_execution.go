@@ -18,7 +18,10 @@ var workflowGetExecutionCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowID := args[0]
 		executionID := args[1]
-		accountID := viper.GetString("account-id")
+		accountID, _ := cmd.Flags().GetString("account-id")
+		if accountID == "" {
+			accountID = viper.GetString("account-id")
+		}
 		if accountID == "" {
 			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
 		}
@@ -180,4 +183,5 @@ query getWorkflowExecution($request: WorkflowExecutionGetRequest!) {
 
 func init() {
 	workflowCmd.AddCommand(workflowGetExecutionCmd)
+	workflowGetExecutionCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 }

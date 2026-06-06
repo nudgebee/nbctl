@@ -21,9 +21,12 @@ compliance report (burn rate, event budgets, status).`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
-		accountID := viper.GetString("account-id")
+		accountID, _ := cmd.Flags().GetString("account-id")
 		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add`")
+			accountID = viper.GetString("account-id")
+		}
+		if accountID == "" {
+			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
 		}
 
 		configQuery := `
@@ -181,5 +184,6 @@ query SLOReport($where: SLOReportWhereRequest!) {
 
 func init() {
 	sloCmd.AddCommand(sloGetCmd)
+	sloGetCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	sloGetCmd.Flags().BoolVar(&sloGetReport, "report", false, "Also fetch the latest compliance report")
 }
