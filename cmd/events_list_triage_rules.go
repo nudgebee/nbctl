@@ -9,11 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	eventsListTriageRulesType    string
-	eventsListTriageRulesEnabled string
-)
-
 var eventsListTriageRulesCmd = &cobra.Command{
 	Use:   "list-triage-rules",
 	Short: "List event triage rules",
@@ -24,17 +19,17 @@ var eventsListTriageRulesCmd = &cobra.Command{
 			return err
 		}
 
+		ruleType, _ := cmd.Flags().GetString("rule-type")
+
 		vars := map[string]any{
 			"cloud_account_id": accountID,
 		}
-		if eventsListTriageRulesType != "" {
-			vars["rule_type"] = eventsListTriageRulesType
+		if ruleType != "" {
+			vars["rule_type"] = ruleType
 		}
-		if eventsListTriageRulesEnabled != "" {
-			if eventsListTriageRulesEnabled != "true" && eventsListTriageRulesEnabled != "false" {
-				return fmt.Errorf("invalid value for --enabled: %q (must be true or false)", eventsListTriageRulesEnabled)
-			}
-			vars["enabled"] = eventsListTriageRulesEnabled == "true"
+		if cmd.Flags().Changed("enabled") {
+			enabled, _ := cmd.Flags().GetBool("enabled")
+			vars["enabled"] = enabled
 		}
 
 		query := `
@@ -73,24 +68,24 @@ mutation EventGetTriageRules($cloud_account_id: String, $rule_type: String, $ena
 		var respData struct {
 			EventGetTriageRules struct {
 				Rules []struct {
-					ID             string          `json:"id"`
-					AccountID      string          `json:"account_id"`
-					Name           string          `json:"name"`
-					Description    string          `json:"description"`
-					RuleType       string          `json:"rule_type"`
-					Action         string          `json:"action"`
-					ActionValue    string          `json:"action_value"`
-					Priority       json.Number     `json:"priority"`
-					Enabled        bool            `json:"enabled"`
-					MatchAlertname string          `json:"match_alertname"`
-					MatchNamespace string          `json:"match_namespace"`
-					MatchService   string          `json:"match_service"`
-					MatchSource    string          `json:"match_source"`
-					MatchPriority  string          `json:"match_priority"`
-					IsEditable     bool            `json:"is_editable"`
-					IsSystemRule   bool            `json:"is_system_rule"`
-					MatchCount     int             `json:"match_count"`
-					LastMatchedAt  *string         `json:"last_matched_at"`
+					ID             string      `json:"id"`
+					AccountID      string      `json:"account_id"`
+					Name           string      `json:"name"`
+					Description    string      `json:"description"`
+					RuleType       string      `json:"rule_type"`
+					Action         string      `json:"action"`
+					ActionValue    string      `json:"action_value"`
+					Priority       json.Number `json:"priority"`
+					Enabled        bool        `json:"enabled"`
+					MatchAlertname string      `json:"match_alertname"`
+					MatchNamespace string      `json:"match_namespace"`
+					MatchService   string      `json:"match_service"`
+					MatchSource    string      `json:"match_source"`
+					MatchPriority  string      `json:"match_priority"`
+					IsEditable     bool        `json:"is_editable"`
+					IsSystemRule   bool        `json:"is_system_rule"`
+					MatchCount     int         `json:"match_count"`
+					LastMatchedAt  *string     `json:"last_matched_at"`
 					CreatedAt      string      `json:"created_at"`
 					UpdatedAt      string      `json:"updated_at"`
 				} `json:"rules"`
@@ -159,6 +154,6 @@ mutation EventGetTriageRules($cloud_account_id: String, $rule_type: String, $ena
 func init() {
 	eventsCmd.AddCommand(eventsListTriageRulesCmd)
 	eventsListTriageRulesCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	eventsListTriageRulesCmd.Flags().StringVar(&eventsListTriageRulesType, "rule-type", "", "Filter by rule type")
-	eventsListTriageRulesCmd.Flags().StringVar(&eventsListTriageRulesEnabled, "enabled", "", "Filter by enabled status (true|false)")
+	eventsListTriageRulesCmd.Flags().String("rule-type", "", "Filter by rule type")
+	eventsListTriageRulesCmd.Flags().Bool("enabled", false, "Filter by enabled status (use --enabled=false to filter for disabled)")
 }

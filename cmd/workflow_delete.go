@@ -7,7 +7,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var workflowDeleteCmd = &cobra.Command{
@@ -16,7 +15,10 @@ var workflowDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowID := args[0]
-		accountId := viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
+		}
 
 		query := `
 mutation deleteWorkflow($accountId:String!, $id: String!) {
@@ -52,4 +54,5 @@ mutation deleteWorkflow($accountId:String!, $id: String!) {
 
 func init() {
 	workflowCmd.AddCommand(workflowDeleteCmd)
+	workflowDeleteCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 }

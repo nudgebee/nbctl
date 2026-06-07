@@ -7,18 +7,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-)
-
-var (
-	workloadName   []string
-	spanName       []string
-	traceId        []string
-	startTime      string
-	endTime        string
-	resource       string
-	statusCode     string
-	httpStatusCode []string
 )
 
 var tracesQueryCmd = &cobra.Command{
@@ -27,7 +15,19 @@ var tracesQueryCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
-		accountId := viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
+		}
+
+		workloadName, _ := cmd.Flags().GetStringSlice("workload-name")
+		spanName, _ := cmd.Flags().GetStringSlice("span-name")
+		traceId, _ := cmd.Flags().GetStringSlice("trace-id")
+		startTime, _ := cmd.Flags().GetString("start-time")
+		endTime, _ := cmd.Flags().GetString("end-time")
+		resource, _ := cmd.Flags().GetString("resource")
+		statusCode, _ := cmd.Flags().GetString("status-code")
+		httpStatusCode, _ := cmd.Flags().GetStringSlice("http-status-code")
 
 		st := time.Now().Add(-24 * time.Hour)
 		if startTime != "" {
@@ -166,12 +166,13 @@ var tracesQueryCmd = &cobra.Command{
 
 func init() {
 	tracesCmd.AddCommand(tracesQueryCmd)
-	tracesQueryCmd.Flags().StringSliceVar(&workloadName, "workload-name", []string{}, "Filter by workload name")
-	tracesQueryCmd.Flags().StringSliceVar(&spanName, "span-name", []string{}, "Filter by span name")
-	tracesQueryCmd.Flags().StringSliceVar(&traceId, "trace-id", []string{}, "Filter by trace id")
-	tracesQueryCmd.Flags().StringVar(&startTime, "start-time", "", "Start time in RFC3339 format")
-	tracesQueryCmd.Flags().StringVar(&endTime, "end-time", "", "End time in RFC3339 format")
-	tracesQueryCmd.Flags().StringVar(&resource, "resource", "", "Filter by resource")
-	tracesQueryCmd.Flags().StringVar(&statusCode, "status-code", "", "Filter by status code")
-	tracesQueryCmd.Flags().StringSliceVar(&httpStatusCode, "http-status-code", []string{}, "Filter by http status code")
+	tracesQueryCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
+	tracesQueryCmd.Flags().StringSlice("workload-name", []string{}, "Filter by workload name")
+	tracesQueryCmd.Flags().StringSlice("span-name", []string{}, "Filter by span name")
+	tracesQueryCmd.Flags().StringSlice("trace-id", []string{}, "Filter by trace id")
+	tracesQueryCmd.Flags().String("start-time", "", "Start time in RFC3339 format")
+	tracesQueryCmd.Flags().String("end-time", "", "End time in RFC3339 format")
+	tracesQueryCmd.Flags().String("resource", "", "Filter by resource")
+	tracesQueryCmd.Flags().String("status-code", "", "Filter by status code")
+	tracesQueryCmd.Flags().StringSlice("http-status-code", []string{}, "Filter by http status code")
 }

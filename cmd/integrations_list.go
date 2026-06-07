@@ -9,19 +9,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	integrationsListStatus string
-	integrationsListType   string
-	integrationsListName   string
-	integrationsListLimit  int
-	integrationsListOffset int
-)
-
 var integrationsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List integrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
+
+		status, _ := cmd.Flags().GetString("status")
+		integrationType, _ := cmd.Flags().GetString("type")
+		name, _ := cmd.Flags().GetString("name")
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
 
 		req := client.NewRequest(`
 			query ListIntegrations($where: IntegrationWhereRequest!, $limit: Int, $offset: Int) {
@@ -40,19 +38,19 @@ var integrationsListCmd = &cobra.Command{
 		`)
 
 		where := make(map[string]any)
-		if integrationsListStatus != "" {
-			where["status"] = map[string]any{"_eq": integrationsListStatus}
+		if status != "" {
+			where["status"] = map[string]any{"_eq": status}
 		}
-		if integrationsListType != "" {
-			where["type"] = map[string]any{"_eq": integrationsListType}
+		if integrationType != "" {
+			where["type"] = map[string]any{"_eq": integrationType}
 		}
-		if integrationsListName != "" {
-			where["name"] = map[string]any{"_ilike": fmt.Sprintf("%%%s%%", integrationsListName)}
+		if name != "" {
+			where["name"] = map[string]any{"_ilike": fmt.Sprintf("%%%s%%", name)}
 		}
 
 		req.Var("where", where)
-		req.Var("limit", integrationsListLimit)
-		req.Var("offset", integrationsListOffset)
+		req.Var("limit", limit)
+		req.Var("offset", offset)
 
 		var respData struct {
 			Integrations struct {
@@ -92,9 +90,9 @@ var integrationsListCmd = &cobra.Command{
 
 func init() {
 	integrationsCmd.AddCommand(integrationsListCmd)
-	integrationsListCmd.Flags().StringVar(&integrationsListStatus, "status", "", "Filter by status (eq)")
-	integrationsListCmd.Flags().StringVar(&integrationsListType, "type", "", "Filter by type (eq)")
-	integrationsListCmd.Flags().StringVar(&integrationsListName, "name", "", "Filter by name (ilike)")
-	integrationsListCmd.Flags().IntVar(&integrationsListLimit, "limit", 20, "Limit for pagination")
-	integrationsListCmd.Flags().IntVar(&integrationsListOffset, "offset", 0, "Offset for pagination")
+	integrationsListCmd.Flags().String("status", "", "Filter by status (eq)")
+	integrationsListCmd.Flags().String("type", "", "Filter by type (eq)")
+	integrationsListCmd.Flags().String("name", "", "Filter by name (ilike)")
+	integrationsListCmd.Flags().Int("limit", 20, "Limit for pagination")
+	integrationsListCmd.Flags().Int("offset", 0, "Offset for pagination")
 }

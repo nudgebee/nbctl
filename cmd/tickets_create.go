@@ -9,19 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	ticketsCreateIntegrationID    string
-	ticketsCreateTitle            string
-	ticketsCreateProjectKey       string
-	ticketsCreateDescription      string
-	ticketsCreateTicketType       string
-	ticketsCreateSeverity         string
-	ticketsCreateAssignee         string
-	ticketsCreateReferenceID      string
-	ticketsCreateSource           string
-	ticketsCreateAdditionalFields string
-)
-
 var ticketsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a ticket in an external system",
@@ -32,43 +19,55 @@ Use ` + "`nbctl tickets list-configurations`" + ` to find the --integration-id a
 		if err != nil {
 			return err
 		}
-		if ticketsCreateIntegrationID == "" {
+
+		integrationID, _ := cmd.Flags().GetString("integration-id")
+		title, _ := cmd.Flags().GetString("title")
+		projectKey, _ := cmd.Flags().GetString("project-key")
+		description, _ := cmd.Flags().GetString("description")
+		ticketType, _ := cmd.Flags().GetString("ticket-type")
+		severity, _ := cmd.Flags().GetString("severity")
+		assignee, _ := cmd.Flags().GetString("assignee")
+		referenceID, _ := cmd.Flags().GetString("reference-id")
+		source, _ := cmd.Flags().GetString("source")
+		additionalFields, _ := cmd.Flags().GetString("additional-fields")
+
+		if integrationID == "" {
 			return fmt.Errorf("--integration-id is required")
 		}
-		if ticketsCreateTitle == "" {
+		if title == "" {
 			return fmt.Errorf("--title is required")
 		}
-		if ticketsCreateProjectKey == "" {
+		if projectKey == "" {
 			return fmt.Errorf("--project-key is required")
 		}
 
 		vars := map[string]any{
 			"account_id":     accountID,
-			"integration_id": ticketsCreateIntegrationID,
-			"title":          ticketsCreateTitle,
-			"project_key":    ticketsCreateProjectKey,
+			"integration_id": integrationID,
+			"title":          title,
+			"project_key":    projectKey,
 		}
-		if ticketsCreateDescription != "" {
-			vars["description"] = ticketsCreateDescription
+		if description != "" {
+			vars["description"] = description
 		}
-		if ticketsCreateTicketType != "" {
-			vars["ticket_type"] = ticketsCreateTicketType
+		if ticketType != "" {
+			vars["ticket_type"] = ticketType
 		}
-		if ticketsCreateSeverity != "" {
-			vars["severity"] = ticketsCreateSeverity
+		if severity != "" {
+			vars["severity"] = severity
 		}
-		if ticketsCreateAssignee != "" {
-			vars["assignee"] = ticketsCreateAssignee
+		if assignee != "" {
+			vars["assignee"] = assignee
 		}
-		if ticketsCreateReferenceID != "" {
-			vars["reference_id"] = ticketsCreateReferenceID
+		if referenceID != "" {
+			vars["reference_id"] = referenceID
 		}
-		if ticketsCreateSource != "" {
-			vars["source"] = ticketsCreateSource
+		if source != "" {
+			vars["source"] = source
 		}
-		if ticketsCreateAdditionalFields != "" {
+		if additionalFields != "" {
 			var parsed any
-			if err := json.Unmarshal([]byte(ticketsCreateAdditionalFields), &parsed); err != nil {
+			if err := json.Unmarshal([]byte(additionalFields), &parsed); err != nil {
 				return fmt.Errorf("--additional-fields must be valid JSON: %w", err)
 			}
 			vars["additional_fields"] = parsed
@@ -147,14 +146,14 @@ mutation CreateTicket($assignee: String, $integration_id: String, $reference_id:
 func init() {
 	ticketsCmd.AddCommand(ticketsCreateCmd)
 	ticketsCreateCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateIntegrationID, "integration-id", "", "Ticket integration configuration ID (required)")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateTitle, "title", "", "Ticket title (required)")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateProjectKey, "project-key", "", "Project/board key in the external system (required)")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateDescription, "description", "", "Ticket description / body")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateTicketType, "ticket-type", "", "Issue type (e.g. Bug, Task)")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateSeverity, "severity", "", "Severity / priority")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateAssignee, "assignee", "", "Assignee identifier")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateReferenceID, "reference-id", "", "Reference ID linking this ticket to a Nudgebee event")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateSource, "source", "", "Source system identifier")
-	ticketsCreateCmd.Flags().StringVar(&ticketsCreateAdditionalFields, "additional-fields", "", "Additional integration-specific fields as a JSON object")
+	ticketsCreateCmd.Flags().String("integration-id", "", "Ticket integration configuration ID (required)")
+	ticketsCreateCmd.Flags().String("title", "", "Ticket title (required)")
+	ticketsCreateCmd.Flags().String("project-key", "", "Project/board key in the external system (required)")
+	ticketsCreateCmd.Flags().String("description", "", "Ticket description / body")
+	ticketsCreateCmd.Flags().String("ticket-type", "", "Issue type (e.g. Bug, Task)")
+	ticketsCreateCmd.Flags().String("severity", "", "Severity / priority")
+	ticketsCreateCmd.Flags().String("assignee", "", "Assignee identifier")
+	ticketsCreateCmd.Flags().String("reference-id", "", "Reference ID linking this ticket to a Nudgebee event")
+	ticketsCreateCmd.Flags().String("source", "", "Source system identifier")
+	ticketsCreateCmd.Flags().String("additional-fields", "", "Additional integration-specific fields as a JSON object")
 }

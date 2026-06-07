@@ -7,7 +7,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var tracesGetCmd = &cobra.Command{
@@ -16,7 +15,10 @@ var tracesGetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
-		accountId := viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
+		}
 
 		req := client.NewRequest(`
 			query TraceGet($account_id: String!, $trace_id: String!) {
@@ -72,4 +74,5 @@ var tracesGetCmd = &cobra.Command{
 
 func init() {
 	tracesCmd.AddCommand(tracesGetCmd)
+	tracesGetCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 }

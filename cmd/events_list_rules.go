@@ -8,12 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	eventsListRulesName   string
-	eventsListRulesLimit  int
-	eventsListRulesOffset int
-)
-
 var eventsListRulesCmd = &cobra.Command{
 	Use:   "list-rules",
 	Short: "List event-manager rules",
@@ -24,11 +18,15 @@ var eventsListRulesCmd = &cobra.Command{
 			return err
 		}
 
+		name, _ := cmd.Flags().GetString("name")
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
+
 		where := map[string]any{
 			"account_id": map[string]any{"_eq": accountID},
 		}
-		if eventsListRulesName != "" {
-			where["alert"] = map[string]any{"_ilike": "%" + eventsListRulesName + "%"}
+		if name != "" {
+			where["alert"] = map[string]any{"_ilike": "%" + name + "%"}
 		}
 
 		query := `
@@ -55,8 +53,8 @@ query ListEventRules($where: EventRuleWhereRequest!, $limit: Int, $offset: Int) 
 `
 		req := client.NewRequest(query)
 		req.Var("where", where)
-		req.Var("limit", eventsListRulesLimit)
-		req.Var("offset", eventsListRulesOffset)
+		req.Var("limit", limit)
+		req.Var("offset", offset)
 
 		var respData struct {
 			EventRulesV2 struct {
@@ -110,7 +108,7 @@ query ListEventRules($where: EventRuleWhereRequest!, $limit: Int, $offset: Int) 
 func init() {
 	eventsCmd.AddCommand(eventsListRulesCmd)
 	eventsListRulesCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	eventsListRulesCmd.Flags().StringVar(&eventsListRulesName, "name", "", "Filter by alert name (ilike)")
-	eventsListRulesCmd.Flags().IntVar(&eventsListRulesLimit, "limit", 25, "Maximum number of rules to return")
-	eventsListRulesCmd.Flags().IntVar(&eventsListRulesOffset, "offset", 0, "Pagination offset")
+	eventsListRulesCmd.Flags().String("name", "", "Filter by alert name (ilike)")
+	eventsListRulesCmd.Flags().Int("limit", 25, "Maximum number of rules to return")
+	eventsListRulesCmd.Flags().Int("offset", 0, "Pagination offset")
 }
