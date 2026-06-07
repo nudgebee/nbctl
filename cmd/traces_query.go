@@ -7,7 +7,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -27,7 +26,10 @@ var tracesQueryCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
-		accountId := viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
+		}
 
 		st := time.Now().Add(-24 * time.Hour)
 		if startTime != "" {
@@ -166,6 +168,7 @@ var tracesQueryCmd = &cobra.Command{
 
 func init() {
 	tracesCmd.AddCommand(tracesQueryCmd)
+	tracesQueryCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	tracesQueryCmd.Flags().StringSliceVar(&workloadName, "workload-name", []string{}, "Filter by workload name")
 	tracesQueryCmd.Flags().StringSliceVar(&spanName, "span-name", []string{}, "Filter by span name")
 	tracesQueryCmd.Flags().StringSliceVar(&traceId, "trace-id", []string{}, "Filter by trace id")

@@ -73,24 +73,24 @@ mutation EventGetTriageRules($cloud_account_id: String, $rule_type: String, $ena
 		var respData struct {
 			EventGetTriageRules struct {
 				Rules []struct {
-					ID             string          `json:"id"`
-					AccountID      string          `json:"account_id"`
-					Name           string          `json:"name"`
-					Description    string          `json:"description"`
-					RuleType       string          `json:"rule_type"`
-					Action         string          `json:"action"`
-					ActionValue    string          `json:"action_value"`
-					Priority       json.Number     `json:"priority"`
-					Enabled        bool            `json:"enabled"`
-					MatchAlertname string          `json:"match_alertname"`
-					MatchNamespace string          `json:"match_namespace"`
-					MatchService   string          `json:"match_service"`
-					MatchSource    string          `json:"match_source"`
-					MatchPriority  string          `json:"match_priority"`
-					IsEditable     bool            `json:"is_editable"`
-					IsSystemRule   bool            `json:"is_system_rule"`
-					MatchCount     int             `json:"match_count"`
-					LastMatchedAt  *string         `json:"last_matched_at"`
+					ID             string      `json:"id"`
+					AccountID      string      `json:"account_id"`
+					Name           string      `json:"name"`
+					Description    string      `json:"description"`
+					RuleType       string      `json:"rule_type"`
+					Action         string      `json:"action"`
+					ActionValue    string      `json:"action_value"`
+					Priority       json.Number `json:"priority"`
+					Enabled        bool        `json:"enabled"`
+					MatchAlertname string      `json:"match_alertname"`
+					MatchNamespace string      `json:"match_namespace"`
+					MatchService   string      `json:"match_service"`
+					MatchSource    string      `json:"match_source"`
+					MatchPriority  string      `json:"match_priority"`
+					IsEditable     bool        `json:"is_editable"`
+					IsSystemRule   bool        `json:"is_system_rule"`
+					MatchCount     int         `json:"match_count"`
+					LastMatchedAt  *string     `json:"last_matched_at"`
 					CreatedAt      string      `json:"created_at"`
 					UpdatedAt      string      `json:"updated_at"`
 				} `json:"rules"`

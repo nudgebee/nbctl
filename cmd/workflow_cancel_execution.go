@@ -7,7 +7,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var workflowCancelExecutionCmd = &cobra.Command{
@@ -18,9 +17,9 @@ var workflowCancelExecutionCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowID := args[0]
 		executionID := args[1]
-		accountId := viper.GetString("account-id")
-		if accountId == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		query := `
@@ -64,4 +63,5 @@ mutation cancelWorkflowExecution($request: WorkflowCancelRequest!) {
 
 func init() {
 	workflowCmd.AddCommand(workflowCancelExecutionCmd)
+	workflowCancelExecutionCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 }

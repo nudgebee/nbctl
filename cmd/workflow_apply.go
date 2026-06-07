@@ -138,8 +138,8 @@ query ListWorkflows($accountId:String!, $name:String) {
 	var respData struct {
 		WorkflowList struct {
 			Workflows []struct {
-					ID   string `json:"id"`
-					Name string `json:"name"`
+				ID   string `json:"id"`
+				Name string `json:"name"`
 			} `json:"workflows"`
 		} `json:"workflow_list"`
 	}

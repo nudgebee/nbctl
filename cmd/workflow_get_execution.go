@@ -57,9 +57,9 @@ query getWorkflowExecution($request: WorkflowExecutionGetRequest!) {
 `
 		req := client.NewRequest(query)
 		req.Var("request", map[string]any{
-			"account_id":   accountID,
-			"id":           executionID,
-			"workflow_id":  workflowID,
+			"account_id":  accountID,
+			"id":          executionID,
+			"workflow_id": workflowID,
 		})
 
 		var respData struct {

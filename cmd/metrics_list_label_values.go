@@ -2,12 +2,10 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var metricsListLabelValuesCmd = &cobra.Command{
@@ -16,12 +14,9 @@ var metricsListLabelValuesCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
-		accountId, _ := cmd.Flags().GetString("account-id")
-		if accountId == "" {
-			accountId = viper.GetString("account-id")
-		}
-		if accountId == "" {
-			return fmt.Errorf("account-id is required")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		label, _ := cmd.Flags().GetString("label")

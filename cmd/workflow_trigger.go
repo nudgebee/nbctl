@@ -8,7 +8,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var workflowTriggerInputs []string
@@ -30,9 +29,9 @@ mutation triggerWorkflow($request: WorkflowTriggerRequest!) {
 }
 `
 		req := client.NewRequest(query)
-		accountId, _ := cmd.Flags().GetString("account-id")
-		if accountId == "" {
-			accountId = viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		inputs := make(map[string]interface{})

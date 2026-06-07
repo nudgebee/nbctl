@@ -8,7 +8,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -55,7 +54,10 @@ query ListWorkflows($accountId:String!, $status:String, $last_execution_status:S
 `
 		req := client.NewRequest(query)
 
-		accountId := viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
+		}
 		req.Var("accountId", accountId)
 
 		if workflowListStatus != "" {
@@ -149,6 +151,7 @@ query ListWorkflows($accountId:String!, $status:String, $last_execution_status:S
 
 func init() {
 	workflowCmd.AddCommand(workflowListCmd)
+	workflowListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	workflowListCmd.Flags().StringVar(&workflowListStatus, "status", "", "Filter by status")
 	workflowListCmd.Flags().StringVar(&workflowListLastExecutionStatus, "last-execution-status", "", "Filter by last execution status")
 	workflowListCmd.Flags().StringVar(&workflowListType, "type", "", "Filter by type")
