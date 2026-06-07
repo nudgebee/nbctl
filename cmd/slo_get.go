@@ -10,8 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var sloGetReport bool
-
 var sloGetCmd = &cobra.Command{
 	Use:   "get [id]",
 	Short: "Get SLO configuration details",
@@ -24,6 +22,8 @@ compliance report (burn rate, event budgets, status).`,
 		if err != nil {
 			return err
 		}
+
+		wantReport, _ := cmd.Flags().GetBool("report")
 
 		configQuery := `
 query GetSLOConfig($where: SLOConfigWhereRequest!) {
@@ -79,7 +79,7 @@ query GetSLOConfig($where: SLOConfigWhereRequest!) {
 		cfg := configResp.SLOConfigV2.Rows[0]
 
 		var reportRow *sloReportRow
-		if sloGetReport {
+		if wantReport {
 			var reportErr error
 			reportRow, reportErr = fetchLatestSLOReport(cmd.Context(), c, accountID, id)
 			if reportErr != nil {
@@ -181,5 +181,5 @@ query SLOReport($where: SLOReportWhereRequest!) {
 func init() {
 	sloCmd.AddCommand(sloGetCmd)
 	sloGetCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	sloGetCmd.Flags().BoolVar(&sloGetReport, "report", false, "Also fetch the latest compliance report")
+	sloGetCmd.Flags().Bool("report", false, "Also fetch the latest compliance report")
 }

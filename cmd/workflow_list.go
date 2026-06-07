@@ -8,13 +8,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-)
-
-var (
-	workflowListStatus              string
-	workflowListLastExecutionStatus string
-	workflowListType                string
 )
 
 var workflowListCmd = &cobra.Command{
@@ -22,6 +15,10 @@ var workflowListCmd = &cobra.Command{
 	Short: "List all workflows",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
+
+		statusFilter, _ := cmd.Flags().GetString("status")
+		lastExecutionStatus, _ := cmd.Flags().GetString("last-execution-status")
+		typeFilter, _ := cmd.Flags().GetString("type")
 
 		query := `
 query ListWorkflows($accountId:String!, $status:String, $last_execution_status:String, $type:String) {
@@ -55,17 +52,20 @@ query ListWorkflows($accountId:String!, $status:String, $last_execution_status:S
 `
 		req := client.NewRequest(query)
 
-		accountId := viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
+		}
 		req.Var("accountId", accountId)
 
-		if workflowListStatus != "" {
-			req.Var("status", workflowListStatus)
+		if statusFilter != "" {
+			req.Var("status", statusFilter)
 		}
-		if workflowListLastExecutionStatus != "" {
-			req.Var("last_execution_status", workflowListLastExecutionStatus)
+		if lastExecutionStatus != "" {
+			req.Var("last_execution_status", lastExecutionStatus)
 		}
-		if workflowListType != "" {
-			req.Var("type", workflowListType)
+		if typeFilter != "" {
+			req.Var("type", typeFilter)
 		}
 
 		var respData struct {
@@ -149,7 +149,8 @@ query ListWorkflows($accountId:String!, $status:String, $last_execution_status:S
 
 func init() {
 	workflowCmd.AddCommand(workflowListCmd)
-	workflowListCmd.Flags().StringVar(&workflowListStatus, "status", "", "Filter by status")
-	workflowListCmd.Flags().StringVar(&workflowListLastExecutionStatus, "last-execution-status", "", "Filter by last execution status")
-	workflowListCmd.Flags().StringVar(&workflowListType, "type", "", "Filter by type")
+	workflowListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
+	workflowListCmd.Flags().String("status", "", "Filter by status")
+	workflowListCmd.Flags().String("last-execution-status", "", "Filter by last execution status")
+	workflowListCmd.Flags().String("type", "", "Filter by type")
 }

@@ -9,18 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	auditLogsListUsername      string
-	auditLogsListEventCategory string
-	auditLogsListEventType     string
-	auditLogsListEventAction   string
-	auditLogsListEventStatus   string
-	auditLogsListStartTime     string
-	auditLogsListEndTime       string
-	auditLogsListLimit         int
-	auditLogsListOffset        int
-)
-
 var auditLogsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List audit events",
@@ -31,31 +19,41 @@ var auditLogsListCmd = &cobra.Command{
 			return err
 		}
 
+		username, _ := cmd.Flags().GetString("username")
+		category, _ := cmd.Flags().GetString("category")
+		eventType, _ := cmd.Flags().GetString("type")
+		action, _ := cmd.Flags().GetString("action")
+		status, _ := cmd.Flags().GetString("status")
+		startTime, _ := cmd.Flags().GetString("start-time")
+		endTime, _ := cmd.Flags().GetString("end-time")
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
+
 		where := map[string]any{
 			"account_id": map[string]any{"_eq": accountID},
 		}
-		if auditLogsListUsername != "" {
-			where["username"] = map[string]any{"_eq": auditLogsListUsername}
+		if username != "" {
+			where["username"] = map[string]any{"_eq": username}
 		}
-		if auditLogsListEventCategory != "" {
-			where["event_category"] = map[string]any{"_eq": auditLogsListEventCategory}
+		if category != "" {
+			where["event_category"] = map[string]any{"_eq": category}
 		}
-		if auditLogsListEventType != "" {
-			where["event_type"] = map[string]any{"_eq": auditLogsListEventType}
+		if eventType != "" {
+			where["event_type"] = map[string]any{"_eq": eventType}
 		}
-		if auditLogsListEventAction != "" {
-			where["event_action"] = map[string]any{"_eq": auditLogsListEventAction}
+		if action != "" {
+			where["event_action"] = map[string]any{"_eq": action}
 		}
-		if auditLogsListEventStatus != "" {
-			where["event_status"] = map[string]any{"_eq": auditLogsListEventStatus}
+		if status != "" {
+			where["event_status"] = map[string]any{"_eq": status}
 		}
-		if auditLogsListStartTime != "" || auditLogsListEndTime != "" {
+		if startTime != "" || endTime != "" {
 			timeFilter := map[string]any{}
-			if auditLogsListStartTime != "" {
-				timeFilter["_gt"] = auditLogsListStartTime
+			if startTime != "" {
+				timeFilter["_gt"] = startTime
 			}
-			if auditLogsListEndTime != "" {
-				timeFilter["_lt"] = auditLogsListEndTime
+			if endTime != "" {
+				timeFilter["_lt"] = endTime
 			}
 			where["event_time"] = map[string]any{"_between": timeFilter}
 		}
@@ -80,8 +78,8 @@ query ListAuditEvents($where: AuditEventWhereRequest!, $limit: Int, $offset: Int
 `
 		req := client.NewRequest(query)
 		req.Var("where", where)
-		req.Var("limit", auditLogsListLimit)
-		req.Var("offset", auditLogsListOffset)
+		req.Var("limit", limit)
+		req.Var("offset", offset)
 
 		var respData struct {
 			AuditsV2 struct {
@@ -152,13 +150,13 @@ query ListAuditEvents($where: AuditEventWhereRequest!, $limit: Int, $offset: Int
 func init() {
 	auditLogsCmd.AddCommand(auditLogsListCmd)
 	auditLogsListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	auditLogsListCmd.Flags().StringVar(&auditLogsListUsername, "username", "", "Filter by username")
-	auditLogsListCmd.Flags().StringVar(&auditLogsListEventCategory, "category", "", "Filter by event category")
-	auditLogsListCmd.Flags().StringVar(&auditLogsListEventType, "type", "", "Filter by event type")
-	auditLogsListCmd.Flags().StringVar(&auditLogsListEventAction, "action", "", "Filter by event action")
-	auditLogsListCmd.Flags().StringVar(&auditLogsListEventStatus, "status", "", "Filter by event status")
-	auditLogsListCmd.Flags().StringVar(&auditLogsListStartTime, "start-time", "", "Filter events after this RFC3339 timestamp")
-	auditLogsListCmd.Flags().StringVar(&auditLogsListEndTime, "end-time", "", "Filter events before this RFC3339 timestamp")
-	auditLogsListCmd.Flags().IntVar(&auditLogsListLimit, "limit", 25, "Maximum number of events to return")
-	auditLogsListCmd.Flags().IntVar(&auditLogsListOffset, "offset", 0, "Pagination offset")
+	auditLogsListCmd.Flags().String("username", "", "Filter by username")
+	auditLogsListCmd.Flags().String("category", "", "Filter by event category")
+	auditLogsListCmd.Flags().String("type", "", "Filter by event type")
+	auditLogsListCmd.Flags().String("action", "", "Filter by event action")
+	auditLogsListCmd.Flags().String("status", "", "Filter by event status")
+	auditLogsListCmd.Flags().String("start-time", "", "Filter events after this RFC3339 timestamp")
+	auditLogsListCmd.Flags().String("end-time", "", "Filter events before this RFC3339 timestamp")
+	auditLogsListCmd.Flags().Int("limit", 25, "Maximum number of events to return")
+	auditLogsListCmd.Flags().Int("offset", 0, "Pagination offset")
 }

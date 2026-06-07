@@ -38,8 +38,7 @@ func TestSLOGetCmd(t *testing.T) {
 }
 
 func TestSLOGetCmd_WithReport(t *testing.T) {
-	sloGetReport = true
-	t.Cleanup(func() { sloGetReport = false })
+	t.Cleanup(func() { _ = sloGetCmd.Flags().Set("report", "false") })
 
 	mockResponse := map[string]any{
 		"slo_config_v2": map[string]any{
@@ -80,8 +79,7 @@ func TestSLOGetCmd_WithReport(t *testing.T) {
 }
 
 func TestSLOGetCmd_WithReportButNoReportRows(t *testing.T) {
-	sloGetReport = true
-	t.Cleanup(func() { sloGetReport = false })
+	t.Cleanup(func() { _ = sloGetCmd.Flags().Set("report", "false") })
 
 	mockResponse := map[string]any{
 		"slo_config_v2": map[string]any{

@@ -8,7 +8,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var workflowGetCmd = &cobra.Command{
@@ -97,7 +96,10 @@ query GetWorkflowById($accountId:String!, $workflowId:String!) {
 }
 `
 		req := client.NewRequest(query)
-		accountId := viper.GetString("account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
+		}
 		req.Var("accountId", accountId)
 		req.Var("workflowId", workflowId)
 
@@ -140,4 +142,5 @@ query GetWorkflowById($accountId:String!, $workflowId:String!) {
 
 func init() {
 	workflowCmd.AddCommand(workflowGetCmd)
+	workflowGetCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 }

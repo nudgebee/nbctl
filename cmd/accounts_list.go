@@ -10,17 +10,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	listStatus        string
-	listCloudProvider string
-	listName          string
-)
-
 var accountsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all accounts",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
+
+		listStatus, _ := cmd.Flags().GetString("status")
+		listCloudProvider, _ := cmd.Flags().GetString("cloud-provider")
+		listName, _ := cmd.Flags().GetString("name")
 
 		req := client.NewRequest(`
 			query GetCloudAccounts($where: CloudAccountWhereRequest!) {
@@ -117,9 +115,9 @@ var accountsListCmd = &cobra.Command{
 
 func init() {
 	accountsCmd.AddCommand(accountsListCmd)
-	accountsListCmd.Flags().StringVar(&listStatus, "status", "", "Filter by status")
-	accountsListCmd.Flags().StringVar(&listCloudProvider, "cloud-provider", "", "Filter by cloud provider")
-	accountsListCmd.Flags().StringVar(&listName, "name", "", "Filter by name (like match)")
+	accountsListCmd.Flags().String("status", "", "Filter by status")
+	accountsListCmd.Flags().String("cloud-provider", "", "Filter by cloud provider")
+	accountsListCmd.Flags().String("name", "", "Filter by name (like match)")
 }
 
 func countJSONArray(raw json.RawMessage) int {

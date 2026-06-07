@@ -8,12 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	sloListWorkloadName      string
-	sloListWorkloadNamespace string
-	sloListEnabled           string
-)
-
 var sloListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List SLO configurations",
@@ -24,20 +18,21 @@ var sloListCmd = &cobra.Command{
 			return err
 		}
 
+		workload, _ := cmd.Flags().GetString("workload")
+		namespace, _ := cmd.Flags().GetString("namespace")
+
 		where := map[string]any{
 			"cloud_account_id": map[string]any{"_eq": accountID},
 		}
-		if sloListWorkloadName != "" {
-			where["workload_name"] = map[string]any{"_eq": sloListWorkloadName}
+		if workload != "" {
+			where["workload_name"] = map[string]any{"_eq": workload}
 		}
-		if sloListWorkloadNamespace != "" {
-			where["workload_namespace"] = map[string]any{"_eq": sloListWorkloadNamespace}
+		if namespace != "" {
+			where["workload_namespace"] = map[string]any{"_eq": namespace}
 		}
-		if sloListEnabled != "" {
-			if sloListEnabled != "true" && sloListEnabled != "false" {
-				return fmt.Errorf("invalid value for --enabled: %q (must be true or false)", sloListEnabled)
-			}
-			where["enabled"] = map[string]any{"_eq": sloListEnabled == "true"}
+		if cmd.Flags().Changed("enabled") {
+			enabled, _ := cmd.Flags().GetBool("enabled")
+			where["enabled"] = map[string]any{"_eq": enabled}
 		}
 
 		query := `
@@ -112,7 +107,7 @@ query ListSLOs($where: SLOConfigWhereRequest!) {
 func init() {
 	sloCmd.AddCommand(sloListCmd)
 	sloListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	sloListCmd.Flags().StringVar(&sloListWorkloadName, "workload", "", "Filter by workload name")
-	sloListCmd.Flags().StringVar(&sloListWorkloadNamespace, "namespace", "", "Filter by workload namespace")
-	sloListCmd.Flags().StringVar(&sloListEnabled, "enabled", "", "Filter by enabled status (true|false)")
+	sloListCmd.Flags().String("workload", "", "Filter by workload name")
+	sloListCmd.Flags().String("namespace", "", "Filter by workload namespace")
+	sloListCmd.Flags().Bool("enabled", false, "Filter by enabled status (use --enabled=false to filter for disabled)")
 }

@@ -14,12 +14,12 @@ func TestTicketsListConfigurationsCmd(t *testing.T) {
 		"integrations": map[string]any{
 			"rows": []map[string]any{
 				{
-					"id":                       "int-1",
-					"name":                     "Prod Jira",
-					"type":                     "jira",
-					"status":                   "enabled",
-					"created_by_display_name":  "Alice",
-					"updated_at":               "2026-01-01T00:00:00Z",
+					"id":                        "int-1",
+					"name":                      "Prod Jira",
+					"type":                      "jira",
+					"status":                    "enabled",
+					"created_by_display_name":   "Alice",
+					"updated_at":                "2026-01-01T00:00:00Z",
 					"integration_config_values": "{}",
 				},
 			},

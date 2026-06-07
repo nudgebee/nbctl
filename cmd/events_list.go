@@ -3,13 +3,11 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var eventsListCmd = &cobra.Command{
@@ -18,12 +16,9 @@ var eventsListCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
-		accountId, _ := cmd.Flags().GetString("account-id")
-		if accountId == "" {
-			accountId = viper.GetString("account-id")
-		}
-		if accountId == "" {
-			return fmt.Errorf("account-id is required")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		startTimeStr, _ := cmd.Flags().GetString("start-time")
@@ -32,7 +27,6 @@ var eventsListCmd = &cobra.Command{
 		offset, _ := cmd.Flags().GetInt("offset")
 
 		var startTime, endTime time.Time
-		var err error
 
 		if startTimeStr == "" {
 			startTime = time.Now().Add(-24 * time.Hour)

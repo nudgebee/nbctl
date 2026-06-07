@@ -10,15 +10,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	userId   string
-	userName string
-)
-
 var adminUsersGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get a single user by ID or username",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		userId, _ := cmd.Flags().GetString("id")
+		userName, _ := cmd.Flags().GetString("username")
+
 		if userId == "" && userName == "" {
 			return fmt.Errorf("either --id or --username is required")
 		}
@@ -104,6 +102,6 @@ var adminUsersGetCmd = &cobra.Command{
 
 func init() {
 	adminUsersCmd.AddCommand(adminUsersGetCmd)
-	adminUsersGetCmd.Flags().StringVar(&userId, "id", "", "User ID")
-	adminUsersGetCmd.Flags().StringVar(&userName, "username", "", "Username")
+	adminUsersGetCmd.Flags().String("id", "", "User ID")
+	adminUsersGetCmd.Flags().String("username", "", "Username")
 }

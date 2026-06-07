@@ -11,20 +11,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	offset   int
-	limit    int
-	name     string
-	username string
-	status   string
-	id       string
-)
-
 var adminUsersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all users",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
+
+		offset, _ := cmd.Flags().GetInt("offset")
+		limit, _ := cmd.Flags().GetInt("limit")
+		name, _ := cmd.Flags().GetString("name")
+		username, _ := cmd.Flags().GetString("username")
+		status, _ := cmd.Flags().GetString("status")
+		id, _ := cmd.Flags().GetString("id")
 
 		req := client.NewRequest(`
 			query GetUsersByTenant($offset: Int, $limit: Int, $where: UsersByTenantWhereRequest!) {
@@ -123,12 +121,12 @@ var adminUsersListCmd = &cobra.Command{
 
 func init() {
 	adminUsersCmd.AddCommand(adminUsersListCmd)
-	adminUsersListCmd.Flags().IntVar(&offset, "offset", 0, "Offset for pagination")
-	adminUsersListCmd.Flags().IntVar(&limit, "limit", 20, "Limit for pagination")
-	adminUsersListCmd.Flags().StringVar(&name, "name", "", "Filter by name (ilike)")
-	adminUsersListCmd.Flags().StringVar(&username, "username", "", "Filter by username (ilike)")
-	adminUsersListCmd.Flags().StringVar(&status, "status", "", "Filter by status (eq)")
-	adminUsersListCmd.Flags().StringVar(&id, "id", "", "Filter by id (eq)")
+	adminUsersListCmd.Flags().Int("offset", 0, "Offset for pagination")
+	adminUsersListCmd.Flags().Int("limit", 20, "Limit for pagination")
+	adminUsersListCmd.Flags().String("name", "", "Filter by name (ilike)")
+	adminUsersListCmd.Flags().String("username", "", "Filter by username (ilike)")
+	adminUsersListCmd.Flags().String("status", "", "Filter by status (eq)")
+	adminUsersListCmd.Flags().String("id", "", "Filter by id (eq)")
 }
 
 func joinJSONNames(raw json.RawMessage, key string) string {

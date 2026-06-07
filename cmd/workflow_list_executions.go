@@ -8,13 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	workflowListExecutionsStatus      string
-	workflowListExecutionsTriggerType string
-	workflowListExecutionsLimit       int
-	workflowListExecutionsPageToken   string
-)
-
 var workflowListExecutionsCmd = &cobra.Command{
 	Use:   "list-executions [workflow-id]",
 	Short: "List executions for a workflow",
@@ -26,6 +19,11 @@ var workflowListExecutionsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		statusFilter, _ := cmd.Flags().GetString("status")
+		triggerType, _ := cmd.Flags().GetString("trigger-type")
+		limit, _ := cmd.Flags().GetInt("limit")
+		pageToken, _ := cmd.Flags().GetString("page-token")
 
 		query := `
 query listWorkflowExecutions($accountId:String!, $id:String!, $limit:Int, $next_page_token:String, $status:String, $trigger_type:String) {
@@ -47,17 +45,17 @@ query listWorkflowExecutions($accountId:String!, $id:String!, $limit:Int, $next_
 		req := client.NewRequest(query)
 		req.Var("accountId", accountID)
 		req.Var("id", workflowID)
-		if workflowListExecutionsStatus != "" {
-			req.Var("status", workflowListExecutionsStatus)
+		if statusFilter != "" {
+			req.Var("status", statusFilter)
 		}
-		if workflowListExecutionsTriggerType != "" {
-			req.Var("trigger_type", workflowListExecutionsTriggerType)
+		if triggerType != "" {
+			req.Var("trigger_type", triggerType)
 		}
-		if workflowListExecutionsLimit > 0 {
-			req.Var("limit", workflowListExecutionsLimit)
+		if limit > 0 {
+			req.Var("limit", limit)
 		}
-		if workflowListExecutionsPageToken != "" {
-			req.Var("next_page_token", workflowListExecutionsPageToken)
+		if pageToken != "" {
+			req.Var("next_page_token", pageToken)
 		}
 
 		var respData struct {
@@ -137,8 +135,8 @@ func formatExecutionTime(ts *string) string {
 func init() {
 	workflowCmd.AddCommand(workflowListExecutionsCmd)
 	workflowListExecutionsCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	workflowListExecutionsCmd.Flags().StringVar(&workflowListExecutionsStatus, "status", "", "Filter by execution status")
-	workflowListExecutionsCmd.Flags().StringVar(&workflowListExecutionsTriggerType, "trigger-type", "", "Filter by trigger type")
-	workflowListExecutionsCmd.Flags().IntVar(&workflowListExecutionsLimit, "limit", 0, "Maximum number of executions to return")
-	workflowListExecutionsCmd.Flags().StringVar(&workflowListExecutionsPageToken, "page-token", "", "Pagination token from a previous response")
+	workflowListExecutionsCmd.Flags().String("status", "", "Filter by execution status")
+	workflowListExecutionsCmd.Flags().String("trigger-type", "", "Filter by trigger type")
+	workflowListExecutionsCmd.Flags().Int("limit", 0, "Maximum number of executions to return")
+	workflowListExecutionsCmd.Flags().String("page-token", "", "Pagination token from a previous response")
 }

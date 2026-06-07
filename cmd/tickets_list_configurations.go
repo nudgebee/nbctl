@@ -11,27 +11,25 @@ import (
 
 var ticketCapableTypes = []string{"jira", "github", "gitlab", "servicenow", "pagerduty", "zenduty"}
 
-var (
-	ticketsListConfigsType   string
-	ticketsListConfigsStatus string
-)
-
 var ticketsListConfigurationsCmd = &cobra.Command{
 	Use:   "list-configurations",
 	Short: "List ticket integration configurations",
 	Long:  `List configured ticket integrations (Jira, ServiceNow, PagerDuty, GitHub, GitLab, Zenduty) for the current account.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		typeFilter, _ := cmd.Flags().GetString("type")
+		statusFilter, _ := cmd.Flags().GetString("status")
+
 		where := map[string]any{}
-		if ticketsListConfigsType != "" {
-			if !slices.Contains(ticketCapableTypes, ticketsListConfigsType) {
-				return fmt.Errorf("invalid --type %q; must be one of %v", ticketsListConfigsType, ticketCapableTypes)
+		if typeFilter != "" {
+			if !slices.Contains(ticketCapableTypes, typeFilter) {
+				return fmt.Errorf("invalid --type %q; must be one of %v", typeFilter, ticketCapableTypes)
 			}
-			where["type"] = map[string]any{"_eq": ticketsListConfigsType}
+			where["type"] = map[string]any{"_eq": typeFilter}
 		} else {
 			where["type"] = map[string]any{"_in": ticketCapableTypes}
 		}
-		if ticketsListConfigsStatus != "" {
-			where["status"] = map[string]any{"_eq": ticketsListConfigsStatus}
+		if statusFilter != "" {
+			where["status"] = map[string]any{"_eq": statusFilter}
 		}
 
 		query := `
@@ -112,6 +110,6 @@ query ListTicketConfigurations($where: IntegrationWhereRequest!) {
 
 func init() {
 	ticketsCmd.AddCommand(ticketsListConfigurationsCmd)
-	ticketsListConfigurationsCmd.Flags().StringVar(&ticketsListConfigsType, "type", "", "Filter by a single integration type (jira, github, gitlab, servicenow, pagerduty, zenduty)")
-	ticketsListConfigurationsCmd.Flags().StringVar(&ticketsListConfigsStatus, "status", "", "Filter by status (e.g. enabled)")
+	ticketsListConfigurationsCmd.Flags().String("type", "", "Filter by a single integration type (jira, github, gitlab, servicenow, pagerduty, zenduty)")
+	ticketsListConfigurationsCmd.Flags().String("status", "", "Filter by status (e.g. enabled)")
 }

@@ -9,7 +9,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// resetTicketsCreateFlags clears every flag on the shared ticketsCreateCmd
+// so flag values parsed by a prior test don't leak into the next one.
+// Cobra stores parsed values on the *Command, not on test-scoped state,
+// so tests must reset them explicitly to be order-independent.
+func resetTicketsCreateFlags(t *testing.T) {
+	t.Helper()
+	for _, f := range []string{
+		"account-id", "integration-id", "title", "project-key", "description",
+		"ticket-type", "severity", "assignee", "reference-id", "source",
+		"additional-fields",
+	} {
+		require.NoError(t, ticketsCreateCmd.Flags().Set(f, ""))
+	}
+}
+
 func TestTicketsCreateCmd(t *testing.T) {
+	resetTicketsCreateFlags(t)
+
 	mockResponse := map[string]any{
 		"tickets_create": map[string]any{
 			"data": map[string]any{
@@ -39,6 +56,8 @@ func TestTicketsCreateCmd(t *testing.T) {
 }
 
 func TestTicketsCreateCmd_JSON(t *testing.T) {
+	resetTicketsCreateFlags(t)
+
 	mockResponse := map[string]any{
 		"tickets_create": map[string]any{
 			"data": map[string]any{
@@ -67,6 +86,8 @@ func TestTicketsCreateCmd_JSON(t *testing.T) {
 }
 
 func TestTicketsCreateCmd_ServerError(t *testing.T) {
+	resetTicketsCreateFlags(t)
+
 	mockResponse := map[string]any{
 		"tickets_create": map[string]any{
 			"data": map[string]any{
@@ -90,10 +111,7 @@ func TestTicketsCreateCmd_ServerError(t *testing.T) {
 }
 
 func TestTicketsCreateCmd_MissingRequiredArg(t *testing.T) {
-	// Reset package-level flag vars set by prior tests in this file.
-	ticketsCreateIntegrationID = ""
-	ticketsCreateTitle = ""
-	ticketsCreateProjectKey = ""
+	resetTicketsCreateFlags(t)
 
 	args := []string{"tickets", "create", "--title", "x", "--project-key", "OPS"}
 	_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, ticketsCmd, args)
@@ -102,9 +120,7 @@ func TestTicketsCreateCmd_MissingRequiredArg(t *testing.T) {
 }
 
 func TestTicketsCreateCmd_NullResponse(t *testing.T) {
-	ticketsCreateIntegrationID = ""
-	ticketsCreateTitle = ""
-	ticketsCreateProjectKey = ""
+	resetTicketsCreateFlags(t)
 
 	mockResponse := map[string]any{
 		"tickets_create": map[string]any{
@@ -126,6 +142,8 @@ func TestTicketsCreateCmd_NullResponse(t *testing.T) {
 }
 
 func TestTicketsCreateCmd_BadAdditionalFields(t *testing.T) {
+	resetTicketsCreateFlags(t)
+
 	args := []string{
 		"tickets", "create",
 		"--integration-id", "int-1",

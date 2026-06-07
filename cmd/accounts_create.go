@@ -9,13 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	createAccountName   string
-	createCloudProvider string
-	createAccountType   string
-	createAccountEnv    string
-)
-
 var accountsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new Nudgebee account",
@@ -23,10 +16,10 @@ var accountsCreateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
-		accountName := createAccountName
-		cloudProvider := createCloudProvider
-		accountType := createAccountType
-		accountEnv := createAccountEnv
+		accountName, _ := cmd.Flags().GetString("name")
+		cloudProvider, _ := cmd.Flags().GetString("cloud-provider")
+		accountType, _ := cmd.Flags().GetString("account-type")
+		accountEnv, _ := cmd.Flags().GetString("env")
 
 		if accountEnv == "" {
 			accountEnv = "dev"
@@ -104,11 +97,10 @@ var accountsCreateCmd = &cobra.Command{
 }
 
 func init() {
-
-	accountsCreateCmd.Flags().StringVar(&createAccountName, "name", "", "Name of the account")
-	accountsCreateCmd.Flags().StringVar(&createCloudProvider, "cloud-provider", "", "Cloud provider (e.g., K8s)")
-	accountsCreateCmd.Flags().StringVar(&createAccountType, "account-type", "", "Type of the account (e.g., kubernetes)")
-	accountsCreateCmd.Flags().StringVar(&createAccountEnv, "env", "", "Environment of the account (e.g., dev, prod)")
+	accountsCreateCmd.Flags().String("name", "", "Name of the account")
+	accountsCreateCmd.Flags().String("cloud-provider", "", "Cloud provider (e.g., K8s)")
+	accountsCreateCmd.Flags().String("account-type", "", "Type of the account (e.g., kubernetes)")
+	accountsCreateCmd.Flags().String("env", "", "Environment of the account (e.g., dev, prod)")
 
 	_ = accountsCreateCmd.MarkFlagRequired("name")
 	_ = accountsCreateCmd.MarkFlagRequired("account-type")

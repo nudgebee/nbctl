@@ -8,7 +8,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var workflowPauseCmd = &cobra.Command{
@@ -18,9 +17,9 @@ var workflowPauseCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowID := args[0]
-		accountId := viper.GetString("account-id")
-		if accountId == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
+		accountId, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		query := `
@@ -57,4 +56,5 @@ mutation pauseWorkflow($accountId: String!, $id: String!) {
 
 func init() {
 	workflowCmd.AddCommand(workflowPauseCmd)
+	workflowPauseCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 }
