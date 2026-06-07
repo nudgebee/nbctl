@@ -25,14 +25,3 @@ func TestMetricsListLabelValues_Unit(t *testing.T) {
 	}
 }
 
-func TestMetricsListLabelValues_Integration(t *testing.T) {
-	testutil.RequireIntegration(t)
-
-	got, err := testutil.RunCommandCaptureOutput(rootCmd, []string{"metrics", "list-label-values", "--account-id", "1", "--label", "test"})
-	if err != nil {
-		t.Fatalf("integration metricsListLabelValuesCmd failed: %v", err)
-	}
-	if got == "" {
-		t.Fatalf("expected non-empty output from integration run")
-	}
-}

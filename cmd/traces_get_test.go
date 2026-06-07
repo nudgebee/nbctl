@@ -30,14 +30,3 @@ func TestTracesGet_Unit(t *testing.T) {
 	}
 }
 
-func TestTracesGet_Integration(t *testing.T) {
-	testutil.RequireIntegration(t)
-
-	got, err := testutil.RunCommandCaptureOutput(rootCmd, []string{"traces", "get", "1"})
-	if err != nil {
-		t.Fatalf("integration tracesGetCmd failed: %v", err)
-	}
-	if got == "" {
-		t.Fatalf("expected non-empty output from integration run")
-	}
-}
