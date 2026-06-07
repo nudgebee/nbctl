@@ -6,7 +6,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -23,9 +22,9 @@ var workflowListExecutionsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workflowID := args[0]
-		accountID := viper.GetString("account-id")
-		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add` or pass --account-id")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		query := `
@@ -137,6 +136,7 @@ func formatExecutionTime(ts *string) string {
 
 func init() {
 	workflowCmd.AddCommand(workflowListExecutionsCmd)
+	workflowListExecutionsCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	workflowListExecutionsCmd.Flags().StringVar(&workflowListExecutionsStatus, "status", "", "Filter by execution status")
 	workflowListExecutionsCmd.Flags().StringVar(&workflowListExecutionsTriggerType, "trigger-type", "", "Filter by trigger type")
 	workflowListExecutionsCmd.Flags().IntVar(&workflowListExecutionsLimit, "limit", 0, "Maximum number of executions to return")

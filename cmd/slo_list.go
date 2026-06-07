@@ -6,7 +6,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -20,9 +19,9 @@ var sloListCmd = &cobra.Command{
 	Short: "List SLO configurations",
 	Long:  `List Service Level Objective configurations for the current account.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		accountID := viper.GetString("account-id")
-		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add`")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		where := map[string]any{
@@ -112,6 +111,7 @@ query ListSLOs($where: SLOConfigWhereRequest!) {
 
 func init() {
 	sloCmd.AddCommand(sloListCmd)
+	sloListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	sloListCmd.Flags().StringVar(&sloListWorkloadName, "workload", "", "Filter by workload name")
 	sloListCmd.Flags().StringVar(&sloListWorkloadNamespace, "namespace", "", "Filter by workload namespace")
 	sloListCmd.Flags().StringVar(&sloListEnabled, "enabled", "", "Filter by enabled status (true|false)")

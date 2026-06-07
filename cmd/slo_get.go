@@ -8,7 +8,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var sloGetReport bool
@@ -21,9 +20,9 @@ compliance report (burn rate, event budgets, status).`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
-		accountID := viper.GetString("account-id")
-		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add`")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		configQuery := `
@@ -181,5 +180,6 @@ query SLOReport($where: SLOReportWhereRequest!) {
 
 func init() {
 	sloCmd.AddCommand(sloGetCmd)
+	sloGetCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	sloGetCmd.Flags().BoolVar(&sloGetReport, "report", false, "Also fetch the latest compliance report")
 }

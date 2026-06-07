@@ -7,7 +7,6 @@ import (
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -27,9 +26,9 @@ var auditLogsListCmd = &cobra.Command{
 	Short: "List audit events",
 	Long:  `List audit events for the current account, ordered by most recent first.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		accountID := viper.GetString("account-id")
-		if accountID == "" {
-			return fmt.Errorf("account-id is required; set it in your profile with `nbctl configure add`")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		where := map[string]any{
@@ -152,6 +151,7 @@ query ListAuditEvents($where: AuditEventWhereRequest!, $limit: Int, $offset: Int
 
 func init() {
 	auditLogsCmd.AddCommand(auditLogsListCmd)
+	auditLogsListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	auditLogsListCmd.Flags().StringVar(&auditLogsListUsername, "username", "", "Filter by username")
 	auditLogsListCmd.Flags().StringVar(&auditLogsListEventCategory, "category", "", "Filter by event category")
 	auditLogsListCmd.Flags().StringVar(&auditLogsListEventType, "type", "", "Filter by event type")

@@ -38,6 +38,31 @@ func TestWorkflowListExecutionsCmd(t *testing.T) {
 	assert.Contains(t, output, "next-token-1")
 }
 
+func TestWorkflowListExecutionsCmd_PaginationToken(t *testing.T) {
+	mockResponse := map[string]any{
+		"workflow_list_executions": map[string]any{
+			"next_page_token": "tok-page-2",
+			"executions": []map[string]any{
+				{
+					"id":           "exec-1",
+					"workflow_id":  "wf-1",
+					"status":       "COMPLETED",
+					"trigger_type": "MANUAL",
+					"triggered_by": "u@example.com",
+					"start_time":   "2026-06-01T00:00:00Z",
+					"close_time":   "2026-06-01T00:01:00Z",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, workflowCmd, []string{"workflow", "list-executions", "wf-1"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "exec-1")
+	assert.Contains(t, output, "Next page token: tok-page-2")
+}
+
 func TestWorkflowListExecutionsCmd_JSON(t *testing.T) {
 	mockResponse := map[string]any{
 		"workflow_list_executions": map[string]any{
