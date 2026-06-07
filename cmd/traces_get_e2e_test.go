@@ -1,3 +1,5 @@
+//go:build e2e
+
 package cmd
 
 import (
@@ -6,12 +8,12 @@ import (
 	"github.com/nudgebee/nbctl/pkg/testutil"
 )
 
-func TestLogsListLogGroups_Integration(t *testing.T) {
+func TestTracesGet_Integration(t *testing.T) {
 	testutil.RequireIntegration(t)
 
-	got, err := testutil.RunCommandCaptureOutput(rootCmd, []string{"logs", "list-log-groups"})
+	got, err := testutil.RunCommandCaptureOutput(rootCmd, []string{"traces", "get", "1"})
 	if err != nil {
-		t.Fatalf("integration logsListLogGroupsCmd failed: %v", err)
+		t.Fatalf("integration tracesGetCmd failed: %v", err)
 	}
 	if got == "" {
 		t.Fatalf("expected non-empty output from integration run")
