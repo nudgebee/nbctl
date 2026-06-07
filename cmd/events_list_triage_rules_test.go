@@ -38,11 +38,8 @@ func TestEventsListTriageRulesCmd(t *testing.T) {
 }
 
 func TestEventsListTriageRulesCmd_BadEnabledFlag(t *testing.T) {
-	eventsListTriageRulesType = ""
-	eventsListTriageRulesEnabled = ""
-
-	args := []string{"events", "list-triage-rules", "--enabled", "garbage"}
+	args := []string{"events", "list-triage-rules", "--enabled=garbage"}
 	_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, eventsCmd, args)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must be true or false")
+	assert.Contains(t, err.Error(), "invalid argument")
 }

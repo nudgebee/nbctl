@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	eventsListTriageRulesType    string
-	eventsListTriageRulesEnabled string
+	eventsListTriageRulesType string
 )
 
 var eventsListTriageRulesCmd = &cobra.Command{
@@ -30,11 +29,9 @@ var eventsListTriageRulesCmd = &cobra.Command{
 		if eventsListTriageRulesType != "" {
 			vars["rule_type"] = eventsListTriageRulesType
 		}
-		if eventsListTriageRulesEnabled != "" {
-			if eventsListTriageRulesEnabled != "true" && eventsListTriageRulesEnabled != "false" {
-				return fmt.Errorf("invalid value for --enabled: %q (must be true or false)", eventsListTriageRulesEnabled)
-			}
-			vars["enabled"] = eventsListTriageRulesEnabled == "true"
+		if cmd.Flags().Changed("enabled") {
+			enabled, _ := cmd.Flags().GetBool("enabled")
+			vars["enabled"] = enabled
 		}
 
 		query := `
@@ -160,5 +157,5 @@ func init() {
 	eventsCmd.AddCommand(eventsListTriageRulesCmd)
 	eventsListTriageRulesCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	eventsListTriageRulesCmd.Flags().StringVar(&eventsListTriageRulesType, "rule-type", "", "Filter by rule type")
-	eventsListTriageRulesCmd.Flags().StringVar(&eventsListTriageRulesEnabled, "enabled", "", "Filter by enabled status (true|false)")
+	eventsListTriageRulesCmd.Flags().Bool("enabled", false, "Filter by enabled status (use --enabled=false to filter for disabled)")
 }

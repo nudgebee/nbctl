@@ -11,7 +11,6 @@ import (
 var (
 	sloListWorkloadName      string
 	sloListWorkloadNamespace string
-	sloListEnabled           string
 )
 
 var sloListCmd = &cobra.Command{
@@ -33,11 +32,9 @@ var sloListCmd = &cobra.Command{
 		if sloListWorkloadNamespace != "" {
 			where["workload_namespace"] = map[string]any{"_eq": sloListWorkloadNamespace}
 		}
-		if sloListEnabled != "" {
-			if sloListEnabled != "true" && sloListEnabled != "false" {
-				return fmt.Errorf("invalid value for --enabled: %q (must be true or false)", sloListEnabled)
-			}
-			where["enabled"] = map[string]any{"_eq": sloListEnabled == "true"}
+		if cmd.Flags().Changed("enabled") {
+			enabled, _ := cmd.Flags().GetBool("enabled")
+			where["enabled"] = map[string]any{"_eq": enabled}
 		}
 
 		query := `
@@ -114,5 +111,5 @@ func init() {
 	sloListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 	sloListCmd.Flags().StringVar(&sloListWorkloadName, "workload", "", "Filter by workload name")
 	sloListCmd.Flags().StringVar(&sloListWorkloadNamespace, "namespace", "", "Filter by workload namespace")
-	sloListCmd.Flags().StringVar(&sloListEnabled, "enabled", "", "Filter by enabled status (true|false)")
+	sloListCmd.Flags().Bool("enabled", false, "Filter by enabled status (use --enabled=false to filter for disabled)")
 }
