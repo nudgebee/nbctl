@@ -1,5 +1,10 @@
 # nbctl: Nudgebee CLI
 
+[![CI](https://github.com/nudgebee/nbctl/actions/workflows/ci.yml/badge.svg)](https://github.com/nudgebee/nbctl/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/nudgebee/nbctl)](https://github.com/nudgebee/nbctl/releases/latest)
+[![License](https://img.shields.io/github/license/nudgebee/nbctl)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/nudgebee/nbctl)](go.mod)
+
 `nbctl` is a powerful command-line interface for seamless interaction with the Nudgebee API. It allows you to manage various Nudgebee resources directly from your terminal, providing a convenient way to automate tasks, query data, and integrate with your workflows.
 
 ## Features
@@ -46,6 +51,40 @@ sudo mv nbctl-darwin-arm64 /usr/local/bin/nbctl
 ```
 
 After downloading, make sure the binary is executable and moved to a directory included in your system's `PATH` (e.g., `/usr/local/bin`).
+
+## Quickstart
+
+Once `nbctl` is on your `PATH`, get to your first command in under a minute:
+
+```bash
+# 1. Configure your credentials (interactive — you'll need an API key from your Nudgebee profile)
+nbctl configure add default
+
+# 2. Verify everything works
+nbctl accounts list
+
+# 3. Try something useful — events from the last 24 hours
+nbctl events list --limit 10
+```
+
+Useful follow-ups from here:
+
+```bash
+# Inspect a specific event (replace with an ID from the list above)
+nbctl events get <event-id>
+
+# Look at the rules that fire events
+nbctl events list-rules --limit 10
+
+# See what optimization recommendations exist for your cluster
+nbctl optimizations list --limit 10
+
+# Trigger a workflow
+nbctl workflow list
+nbctl workflow trigger <workflow-id>
+```
+
+Most commands accept `--format json` for scripting and `--help` for full flag documentation. See the [Usage](#usage) section below for the full command reference.
 
 ## Configuration
 
