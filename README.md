@@ -4,8 +4,12 @@
 
 ## Features
 
-*   **Comprehensive API Access**: Interact with Nudgebee accounts, events, logs, metrics, optimizations, and traces.
-*   **Nubi Integration**: Create and manage Nubi (Nudgebee's AI assistant) configurations.
+*   **Comprehensive API Access**: Interact with Nudgebee accounts, events, logs, metrics, traces, optimizations, security recommendations, SLOs, workflows, tickets, and audit logs.
+*   **Workflow Lifecycle**: Apply, trigger, pause/resume, cancel, and inspect workflow executions from the command line.
+*   **Events & Troubleshooting**: List events, inspect event-manager rules and triage rules, and explore deduplication chains.
+*   **Tickets**: Create tickets in external systems (Jira, ServiceNow, PagerDuty, GitHub, GitLab, Zenduty) through configured integrations.
+*   **Nubi Integration**: Create and manage Nubi (Nudgebee's AI assistant) configurations and run an interactive AI shell.
+*   **MCP Server**: Expose all `nbctl` capabilities as Model Context Protocol tools for use with Claude Desktop and other LLM clients.
 *   **Flexible Output**: View results in human-readable text or machine-parseable JSON format.
 *   **Shell Autocompletion**: Generate completion scripts for Bash, Zsh, Fish, and PowerShell for enhanced productivity.
 *   **Configurable Logging**: Control the verbosity and level of logging for debugging and monitoring.
@@ -13,7 +17,7 @@
 
 ## Installation
 
-To install `nbctl`, ensure you have Go installed (version 1.16 or higher). Then, run the following command:
+To install `nbctl`, ensure you have Go installed (version 1.25 or higher). Then, run the following command:
 
 ```bash
 go install github.com/nudgebee/nbctl@latest
@@ -337,6 +341,32 @@ Example:
 nbctl accounts list --status active --cloud-provider aws --name "production"
 ```
 
+#### `nbctl audit-logs`
+
+Query audit events recorded for the current account.
+
+##### `nbctl audit-logs list`
+
+Lists audit events, ordered by most recent first.
+
+*   **Flags**:
+    *   `--account-id <id>`: Account ID (overrides the active profile).
+    *   `--username <string>`: Filter by username (exact match).
+    *   `--category <string>`: Filter by event category (e.g. `AUTO_PILOT`).
+    *   `--type <string>`: Filter by event type.
+    *   `--action <string>`: Filter by event action (e.g. `UPDATE`).
+    *   `--status <string>`: Filter by event status (e.g. `SUCCESS`).
+    *   `--start-time <RFC3339>`: Filter events after this timestamp.
+    *   `--end-time <RFC3339>`: Filter events before this timestamp.
+    *   `--limit <int>`: Maximum number of events to return. Default is 25.
+    *   `--offset <int>`: Pagination offset. Default is 0.
+
+Example:
+
+```bash
+nbctl audit-logs list --category AUTO_PILOT --status SUCCESS --limit 50
+```
+
 #### `nbctl events`
 
 Manages Nudgebee events, allowing you to list, search, and describe them. If no subcommand is provided, it defaults to `list`.
@@ -375,6 +405,50 @@ Example:
 
 ```bash
 nbctl events list --account-id 123e4567-e89b-12d3-a456-426614174000 --status "open" --start-time "2023-10-26T00:00:00Z" --limit 50
+```
+
+##### `nbctl events list-rules`
+
+Lists event-manager rules (Prometheus / alert-manager style rules that determine which conditions raise an event).
+
+*   **Flags**:
+    *   `--account-id <id>`: Account ID (overrides the active profile).
+    *   `--name <string>`: Filter by alert name (case-insensitive partial match).
+    *   `--limit <int>`: Maximum number of rules to return. Default is 25.
+    *   `--offset <int>`: Pagination offset. Default is 0.
+
+Example:
+
+```bash
+nbctl events list-rules --name "PostgreSQL" --limit 10
+```
+
+##### `nbctl events list-triage-rules`
+
+Lists event triage rules — both system rules and user-defined rules that classify or route incoming events.
+
+*   **Flags**:
+    *   `--account-id <id>`: Account ID (overrides the active profile).
+    *   `--rule-type <string>`: Filter by rule type (e.g. `scoring`, `suppression`).
+    *   `--enabled`: Filter by enabled status. Pass `--enabled` to filter enabled rules; `--enabled=false` for disabled.
+
+Example:
+
+```bash
+nbctl events list-triage-rules --enabled --rule-type scoring
+```
+
+##### `nbctl events list-duplicates <event-id>`
+
+Shows the deduplication chain for an event — every occurrence the system has linked together via fingerprint matching. Prints a friendly message when the event has no duplicates.
+
+*   **Arguments**:
+    *   `<event-id>` (required): The unique identifier of the event.
+
+Example:
+
+```bash
+nbctl events list-duplicates 2934c445-f776-4a8b-9234-a1faefe71058
 ```
 
 #### `nbctl logs`
@@ -590,6 +664,87 @@ Example:
 nbctl security list-image-cves --severity Critical --namespace production
 ```
 
+#### `nbctl slo`
+
+Query Service Level Objective (SLO) configurations and compliance reports.
+
+##### `nbctl slo list`
+
+Lists SLO configurations for the current account.
+
+*   **Flags**:
+    *   `--account-id <id>`: Account ID (overrides the active profile).
+    *   `--workload <string>`: Filter by workload name (exact match).
+    *   `--namespace <string>`: Filter by workload namespace (exact match).
+    *   `--enabled`: Filter by enabled status. Pass `--enabled` for enabled SLOs; `--enabled=false` for disabled.
+
+Example:
+
+```bash
+nbctl slo list --namespace nudgebee-test --enabled
+```
+
+##### `nbctl slo get <id>`
+
+Fetches a single SLO configuration. Use `--report` to also fetch the latest compliance report (burn rate, event budgets, status).
+
+*   **Arguments**:
+    *   `<id>` (required): The unique identifier of the SLO config.
+*   **Flags**:
+    *   `--account-id <id>`: Account ID (overrides the active profile).
+    *   `--report`: Also fetch the latest compliance report.
+
+Example:
+
+```bash
+nbctl slo get a5f07f40-d2f0-4edf-91c7-96ddb0b25ae8 --report
+```
+
+#### `nbctl tickets`
+
+List ticket integration configurations and create tickets in external systems (Jira, ServiceNow, PagerDuty, GitHub, GitLab, Zenduty).
+
+##### `nbctl tickets list-configurations`
+
+Lists configured ticket integrations for the current account. Filters to ticket-capable integration types by default.
+
+*   **Flags**:
+    *   `--type <string>`: Filter by a single integration type (`jira`, `github`, `gitlab`, `servicenow`, `pagerduty`, `zenduty`). Validated client-side.
+    *   `--status <string>`: Filter by status (e.g. `enabled`).
+
+Example:
+
+```bash
+nbctl tickets list-configurations --type jira --status enabled
+```
+
+##### `nbctl tickets create`
+
+Creates a ticket via a configured integration.
+
+*   **Flags**:
+    *   `--integration-id <id>` (required): The integration configuration ID. Use `tickets list-configurations` to find it.
+    *   `--title <string>` (required): Ticket title.
+    *   `--project-key <string>` (required): Project / board key in the external system.
+    *   `--description <string>`: Ticket description / body.
+    *   `--ticket-type <string>`: Issue type (e.g. `Bug`, `Task`).
+    *   `--severity <string>`: Severity / priority.
+    *   `--assignee <string>`: Assignee identifier.
+    *   `--reference-id <string>`: Reference linking this ticket to a Nudgebee event.
+    *   `--source <string>`: Source system identifier.
+    *   `--additional-fields <json>`: Additional integration-specific fields as a JSON object.
+
+Example:
+
+```bash
+nbctl tickets create \
+  --integration-id 100d48eb-6503-4bf1-8474-be3441804284 \
+  --title "Pod crashloop in prod" \
+  --project-key OPS \
+  --severity high \
+  --reference-id <event-id>
+```
+
 #### `nbctl traces`
 
 Queries traces from the Nudgebee API.
@@ -648,24 +803,150 @@ Example:
 nbctl integrations list --type jira --status enabled
 ```
 
+#### `nbctl workflow`
+
+Manage workflows: list, inspect, apply (create or update from YAML), trigger executions, pause/resume, cancel in-flight executions, and inspect execution history.
+
+##### `nbctl workflow list`
+
+Lists all workflows.
+
+*   **Flags**:
+    *   `--account-id <id>`: Account ID (overrides the active profile).
+    *   `--status <string>`: Filter by workflow status (e.g. `ACTIVE`, `PAUSED`).
+    *   `--last-execution-status <string>`: Filter by last execution status.
+    *   `--type <string>`: Filter by workflow type.
+
+Example:
+
+```bash
+nbctl workflow list --status ACTIVE
+```
+
+##### `nbctl workflow get <id>`
+
+Fetches workflow details including the full definition.
+
+Example:
+
+```bash
+nbctl workflow get 6e8e1a30-a306-4635-90c5-ac16611f3677
+```
+
+##### `nbctl workflow apply <file>`
+
+Creates or updates a workflow from a YAML file (upsert).
+
+Example:
+
+```bash
+nbctl workflow apply ./my-workflow.yaml
+```
+
+##### `nbctl workflow validate <file>`
+
+Server-side validation of a workflow YAML without creating or updating anything.
+
+Example:
+
+```bash
+nbctl workflow validate ./my-workflow.yaml
+```
+
+##### `nbctl workflow delete <id>`
+
+Deletes a workflow by ID.
+
+Example:
+
+```bash
+nbctl workflow delete 6e8e1a30-a306-4635-90c5-ac16611f3677
+```
+
+##### `nbctl workflow trigger <id>`
+
+Triggers a workflow execution. Returns the new execution ID.
+
+*   **Flags**:
+    *   `-i, --input <key=value>`: Pass workflow inputs. Repeatable.
+
+Example:
+
+```bash
+nbctl workflow trigger 6e8e1a30-a306-4635-90c5-ac16611f3677 -i name=alice -i count=3
+```
+
+##### `nbctl workflow pause <id>` / `nbctl workflow resume <id>`
+
+Pause an active workflow (stops accepting new triggers) or resume a paused one.
+
+Example:
+
+```bash
+nbctl workflow pause 6e8e1a30-a306-4635-90c5-ac16611f3677
+nbctl workflow resume 6e8e1a30-a306-4635-90c5-ac16611f3677
+```
+
+##### `nbctl workflow list-executions <workflow-id>`
+
+Lists execution history for a specific workflow with optional filters and pagination.
+
+*   **Flags**:
+    *   `--account-id <id>`: Account ID (overrides the active profile).
+    *   `--status <string>`: Filter by execution status (e.g. `COMPLETED`, `FAILED`).
+    *   `--trigger-type <string>`: Filter by trigger type.
+    *   `--limit <int>`: Maximum number of executions to return.
+    *   `--page-token <string>`: Pagination token from a previous response.
+
+Example:
+
+```bash
+nbctl workflow list-executions 6e8e1a30-a306-4635-90c5-ac16611f3677 --status COMPLETED --limit 10
+```
+
+##### `nbctl workflow get-execution <workflow-id> <execution-id>`
+
+Fetches a single workflow execution including its tasks, inputs, outputs, and any errors.
+
+Example:
+
+```bash
+nbctl workflow get-execution 6e8e1a30-a306-4635-90c5-ac16611f3677 019e8cde-38f4-75e2-93cb-de8278183926
+```
+
+##### `nbctl workflow cancel-execution <workflow-id> <execution-id>`
+
+Cancels a specific in-progress execution.
+
+Example:
+
+```bash
+nbctl workflow cancel-execution 6e8e1a30-a306-4635-90c5-ac16611f3677 019e8cde-38f4-75e2-93cb-de8278183926
+```
+
 ## Testing
 
-Unit tests use the helpers in `pkg/testutil` to mock the API and avoid network calls. Integration tests are gated and will only run when explicitly enabled.
+Unit tests use the helpers in `pkg/testutil` to mock the API and avoid network calls. Integration (end-to-end) tests live behind a build tag and are only compiled when explicitly requested.
 
 - Run unit tests:
 
 ```bash
+make test
+# or
 go test ./...
 ```
 
-- Run integration tests (manual):
+- Run end-to-end tests against a live Nudgebee environment:
 
 ```bash
-export NUDGEBEE_INTEGRATION=1
 export NUDGEBEE_ENDPOINT=https://app.nudgebee.com
 export NUDGEBEE_API_KEY=<your_api_key>
-go test ./... -run Integration
+make test-e2e
+# or
+NUDGEBEE_INTEGRATION=1 go test -tags=e2e ./...
 ```
+
+Individual e2e tests will `t.Skip` themselves if `NUDGEBEE_ENDPOINT` or `NUDGEBEE_API_KEY` is unset, so they're safe to run without env vars (they just won't actually exercise anything).
 
 ## Contributing
 
