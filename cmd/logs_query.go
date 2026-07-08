@@ -57,8 +57,6 @@ var logsQueryCmd = &cobra.Command{
 						message
 						labels
 					}
-					query
-					provider
 				}
 			}
 		`)
@@ -81,8 +79,6 @@ var logsQueryCmd = &cobra.Command{
 					Message   string          `json:"message"`
 					Labels    json.RawMessage `json:"labels"`
 				} `json:"logs"`
-				Query    string `json:"query"`
-				Provider string `json:"provider"`
 			} `json:"logs_list"`
 		}
 

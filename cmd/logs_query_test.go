@@ -17,8 +17,6 @@ func TestLogsQuery_Unit(t *testing.T) {
 					"labels":    "{}",
 				},
 			},
-			"query":    "test",
-			"provider": "nudgebee",
 		},
 	}
 
