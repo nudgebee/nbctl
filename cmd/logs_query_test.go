@@ -8,13 +8,17 @@ import (
 
 func TestLogsQuery_Unit(t *testing.T) {
 	mockData := map[string]any{
-		"logs_list": []map[string]any{
-			{
-				"timestamp": "2025-10-15T10:00:00Z",
-				"severity":  "info",
-				"message":   "Log message 1",
-				"labels":    "{}",
+		"logs_list": map[string]any{
+			"logs": []map[string]any{
+				{
+					"timestamp": "2025-10-15T10:00:00Z",
+					"severity":  "info",
+					"message":   "Log message 1",
+					"labels":    "{}",
+				},
 			},
+			"query":    "test",
+			"provider": "nudgebee",
 		},
 	}
 

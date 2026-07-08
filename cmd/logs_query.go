@@ -51,10 +51,14 @@ var logsQueryCmd = &cobra.Command{
 		req := client.NewRequest(`
 			query FetchLogs($request: FetchLogRequest!) {
 				logs_list(request: $request) {
-					timestamp
-					severity
-					message
-					labels
+					logs {
+						timestamp
+						severity
+						message
+						labels
+					}
+					query
+					provider
 				}
 			}
 		`)
@@ -70,11 +74,15 @@ var logsQueryCmd = &cobra.Command{
 		req.Var("request", requestVars)
 
 		var respData struct {
-			LogsList []struct {
-				Timestamp string          `json:"timestamp"`
-				Severity  string          `json:"severity"`
-				Message   string          `json:"message"`
-				Labels    json.RawMessage `json:"labels"`
+			LogsList struct {
+				Logs []struct {
+					Timestamp string          `json:"timestamp"`
+					Severity  string          `json:"severity"`
+					Message   string          `json:"message"`
+					Labels    json.RawMessage `json:"labels"`
+				} `json:"logs"`
+				Query    string `json:"query"`
+				Provider string `json:"provider"`
 			} `json:"logs_list"`
 		}
 
@@ -82,13 +90,13 @@ var logsQueryCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.LogsList) == 0 {
+		if len(respData.LogsList.Logs) == 0 {
 			fmt.Println("No logs found.")
 			return nil
 		}
 
 		table := format.TabularData{
-			Data: respData.LogsList,
+			Data: respData.LogsList.Logs,
 			Fields: []format.TableField{
 				{Header: "Timestamp", Field: "Timestamp"},
 				{Header: "Severity", Field: "Severity"},
