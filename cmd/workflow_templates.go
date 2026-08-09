@@ -123,7 +123,7 @@ var workflowTemplatesGetCmd = &cobra.Command{
 		})
 
 		var respData struct {
-			WorkflowGetTemplate struct {
+			WorkflowGetTemplate *struct {
 				ID          string `json:"id"`
 				Name        string `json:"name"`
 				Description string `json:"description"`
@@ -137,7 +137,7 @@ var workflowTemplatesGetCmd = &cobra.Command{
 			return err
 		}
 
-		if respData.WorkflowGetTemplate.ID == "" {
+		if respData.WorkflowGetTemplate == nil || respData.WorkflowGetTemplate.ID == "" {
 			return fmt.Errorf("workflow template '%s' not found", templateID)
 		}
 
@@ -151,9 +151,9 @@ func init() {
 	workflowTemplatesCmd.AddCommand(workflowTemplatesListCmd)
 	workflowTemplatesCmd.AddCommand(workflowTemplatesGetCmd)
 
-	workflowTemplatesListCmd.Flags().String("type", "system", "Template type (system or custom)")
+	workflowTemplatesListCmd.Flags().String("type", "system", "Template type (system, custom, or all)")
 	workflowTemplatesListCmd.Flags().String("category", "", "Filter templates by category")
 	workflowTemplatesListCmd.Flags().Int("limit", 50, "Maximum number of templates to return")
 
-	workflowTemplatesGetCmd.Flags().String("type", "", "Optional template type filter (system or custom)")
+	workflowTemplatesGetCmd.Flags().String("type", "", "Optional template type filter (system, custom, or all)")
 }
