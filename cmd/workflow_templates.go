@@ -127,14 +127,14 @@ var workflowTemplatesGetCmd = &cobra.Command{
 		})
 
 		var respData struct {
-			WorkflowGetTemplate workflowTemplate `json:"workflow_get_template"`
+			WorkflowGetTemplate *workflowTemplate `json:"workflow_get_template"`
 		}
 
 		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
-		if respData.WorkflowGetTemplate.ID == "" {
+		if respData.WorkflowGetTemplate == nil || respData.WorkflowGetTemplate.ID == "" {
 			return fmt.Errorf("workflow template '%s' not found", templateID)
 		}
 
