@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
@@ -18,6 +19,7 @@ var workflowTemplatesListCmd = &cobra.Command{
 	Short: "List pre-built workflow templates",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		typeFlag, _ := cmd.Flags().GetString("type")
+		typeFlag = strings.ToLower(typeFlag)
 		category, _ := cmd.Flags().GetString("category")
 		limit, _ := cmd.Flags().GetInt("limit")
 
@@ -93,6 +95,7 @@ var workflowTemplatesGetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		templateID := args[0]
 		typeFlag, _ := cmd.Flags().GetString("type")
+		typeFlag = strings.ToLower(typeFlag)
 
 		if typeFlag != "" && typeFlag != "system" && typeFlag != "custom" && typeFlag != "all" {
 			return fmt.Errorf("invalid template type '%s': must be 'system', 'custom', or 'all'", typeFlag)
