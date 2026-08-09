@@ -32,4 +32,3 @@ func TestIntegrationsList_Unit(t *testing.T) {
 		t.Fatalf("expected output to contain 'jira-prod', got %s", got)
 	}
 }
-

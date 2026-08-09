@@ -41,4 +41,3 @@ func TestAccountsList_Unit(t *testing.T) {
 		}
 	}
 }
-
