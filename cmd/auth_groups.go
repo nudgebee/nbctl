@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"strings"
+
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -49,12 +51,37 @@ var authGroupsListCmd = &cobra.Command{
 			return err
 		}
 
+		type groupRow struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Roles       string `json:"roles"`
+			UserCount   int    `json:"user_count"`
+			CreatedAt   string `json:"created_at"`
+		}
+		var rows []groupRow
+		for _, r := range respData.UsergroupsList.Rows {
+			rolesStr := "-"
+			if len(r.Roles) > 0 {
+				rolesStr = strings.Join(r.Roles, ", ")
+			}
+			rows = append(rows, groupRow{
+				ID:          r.ID,
+				Name:        r.Name,
+				Description: r.Description,
+				Roles:       rolesStr,
+				UserCount:   r.UserCount,
+				CreatedAt:   r.CreatedAt,
+			})
+		}
+
 		table := format.TabularData{
-			Data: respData.UsergroupsList.Rows,
+			Data: rows,
 			Fields: []format.TableField{
 				{Header: "ID", Field: "ID"},
 				{Header: "Group Name", Field: "Name"},
 				{Header: "Description", Field: "Description"},
+				{Header: "Assigned Roles", Field: "Roles"},
 				{Header: "Users", Field: "UserCount"},
 				{Header: "Created At", Field: "CreatedAt"},
 			},

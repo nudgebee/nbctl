@@ -42,7 +42,7 @@ var optimizationsSummaryCmd = &cobra.Command{
 			// Fallback to recommendations_list grouping if v2 grouping table is unavailable
 			reqFallback := client.NewRequest(`
 				query ListRecommendations {
-					recommendations: recommendations_list(limit: 100) {
+					recommendations: recommendations_list(limit: 10000) {
 						rows {
 							category
 							status

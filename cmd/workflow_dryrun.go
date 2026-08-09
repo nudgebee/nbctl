@@ -55,6 +55,10 @@ var workflowDryRunCmd = &cobra.Command{
 
 		format.GetFormat().Print(respData.WorkflowDryrunExecute)
 
+		if !respData.WorkflowDryrunExecute.Valid {
+			return fmt.Errorf("workflow dry-run failed for %s (Status: %s)", filePath, respData.WorkflowDryrunExecute.Status)
+		}
+
 		return nil
 	},
 }
