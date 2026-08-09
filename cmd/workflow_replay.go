@@ -12,8 +12,6 @@ var workflowReplayCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		executionID := args[0]
-		graphqlClient := client.NewClient()
-
 		req := client.NewRequest(`
 			mutation ReplayWorkflowExecution($request: WorkflowRetriggerRequest!) {
 				workflow_replay_execution(request: $request) {
@@ -35,7 +33,7 @@ var workflowReplayCmd = &cobra.Command{
 			} `json:"workflow_replay_execution"`
 		}
 
-		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
+		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

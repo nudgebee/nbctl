@@ -27,8 +27,6 @@ var workflowTemplatesListCmd = &cobra.Command{
 			return fmt.Errorf("invalid template type '%s': must be 'system', 'custom', or 'all'", typeFlag)
 		}
 
-		graphqlClient := client.NewClient()
-
 		req := client.NewRequest(`
 			query ListWorkflowTemplates($request: WorkflowListTemplateRequest!) {
 				workflow_list_template(request: $request) {
@@ -68,7 +66,7 @@ var workflowTemplatesListCmd = &cobra.Command{
 			} `json:"workflow_list_template"`
 		}
 
-		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
+		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
@@ -106,8 +104,6 @@ var workflowTemplatesGetCmd = &cobra.Command{
 			typeVal = "all"
 		}
 
-		graphqlClient := client.NewClient()
-
 		req := client.NewRequest(`
 			query GetWorkflowTemplate($request: WorkflowGetTemplateRequest!) {
 				workflow_get_template(request: $request) {
@@ -136,7 +132,7 @@ var workflowTemplatesGetCmd = &cobra.Command{
 			} `json:"workflow_get_template"`
 		}
 
-		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
+		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

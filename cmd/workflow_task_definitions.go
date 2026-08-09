@@ -15,8 +15,6 @@ var workflowTaskDefinitionsCmd = &cobra.Command{
 		nameFilter, _ := cmd.Flags().GetString("name")
 		limit, _ := cmd.Flags().GetInt("limit")
 
-		graphqlClient := client.NewClient()
-
 		req := client.NewRequest(`
 			query ListWorkflowTaskDefinitions($params: WorkflowTaskDefinitionListRequest!) {
 				workflow_list_taskdefinitions(params: $params) {
@@ -47,7 +45,7 @@ var workflowTaskDefinitionsCmd = &cobra.Command{
 			} `json:"workflow_list_taskdefinitions"`
 		}
 
-		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
+		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

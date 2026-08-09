@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -13,6 +16,10 @@ var workflowApproveCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		executionID := args[0]
 		taskID, _ := cmd.Flags().GetString("task")
+		if strings.TrimSpace(taskID) == "" {
+			return fmt.Errorf("task flag is required and cannot be empty")
+		}
+
 		reject, _ := cmd.Flags().GetBool("reject")
 		comments, _ := cmd.Flags().GetString("comments")
 
@@ -20,8 +27,6 @@ var workflowApproveCmd = &cobra.Command{
 		if reject {
 			status = "rejected"
 		}
-
-		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
 			mutation CompleteWorkflowApproval($request: WorkflowCompleteApprovalRequest!) {
@@ -45,7 +50,7 @@ var workflowApproveCmd = &cobra.Command{
 			} `json:"workflow_complete_approval"`
 		}
 
-		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
+		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
