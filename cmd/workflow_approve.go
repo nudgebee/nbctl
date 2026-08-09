@@ -1,0 +1,63 @@
+package cmd
+
+import (
+	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
+	"github.com/spf13/cobra"
+)
+
+var workflowApproveCmd = &cobra.Command{
+	Use:   "approve <execution-id>",
+	Short: "Complete a human approval gate for a pending workflow execution",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		executionID := args[0]
+		taskID, _ := cmd.Flags().GetString("task")
+		reject, _ := cmd.Flags().GetBool("reject")
+		comments, _ := cmd.Flags().GetString("comments")
+
+		status := "approved"
+		if reject {
+			status = "rejected"
+		}
+
+		graphqlClient := client.NewClient()
+
+		req := client.NewRequest(`
+			mutation CompleteWorkflowApproval($request: WorkflowCompleteApprovalRequest!) {
+				workflow_complete_approval(request: $request) {
+					status
+					message
+				}
+			}
+		`)
+		req.Var("request", map[string]any{
+			"execution_id": executionID,
+			"task_id":      taskID,
+			"status":       status,
+			"comments":     comments,
+		})
+
+		var respData struct {
+			WorkflowCompleteApproval struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			} `json:"workflow_complete_approval"`
+		}
+
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
+			return err
+		}
+
+		format.GetFormat().Print(respData.WorkflowCompleteApproval)
+		return nil
+	},
+}
+
+func init() {
+	workflowCmd.AddCommand(workflowApproveCmd)
+	workflowApproveCmd.Flags().String("task", "", "Task ID waiting for approval (required)")
+	workflowApproveCmd.Flags().Bool("reject", false, "Reject the approval step instead of approving")
+	workflowApproveCmd.Flags().String("comments", "", "Optional comments for the approval decision")
+	_ = workflowApproveCmd.MarkFlagRequired("task")
+}
