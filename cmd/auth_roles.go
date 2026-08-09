@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -53,7 +55,7 @@ var authRolesListCmd = &cobra.Command{
 				}
 			`)
 			if errFallback := graphqlClient.Run(cmd.Context(), reqFallback, &respData); errFallback != nil {
-				return err
+				return fmt.Errorf("primary query failed (%v), fallback query failed: %w", err, errFallback)
 			}
 		}
 
