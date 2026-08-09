@@ -94,8 +94,13 @@ var workflowTemplatesGetCmd = &cobra.Command{
 		templateID := args[0]
 		typeFlag, _ := cmd.Flags().GetString("type")
 
-		if typeFlag != "system" && typeFlag != "custom" && typeFlag != "all" {
+		if typeFlag != "" && typeFlag != "system" && typeFlag != "custom" && typeFlag != "all" {
 			return fmt.Errorf("invalid template type '%s': must be 'system', 'custom', or 'all'", typeFlag)
+		}
+
+		typeVal := typeFlag
+		if typeVal == "" {
+			typeVal = "all"
 		}
 
 		graphqlClient := client.NewClient()
@@ -113,7 +118,7 @@ var workflowTemplatesGetCmd = &cobra.Command{
 			}
 		`)
 		req.Var("request", map[string]any{
-			"type": typeFlag,
+			"type": typeVal,
 			"id":   templateID,
 		})
 
@@ -150,5 +155,5 @@ func init() {
 	workflowTemplatesListCmd.Flags().String("category", "", "Filter templates by category")
 	workflowTemplatesListCmd.Flags().Int("limit", 50, "Maximum number of templates to return")
 
-	workflowTemplatesGetCmd.Flags().String("type", "system", "Template type (system or custom)")
+	workflowTemplatesGetCmd.Flags().String("type", "", "Optional template type filter (system or custom)")
 }
