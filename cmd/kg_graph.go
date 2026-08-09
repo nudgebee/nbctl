@@ -45,7 +45,7 @@ var kgGraphCmd = &cobra.Command{
 		}
 
 		if len(respData.KgGraph) == 0 {
-			fmt.Printf("No graph relationships found for node '%s'\n", nodeID)
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "No graph relationships found for node '"+nodeID+"'")
 			return nil
 		}
 

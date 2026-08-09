@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +15,14 @@ var authAssignRoleCmd = &cobra.Command{
 		accountID, _ := cmd.Flags().GetString("account-id")
 
 		graphqlClient := client.NewClient()
+
+		type assignRoleResult struct {
+			GroupID   string `json:"group_id"`
+			Role      string `json:"role"`
+			AccountID string `json:"account_id,omitempty"`
+			Status    string `json:"status"`
+			Message   string `json:"message,omitempty"`
+		}
 
 		if accountID != "" {
 			// Account-scoped role assignment
@@ -42,7 +49,13 @@ var authAssignRoleCmd = &cobra.Command{
 			if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 				return err
 			}
-			fmt.Printf("Assigned role '%s' to group '%s' for account '%s' (Status: %s)\n", role, groupID, accountID, respData.UserrolesUpsertAccountGroup.Status)
+			format.GetFormat().Print(assignRoleResult{
+				GroupID:   groupID,
+				Role:      role,
+				AccountID: accountID,
+				Status:    respData.UserrolesUpsertAccountGroup.Status,
+				Message:   respData.UserrolesUpsertAccountGroup.Message,
+			})
 		} else {
 			// Tenant-level role assignment
 			req := client.NewRequest(`
@@ -67,7 +80,12 @@ var authAssignRoleCmd = &cobra.Command{
 			if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 				return err
 			}
-			fmt.Printf("Assigned role '%s' to group '%s' at tenant level (Status: %s)\n", role, groupID, respData.UserrolesUpsertGroup.Status)
+			format.GetFormat().Print(assignRoleResult{
+				GroupID: groupID,
+				Role:    role,
+				Status:  respData.UserrolesUpsertGroup.Status,
+				Message: respData.UserrolesUpsertGroup.Message,
+			})
 		}
 
 		return nil

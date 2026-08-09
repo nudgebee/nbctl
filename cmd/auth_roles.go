@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -55,7 +54,7 @@ var authRolesListCmd = &cobra.Command{
 					}
 				}
 			`)
-			if errFallback := graphqlClient.Run(context.Background(), reqFallback, &respData); errFallback != nil {
+			if errFallback := graphqlClient.Run(cmd.Context(), reqFallback, &respData); errFallback != nil {
 				return err
 			}
 		}
