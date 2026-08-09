@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
@@ -92,6 +93,13 @@ var optimizationsSummaryCmd = &cobra.Command{
 					TotalSavings: savings[k],
 				})
 			}
+
+			sort.Slice(rows, func(i, j int) bool {
+				if rows[i].Category != rows[j].Category {
+					return rows[i].Category < rows[j].Category
+				}
+				return rows[i].Status < rows[j].Status
+			})
 
 			table := format.TabularData{
 				Data: rows,

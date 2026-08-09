@@ -139,15 +139,7 @@ var authRolesCreateCmd = &cobra.Command{
 			return err
 		}
 
-		format.GetFormat().Print(struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Status string `json:"status"`
-		}{
-			ID:     respData.CustomrolesCreate.ID,
-			Name:   roleName,
-			Status: respData.CustomrolesCreate.Status,
-		})
+		format.GetFormat().Print(respData.CustomrolesCreate)
 		return nil
 	},
 }

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"sort"
+
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -68,6 +70,13 @@ var accountsSummaryCmd = &cobra.Command{
 				})
 			}
 		}
+
+		sort.Slice(summaryRows, func(i, j int) bool {
+			if summaryRows[i].CloudProvider != summaryRows[j].CloudProvider {
+				return summaryRows[i].CloudProvider < summaryRows[j].CloudProvider
+			}
+			return summaryRows[i].Status < summaryRows[j].Status
+		})
 
 		table := format.TabularData{
 			Data: summaryRows,
