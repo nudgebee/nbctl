@@ -73,7 +73,15 @@ var optimizationsSummaryCmd = &cobra.Command{
 			savings := make(map[key]float64)
 
 			for _, r := range fallbackRespData.Recommendations.Rows {
-				k := key{Category: r.Category, Status: r.Status}
+				cat := r.Category
+				if cat == "" {
+					cat = "unknown"
+				}
+				st := r.Status
+				if st == "" {
+					st = "unknown"
+				}
+				k := key{Category: cat, Status: st}
 				counts[k]++
 				savings[k] += r.EstimatedMonthlySavings
 			}
