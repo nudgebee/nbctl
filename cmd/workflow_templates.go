@@ -21,6 +21,10 @@ var workflowTemplatesListCmd = &cobra.Command{
 		category, _ := cmd.Flags().GetString("category")
 		limit, _ := cmd.Flags().GetInt("limit")
 
+		if typeFlag != "system" && typeFlag != "custom" && typeFlag != "all" {
+			return fmt.Errorf("invalid template type '%s': must be 'system', 'custom', or 'all'", typeFlag)
+		}
+
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
@@ -89,6 +93,11 @@ var workflowTemplatesGetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		templateID := args[0]
 		typeFlag, _ := cmd.Flags().GetString("type")
+
+		if typeFlag != "system" && typeFlag != "custom" && typeFlag != "all" {
+			return fmt.Errorf("invalid template type '%s': must be 'system', 'custom', or 'all'", typeFlag)
+		}
+
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`

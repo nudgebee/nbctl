@@ -56,7 +56,7 @@ var workflowTaskDefinitionsCmd = &cobra.Command{
 			Description string `json:"description"`
 			Aliases     string `json:"aliases"`
 		}
-		var rows []taskRow
+		rows := make([]taskRow, 0, len(respData.WorkflowListTaskdefinitions.Tasks))
 		for _, t := range respData.WorkflowListTaskdefinitions.Tasks {
 			aliasesStr := "-"
 			if len(t.Aliases) > 0 {
