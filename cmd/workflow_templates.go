@@ -26,10 +26,12 @@ var workflowTemplatesCmd = &cobra.Command{
 var workflowTemplatesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List pre-built workflow templates",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		typeFlag, _ := cmd.Flags().GetString("type")
 		typeFlag = strings.ToLower(typeFlag)
 		category, _ := cmd.Flags().GetString("category")
+		category = strings.TrimSpace(category)
 		limit, _ := cmd.Flags().GetInt("limit")
 
 		if typeFlag != "system" && typeFlag != "custom" && typeFlag != "all" {

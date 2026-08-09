@@ -11,8 +11,10 @@ import (
 var workflowTaskDefinitionsCmd = &cobra.Command{
 	Use:   "task-definitions",
 	Short: "List supported workflow task definitions and action schemas",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		nameFilter, _ := cmd.Flags().GetString("name")
+		nameFilter = strings.TrimSpace(nameFilter)
 		limit, _ := cmd.Flags().GetInt("limit")
 
 		req := client.NewRequest(`

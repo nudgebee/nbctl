@@ -19,12 +19,14 @@ var workflowApproveCmd = &cobra.Command{
 			return fmt.Errorf("execution-id cannot be empty")
 		}
 		taskID, _ := cmd.Flags().GetString("task")
-		if strings.TrimSpace(taskID) == "" {
+		taskID = strings.TrimSpace(taskID)
+		if taskID == "" {
 			return fmt.Errorf("task flag is required and cannot be empty")
 		}
 
 		reject, _ := cmd.Flags().GetBool("reject")
 		comments, _ := cmd.Flags().GetString("comments")
+		comments = strings.TrimSpace(comments)
 
 		status := "approved"
 		if reject {
