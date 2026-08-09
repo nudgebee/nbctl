@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 )
 
@@ -52,15 +53,7 @@ var workflowDryRunCmd = &cobra.Command{
 			return err
 		}
 
-		if respData.WorkflowDryrunExecute.Valid {
-			fmt.Printf("Workflow dry-run PASSED for %s (Status: %s)\n", filePath, respData.WorkflowDryrunExecute.Status)
-		} else {
-			fmt.Printf("Workflow dry-run FAILED for %s (Status: %s)\n", filePath, respData.WorkflowDryrunExecute.Status)
-		}
-
-		for i, t := range respData.WorkflowDryrunExecute.SimulatedTasks {
-			fmt.Printf("  Step %d: %s -> %s (%s)\n", i+1, t.TaskName, t.Status, t.Message)
-		}
+		format.GetFormat().Print(respData.WorkflowDryrunExecute)
 
 		return nil
 	},

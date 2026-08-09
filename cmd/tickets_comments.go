@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -97,7 +95,7 @@ var ticketsCommentsAddCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Comment added to ticket %s successfully (Comment ID: %s)\n", ticketID, respData.TicketAddComment.CommentID)
+		format.GetFormat().Print(respData.TicketAddComment)
 		return nil
 	},
 }

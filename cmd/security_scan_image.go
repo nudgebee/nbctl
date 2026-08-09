@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 )
 
@@ -48,12 +47,7 @@ var securityScanImageCmd = &cobra.Command{
 			return err
 		}
 
-		if respData.SecurityScanImage.ScanID != "" {
-			fmt.Printf("Scan triggered successfully for %s (Scan ID: %s, Status: %s)\n", imageRef, respData.SecurityScanImage.ScanID, respData.SecurityScanImage.Status)
-		} else {
-			fmt.Printf("Scan request submitted for %s (Status: %s)\n", imageRef, respData.SecurityScanImage.Status)
-		}
-
+		format.GetFormat().Print(respData.SecurityScanImage)
 		return nil
 	},
 }

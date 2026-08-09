@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +48,7 @@ var sloCreateCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("SLO '%s' created successfully (ID: %s)\n", name, respData.SloConfigCreate.ID)
+		format.GetFormat().Print(respData.SloConfigCreate)
 		return nil
 	},
 }

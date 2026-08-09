@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -104,7 +102,7 @@ var kgDependenciesResolveCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Manual dependency resolved successfully: %s -> %s (Status: %s)\n", source, target, respData.KgResolveManualDependency.Status)
+		format.GetFormat().Print(respData.KgResolveManualDependency)
 		return nil
 	},
 }

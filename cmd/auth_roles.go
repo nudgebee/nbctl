@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -139,7 +137,15 @@ var authRolesCreateCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Custom role '%s' created successfully (ID: %s)\n", roleName, respData.CustomrolesCreate.ID)
+		format.GetFormat().Print(struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		}{
+			ID:     respData.CustomrolesCreate.ID,
+			Name:   roleName,
+			Status: respData.CustomrolesCreate.Status,
+		})
 		return nil
 	},
 }
@@ -174,7 +180,15 @@ var authRolesDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Custom role ID '%s' deleted successfully\n", roleID)
+		format.GetFormat().Print(struct {
+			RoleID  string `json:"role_id"`
+			Status  string `json:"status"`
+			Message string `json:"message,omitempty"`
+		}{
+			RoleID:  roleID,
+			Status:  respData.CustomrolesDelete.Status,
+			Message: respData.CustomrolesDelete.Message,
+		})
 		return nil
 	},
 }

@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -103,7 +101,7 @@ var authGroupsCreateCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("User group '%s' created successfully (ID: %s)\n", groupName, respData.UsergroupCreate.ID)
+		format.GetFormat().Print(respData.UsergroupCreate)
 		return nil
 	},
 }
