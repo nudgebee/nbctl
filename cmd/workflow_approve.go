@@ -14,7 +14,10 @@ var workflowApproveCmd = &cobra.Command{
 	Short: "Complete a human approval gate for a pending workflow execution",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		executionID := args[0]
+		executionID := strings.TrimSpace(args[0])
+		if executionID == "" {
+			return fmt.Errorf("execution-id cannot be empty")
+		}
 		taskID, _ := cmd.Flags().GetString("task")
 		if strings.TrimSpace(taskID) == "" {
 			return fmt.Errorf("task flag is required and cannot be empty")

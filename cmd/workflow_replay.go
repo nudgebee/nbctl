@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -11,7 +14,10 @@ var workflowReplayCmd = &cobra.Command{
 	Short: "Replay a previous or failed workflow execution",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		executionID := args[0]
+		executionID := strings.TrimSpace(args[0])
+		if executionID == "" {
+			return fmt.Errorf("execution-id cannot be empty")
+		}
 		req := client.NewRequest(`
 			mutation ReplayWorkflowExecution($request: WorkflowRetriggerRequest!) {
 				workflow_replay_execution(request: $request) {

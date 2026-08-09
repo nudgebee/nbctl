@@ -93,7 +93,10 @@ var workflowTemplatesGetCmd = &cobra.Command{
 	Short: "Get details for a specific workflow template",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		templateID := args[0]
+		templateID := strings.TrimSpace(args[0])
+		if templateID == "" {
+			return fmt.Errorf("template-id cannot be empty")
+		}
 		typeFlag, _ := cmd.Flags().GetString("type")
 		typeFlag = strings.ToLower(typeFlag)
 
