@@ -46,6 +46,7 @@ var authRolesListCmd = &cobra.Command{
 		}
 
 		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Warning: failed to fetch custom roles, falling back to built-in roles:", err)
 			reqFallback := client.NewRequest(`
 				query ListBuiltInRoles {
 					roles_list {

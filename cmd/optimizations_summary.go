@@ -41,6 +41,7 @@ var optimizationsSummaryCmd = &cobra.Command{
 
 		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			// Fallback to recommendations_list grouping if v2 grouping table is unavailable
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Warning: failed to query recommendation_groupings_v2, falling back to recommendations_list:", err)
 			reqFallback := client.NewRequest(`
 				query ListRecommendations {
 					recommendations: recommendations_list(limit: 10000) {
