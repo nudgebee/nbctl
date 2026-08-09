@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -42,11 +40,6 @@ var kgGraphCmd = &cobra.Command{
 
 		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
-		}
-
-		if len(respData.KgGraph) == 0 {
-			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "No graph relationships found for node '"+nodeID+"'")
-			return nil
 		}
 
 		table := format.TabularData{

@@ -29,7 +29,9 @@ var kgNodesCmd = &cobra.Command{
 				}
 			}
 		`)
-		req.Var("query", query)
+		if query != "" {
+			req.Var("query", query)
+		}
 		if nodeType != "" {
 			req.Var("nodeType", nodeType)
 		}
