@@ -140,7 +140,7 @@ var workflowTemplatesGetCmd = &cobra.Command{
 			return fmt.Errorf("workflow template '%s' not found", templateID)
 		}
 
-		format.GetFormat().Print(respData.WorkflowGetTemplate)
+		format.GetFormat().Print(*respData.WorkflowGetTemplate)
 		return nil
 	},
 }
