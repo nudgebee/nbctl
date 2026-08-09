@@ -46,7 +46,7 @@ var authRolesListCmd = &cobra.Command{
 			} `json:"customroles_list"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			reqFallback := client.NewRequest(`
 				query ListBuiltInRoles {
 					roles_list {
@@ -136,7 +136,7 @@ var authRolesCreateCmd = &cobra.Command{
 			} `json:"customroles_create"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
@@ -171,7 +171,7 @@ var authRolesDeleteCmd = &cobra.Command{
 			} `json:"customroles_delete"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -49,7 +48,7 @@ var workflowDryRunCmd = &cobra.Command{
 			} `json:"workflow_dryrun_execute"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

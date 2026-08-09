@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -48,7 +47,7 @@ var authGroupsListCmd = &cobra.Command{
 			} `json:"usergroups_list"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
@@ -100,7 +99,7 @@ var authGroupsCreateCmd = &cobra.Command{
 			} `json:"usergroup_create"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

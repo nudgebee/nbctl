@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -17,10 +16,6 @@ var sloCreateCmd = &cobra.Command{
 		target, _ := cmd.Flags().GetFloat64("target")
 		window, _ := cmd.Flags().GetString("window")
 		service, _ := cmd.Flags().GetString("service")
-
-		if service == "" {
-			return fmt.Errorf("--service flag is required")
-		}
 
 		graphqlClient := client.NewClient()
 
@@ -50,7 +45,7 @@ var sloCreateCmd = &cobra.Command{
 			} `json:"slo_config_create"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
@@ -64,4 +59,5 @@ func init() {
 	sloCreateCmd.Flags().Float64("target", 99.9, "SLO target percentage (e.g. 99.9)")
 	sloCreateCmd.Flags().String("window", "30d", "Time window (e.g. 7d, 30d)")
 	sloCreateCmd.Flags().String("service", "", "Target service name (required)")
+	_ = sloCreateCmd.MarkFlagRequired("service")
 }

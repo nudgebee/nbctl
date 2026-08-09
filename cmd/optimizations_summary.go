@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"context"
+	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
@@ -38,7 +38,7 @@ var optimizationsSummaryCmd = &cobra.Command{
 			} `json:"recommendation_groupings_v2"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			// Fallback to recommendations_list grouping if v2 grouping table is unavailable
 			reqFallback := client.NewRequest(`
 				query ListRecommendations {
@@ -60,8 +60,8 @@ var optimizationsSummaryCmd = &cobra.Command{
 					} `json:"rows"`
 				} `json:"recommendations"`
 			}
-			if errFallback := graphqlClient.Run(context.Background(), reqFallback, &fallbackRespData); errFallback != nil {
-				return err
+			if errFallback := graphqlClient.Run(cmd.Context(), reqFallback, &fallbackRespData); errFallback != nil {
+				return fmt.Errorf("primary query failed (%v), fallback query failed: %w", err, errFallback)
 			}
 
 			type key struct {

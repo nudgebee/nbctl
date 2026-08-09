@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -47,7 +46,7 @@ var ticketsCommentsListCmd = &cobra.Command{
 			} `json:"ticket_get_comments"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
@@ -94,7 +93,7 @@ var ticketsCommentsAddCmd = &cobra.Command{
 			} `json:"ticket_add_comment"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

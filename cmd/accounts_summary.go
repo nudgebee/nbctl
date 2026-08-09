@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
@@ -34,7 +32,7 @@ var accountsSummaryCmd = &cobra.Command{
 			} `json:"accounts_list"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 

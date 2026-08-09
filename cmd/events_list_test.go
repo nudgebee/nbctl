@@ -30,4 +30,3 @@ func TestEventsList_Unit(t *testing.T) {
 		t.Fatalf("expected output, got empty string")
 	}
 }
-

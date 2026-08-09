@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -15,10 +14,6 @@ var authAssignRoleCmd = &cobra.Command{
 		groupID, _ := cmd.Flags().GetString("group-id")
 		role, _ := cmd.Flags().GetString("role")
 		accountID, _ := cmd.Flags().GetString("account-id")
-
-		if groupID == "" || role == "" {
-			return fmt.Errorf("--group-id and --role flags are required")
-		}
 
 		graphqlClient := client.NewClient()
 
@@ -44,7 +39,7 @@ var authAssignRoleCmd = &cobra.Command{
 					Message string `json:"message"`
 				} `json:"userroles_upsert_account_group"`
 			}
-			if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+			if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 				return err
 			}
 			fmt.Printf("Assigned role '%s' to group '%s' for account '%s' (Status: %s)\n", role, groupID, accountID, respData.UserrolesUpsertAccountGroup.Status)
@@ -69,7 +64,7 @@ var authAssignRoleCmd = &cobra.Command{
 					Message string `json:"message"`
 				} `json:"userroles_upsert_group"`
 			}
-			if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+			if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 				return err
 			}
 			fmt.Printf("Assigned role '%s' to group '%s' at tenant level (Status: %s)\n", role, groupID, respData.UserrolesUpsertGroup.Status)
@@ -84,4 +79,6 @@ func init() {
 	authAssignRoleCmd.Flags().String("group-id", "", "User Group ID (required)")
 	authAssignRoleCmd.Flags().String("role", "", "Role name (e.g. tenant_admin, account_admin, or custom role ID) (required)")
 	authAssignRoleCmd.Flags().String("account-id", "", "Account ID for account-scoped assignment (optional)")
+	_ = authAssignRoleCmd.MarkFlagRequired("group-id")
+	_ = authAssignRoleCmd.MarkFlagRequired("role")
 }

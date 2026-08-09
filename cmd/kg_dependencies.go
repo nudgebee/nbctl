@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -50,7 +49,7 @@ var kgDependenciesListCmd = &cobra.Command{
 			} `json:"kg_list_manual_dependencies"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
@@ -79,10 +78,6 @@ var kgDependenciesResolveCmd = &cobra.Command{
 		target, _ := cmd.Flags().GetString("target")
 		relation, _ := cmd.Flags().GetString("relation")
 
-		if source == "" || target == "" {
-			return fmt.Errorf("--source and --target flags are required")
-		}
-
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
@@ -105,7 +100,7 @@ var kgDependenciesResolveCmd = &cobra.Command{
 			} `json:"kg_resolve_manual_dependency"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
 		}
 
@@ -122,4 +117,6 @@ func init() {
 	kgDependenciesResolveCmd.Flags().String("source", "", "Source service name (required)")
 	kgDependenciesResolveCmd.Flags().String("target", "", "Target service name (required)")
 	kgDependenciesResolveCmd.Flags().String("relation", "calls", "Dependency relationship type (default: calls)")
+	_ = kgDependenciesResolveCmd.MarkFlagRequired("source")
+	_ = kgDependenciesResolveCmd.MarkFlagRequired("target")
 }
