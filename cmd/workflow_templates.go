@@ -9,6 +9,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type workflowTemplate struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	IsSystem    bool   `json:"is_system"`
+	Status      string `json:"status"`
+}
+
 var workflowTemplatesCmd = &cobra.Command{
 	Use:   "templates",
 	Short: "Browse and inspect pre-built workflow templates",
@@ -54,15 +63,8 @@ var workflowTemplatesListCmd = &cobra.Command{
 
 		var respData struct {
 			WorkflowListTemplate struct {
-				TotalCount int `json:"total_count"`
-				Templates  []struct {
-					ID          string `json:"id"`
-					Name        string `json:"name"`
-					Description string `json:"description"`
-					Category    string `json:"category"`
-					IsSystem    bool   `json:"is_system"`
-					Status      string `json:"status"`
-				} `json:"templates"`
+				TotalCount int                `json:"total_count"`
+				Templates  []workflowTemplate `json:"templates"`
 			} `json:"workflow_list_template"`
 		}
 
@@ -122,14 +124,7 @@ var workflowTemplatesGetCmd = &cobra.Command{
 		})
 
 		var respData struct {
-			WorkflowGetTemplate struct {
-				ID          string `json:"id"`
-				Name        string `json:"name"`
-				Description string `json:"description"`
-				Category    string `json:"category"`
-				IsSystem    bool   `json:"is_system"`
-				Status      string `json:"status"`
-			} `json:"workflow_get_template"`
+			WorkflowGetTemplate workflowTemplate `json:"workflow_get_template"`
 		}
 
 		if err := client.Run(cmd.Context(), req, &respData); err != nil {

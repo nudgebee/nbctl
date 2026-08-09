@@ -36,12 +36,15 @@ var workflowApproveCmd = &cobra.Command{
 				}
 			}
 		`)
-		req.Var("request", map[string]any{
+		input := map[string]any{
 			"execution_id": executionID,
 			"task_id":      taskID,
 			"status":       status,
-			"comments":     comments,
-		})
+		}
+		if comments != "" {
+			input["comments"] = comments
+		}
+		req.Var("request", input)
 
 		var respData struct {
 			WorkflowCompleteApproval struct {
