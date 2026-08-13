@@ -154,6 +154,8 @@ var nubiCmd = &cobra.Command{
 
 			if status == "WAITING" {
 				_, _ = fmt.Fprintln(out, response)
+				gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+				_, _ = fmt.Fprintln(out, gray.Render("\nNote: Nubi is waiting for a followup response. To continue, please use the interactive mode or visit the URL below."))
 			} else {
 				rendered, err := renderMarkdown(response)
 				if err != nil {
