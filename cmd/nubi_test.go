@@ -9,12 +9,8 @@ import (
 )
 
 func TestNubiCmd_AsyncQuery(t *testing.T) {
-	nubiQuery = ""
-	nubiAsync = false
-	defer func() {
-		nubiQuery = ""
-		nubiAsync = false
-	}()
+	_ = nubiCmd.Flags().Set("query", "")
+	_ = nubiCmd.Flags().Set("async", "false")
 
 	mockResponse := map[string]interface{}{
 		"ai_execute_investigation": map[string]interface{}{
@@ -32,12 +28,8 @@ func TestNubiCmd_AsyncQuery(t *testing.T) {
 }
 
 func TestNubiCmd_AsyncWithoutQuery(t *testing.T) {
-	nubiQuery = ""
-	nubiAsync = false
-	defer func() {
-		nubiQuery = ""
-		nubiAsync = false
-	}()
+	_ = nubiCmd.Flags().Set("query", "")
+	_ = nubiCmd.Flags().Set("async", "false")
 
 	_, err := testutil.RunWithSimpleGraphQL(nil, nubiCmd, []string{"nubi", "test-account-id", "--async"})
 	require.Error(t, err)

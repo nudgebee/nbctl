@@ -105,18 +105,27 @@ var nubiCmd = &cobra.Command{
 			os.Exit(0)
 		}()
 
-		if nubiAsync && nubiQuery == "" {
+		query, err := cmd.Flags().GetString("query")
+		if err != nil {
+			return err
+		}
+		async, err := cmd.Flags().GetBool("async")
+		if err != nil {
+			return err
+		}
+
+		if async && query == "" {
 			return fmt.Errorf("--async requires --query / -q")
 		}
 
 		// Single query mode (non-interactive)
-		if nubiQuery != "" {
+		if query != "" {
 			ctx, cancel := context.WithCancel(cmd.Context())
 			s.cancel = cancel
 			defer cancel()
 
-			if nubiAsync {
-				if err := s.nubiClient.TriggerInvestigation(ctx, nubiQuery); err != nil {
+			if async {
+				if err := s.nubiClient.TriggerInvestigation(ctx, query); err != nil {
 					return fmt.Errorf("failed to trigger investigation: %w", err)
 				}
 				out := format.GetFormat().GetOutput()
@@ -127,7 +136,7 @@ var nubiCmd = &cobra.Command{
 
 			s.spinner.Start()
 			startTime := time.Now()
-			response, status, err := s.triggerAndPoll(ctx, nubiQuery)
+			response, status, err := s.triggerAndPoll(ctx, query)
 			duration := time.Since(startTime)
 			s.spinner.Stop()
 
@@ -665,13 +674,8 @@ func saveHistory(file string, history []string) error {
 	return nil
 }
 
-var (
-	nubiQuery string
-	nubiAsync bool
-)
-
 func init() {
-	nubiCmd.Flags().StringVarP(&nubiQuery, "query", "q", "", "Execute a single query non-interactively and exit")
-	nubiCmd.Flags().BoolVar(&nubiAsync, "async", false, "Trigger query asynchronously without waiting for response (use with --query)")
+	nubiCmd.Flags().StringP("query", "q", "", "Execute a single query non-interactively and exit")
+	nubiCmd.Flags().Bool("async", false, "Trigger query asynchronously without waiting for response (use with --query)")
 	rootCmd.AddCommand(nubiCmd)
 }
