@@ -115,6 +115,8 @@ var nubiCmd = &cobra.Command{
 			return err
 		}
 
+		query = strings.TrimSpace(query)
+
 		if async && query == "" {
 			return fmt.Errorf("--async requires --query / -q")
 		}
@@ -145,7 +147,7 @@ var nubiCmd = &cobra.Command{
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					_, _ = fmt.Fprintln(out, "Request canceled.")
-					return nil
+					return err
 				}
 				return fmt.Errorf("error executing query: %w", err)
 			}
@@ -176,7 +178,8 @@ var nubiCmd = &cobra.Command{
 			gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 			_, _ = fmt.Fprintln(out, gray.Render(fmt.Sprintf("Response time: %s", duration)))
 
-			conversationURL := fmt.Sprintf("For more details: %s/ask-nudgebee?accountId=%s&conversation_id=%s", s.nubiClient.Endpoint, s.nubiClient.AccountID, s.nubiClient.ConversationID)
+			endpoint := strings.TrimSuffix(s.nubiClient.Endpoint, "/")
+			conversationURL := fmt.Sprintf("For more details: %s/ask-nudgebee?accountId=%s&conversation_id=%s", endpoint, s.nubiClient.AccountID, s.nubiClient.ConversationID)
 			_, _ = fmt.Fprintln(out, gray.Render(conversationURL))
 
 			return nil
