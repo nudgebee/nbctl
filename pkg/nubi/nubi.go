@@ -416,8 +416,12 @@ func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
 		}
 	`)
 
+	convID := c.ConversationID
+	if convID == "" {
+		convID = c.SessionID
+	}
 	req.Var("accountId", c.AccountID)
-	req.Var("conversationId", c.SessionID)
+	req.Var("conversationId", convID)
 
 	var respData struct {
 		AiGetConversationUsageMetrics struct {
