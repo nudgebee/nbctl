@@ -143,6 +143,7 @@ var nubiCmd = &cobra.Command{
 			s.spinner.Stop()
 
 			out := format.GetFormat().GetOutput()
+			grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -156,8 +157,7 @@ var nubiCmd = &cobra.Command{
 
 			if status == "WAITING" {
 				_, _ = fmt.Fprintln(out, response)
-				gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-				_, _ = fmt.Fprintln(out, gray.Render(fmt.Sprintf("\nNote: Nubi is waiting for a followup response. To continue interactively, run 'nbctl nubi' and switch to this conversation using:\n  /conversation %s\nOr visit the URL below.", s.nubiClient.ConversationID)))
+				_, _ = fmt.Fprintln(out, grayStyle.Render(fmt.Sprintf("\nNote: Nubi is waiting for a followup response. To continue interactively, run 'nbctl nubi' and switch to this conversation using:\n  /conversation %s\nOr visit the URL below.", s.nubiClient.ConversationID)))
 			} else {
 				rendered, err := renderMarkdown(response)
 				if err != nil {
@@ -171,16 +171,14 @@ var nubiCmd = &cobra.Command{
 
 			metrics, err := s.nubiClient.GetUsageMetrics(ctx)
 			if err == nil && metrics != "" {
-				gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-				_, _ = fmt.Fprintln(out, gray.Render(metrics))
+				_, _ = fmt.Fprintln(out, grayStyle.Render(metrics))
 			}
 
-			gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-			_, _ = fmt.Fprintln(out, gray.Render(fmt.Sprintf("Response time: %s", duration)))
+			_, _ = fmt.Fprintln(out, grayStyle.Render(fmt.Sprintf("Response time: %s", duration)))
 
 			endpoint := strings.TrimSuffix(s.nubiClient.Endpoint, "/")
 			conversationURL := fmt.Sprintf("For more details: %s/ask-nudgebee?accountId=%s&conversation_id=%s", endpoint, s.nubiClient.AccountID, s.nubiClient.ConversationID)
-			_, _ = fmt.Fprintln(out, gray.Render(conversationURL))
+			_, _ = fmt.Fprintln(out, grayStyle.Render(conversationURL))
 
 			return nil
 		}
