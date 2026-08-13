@@ -609,11 +609,14 @@ nbctl metrics query --account-id 123e4567-e89b-12d3-a456-426614174000 --query "n
 
 #### `nbctl nubi`
 
-Starts an interactive shell session with Nudgebee AI to ask questions and get insights.
+Starts an interactive shell session or executes a single query with Nudgebee AI to ask questions and get insights.
 
-*   **Usage**: `nbctl nubi [account-id]`
+*   **Usage**: `nbctl nubi [account-id] [flags]`
 *   **Arguments**:
     *   `[account-id]` (optional): The account ID to use for the Nubi session. If not provided, `nbctl` will attempt to use the `default-account-id` from your configuration.
+*   **Flags**:
+    *   `-q, --query <string>`: Execute a single query non-interactively and exit.
+    *   `--async`: Trigger the query asynchronously without waiting for the response (used with `--query`).
 *   **Prerequisites**: Your `account-id` and `username` must be configured (see `nbctl configure`).
 
 **Interactive Features (within the Nubi shell):**
@@ -633,14 +636,22 @@ The Nubi shell supports various slash commands to manage your session and intera
 *   `/functions`: Lists all available functions that Nubi can execute.
 *   `/exit`: Exits the Nubi interactive shell.
 
-**Example:**
+**Examples:**
 
+*Start interactive session:*
 ```bash
 nbctl nubi
+nbctl nubi my-dev-account-id
 ```
 
+*Single query mode (synchronous):*
 ```bash
-nbctl nubi my-dev-account-id
+nbctl nubi -q "What is the health status of my services?"
+```
+
+*Single query mode (asynchronous):*
+```bash
+nbctl nubi -q "Analyze latest deployment logs" --async
 ```
 
 #### `nbctl optimizations`

@@ -105,6 +105,68 @@ var nubiCmd = &cobra.Command{
 			os.Exit(0)
 		}()
 
+		// Single query mode (non-interactive)
+		if nubiQuery != "" {
+			ctx, cancel := context.WithCancel(cmd.Context())
+			s.cancel = cancel
+			defer cancel()
+
+			if nubiAsync {
+				if err := s.nubiClient.TriggerInvestigation(ctx, nubiQuery); err != nil {
+					return fmt.Errorf("failed to trigger investigation: %w", err)
+				}
+				out := format.GetFormat().GetOutput()
+				_, _ = fmt.Fprintln(out, "Investigation triggered asynchronously.")
+				_, _ = fmt.Fprintf(out, "Session ID: %s\n", s.nubiClient.SessionID)
+				return nil
+			}
+
+			s.spinner.Start()
+			startTime := time.Now()
+			response, status, err := s.triggerAndPoll(ctx, nubiQuery)
+			duration := time.Since(startTime)
+			s.spinner.Stop()
+
+			out := format.GetFormat().GetOutput()
+
+			if err != nil {
+				if err == context.Canceled {
+					_, _ = fmt.Fprintln(out, "Request canceled.")
+					return nil
+				}
+				return fmt.Errorf("error executing query: %w", err)
+			}
+
+			s.lastResponse = response
+
+			if status == "WAITING" {
+				_, _ = fmt.Fprintln(out, response)
+			} else {
+				rendered, err := renderMarkdown(response)
+				if err != nil {
+					_, _ = fmt.Fprintf(out, "Error rendering markdown: %v\n", err)
+					_, _ = fmt.Fprintln(out, response)
+				} else {
+					borderStyle := lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1)
+					_, _ = fmt.Fprintln(out, borderStyle.Render(rendered))
+				}
+			}
+
+			metrics, err := s.nubiClient.GetUsageMetrics(context.Background())
+			if err == nil && metrics != "" {
+				gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+				_, _ = fmt.Fprintln(out, gray.Render(metrics))
+			}
+
+			gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+			_, _ = fmt.Fprintln(out, gray.Render(fmt.Sprintf("Response time: %s", duration)))
+
+			conversationURL := fmt.Sprintf("For more details: %s/ask-nudgebee?accountId=%s&conversation_id=%s", s.nubiClient.Endpoint, s.nubiClient.AccountID, s.nubiClient.ConversationID)
+			_, _ = fmt.Fprintln(out, gray.Render(conversationURL))
+
+			return nil
+		}
+
 		printNubiArt()
 
 		// Welcome message styling
@@ -599,6 +661,13 @@ func saveHistory(file string, history []string) error {
 	return nil
 }
 
+var (
+	nubiQuery string
+	nubiAsync bool
+)
+
 func init() {
+	nubiCmd.Flags().StringVarP(&nubiQuery, "query", "q", "", "Execute a single query non-interactively and exit")
+	nubiCmd.Flags().BoolVar(&nubiAsync, "async", false, "Trigger query asynchronously without waiting for response (use with --query)")
 	rootCmd.AddCommand(nubiCmd)
 }
