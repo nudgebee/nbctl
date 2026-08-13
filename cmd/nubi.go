@@ -105,6 +105,10 @@ var nubiCmd = &cobra.Command{
 			os.Exit(0)
 		}()
 
+		if nubiAsync && nubiQuery == "" {
+			return fmt.Errorf("--async requires --query / -q")
+		}
+
 		// Single query mode (non-interactive)
 		if nubiQuery != "" {
 			ctx, cancel := context.WithCancel(cmd.Context())
@@ -152,7 +156,7 @@ var nubiCmd = &cobra.Command{
 				}
 			}
 
-			metrics, err := s.nubiClient.GetUsageMetrics(context.Background())
+			metrics, err := s.nubiClient.GetUsageMetrics(ctx)
 			if err == nil && metrics != "" {
 				gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 				_, _ = fmt.Fprintln(out, gray.Render(metrics))
