@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -143,7 +144,7 @@ var nubiCmd = &cobra.Command{
 			out := format.GetFormat().GetOutput()
 
 			if err != nil {
-				if err == context.Canceled {
+				if errors.Is(err, context.Canceled) {
 					_, _ = fmt.Fprintln(out, "Request canceled.")
 					return nil
 				}
