@@ -11,13 +11,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func resetNubiFlags() {
+	if f := nubiCmd.Flags().Lookup("query"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
+	if f := nubiCmd.Flags().Lookup("async"); f != nil {
+		_ = f.Value.Set("false")
+		f.Changed = false
+	}
+	viper.Set("username", "")
+}
+
 func TestNubiCmd_AsyncQuery(t *testing.T) {
+	resetNubiFlags()
 	viper.Set("username", "test-user")
-	t.Cleanup(func() {
-		_ = nubiCmd.Flags().Set("query", "")
-		_ = nubiCmd.Flags().Set("async", "false")
-		viper.Set("username", "")
-	})
+	t.Cleanup(resetNubiFlags)
 
 	mockResponse := map[string]interface{}{
 		"ai_execute_investigation": map[string]interface{}{
@@ -35,25 +44,29 @@ func TestNubiCmd_AsyncQuery(t *testing.T) {
 }
 
 func TestNubiCmd_AsyncWithoutQuery(t *testing.T) {
+	resetNubiFlags()
 	viper.Set("username", "test-user")
-	t.Cleanup(func() {
-		_ = nubiCmd.Flags().Set("query", "")
-		_ = nubiCmd.Flags().Set("async", "false")
-		viper.Set("username", "")
-	})
+	t.Cleanup(resetNubiFlags)
 
 	_, err := testutil.RunWithSimpleGraphQL(nil, nubiCmd, []string{"nubi", "test-account-id", "--async"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--async requires --query / -q")
 }
 
-func TestNubiCmd_SyncQuery(t *testing.T) {
+func TestNubiCmd_EmptyQuery(t *testing.T) {
+	resetNubiFlags()
 	viper.Set("username", "test-user")
-	t.Cleanup(func() {
-		_ = nubiCmd.Flags().Set("query", "")
-		_ = nubiCmd.Flags().Set("async", "false")
-		viper.Set("username", "")
-	})
+	t.Cleanup(resetNubiFlags)
+
+	_, err := testutil.RunWithSimpleGraphQL(nil, nubiCmd, []string{"nubi", "test-account-id", "-q", "   "})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query cannot be empty")
+}
+
+func TestNubiCmd_SyncQuery(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	t.Cleanup(resetNubiFlags)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

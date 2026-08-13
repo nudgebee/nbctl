@@ -117,14 +117,33 @@ var nubiCmd = &cobra.Command{
 
 		query = strings.TrimSpace(query)
 
-		if async && query == "" {
+		if async && !cmd.Flags().Changed("query") {
 			return fmt.Errorf("--async requires --query / -q")
 		}
 
 		// Single query mode (non-interactive)
-		if query != "" {
+		if cmd.Flags().Changed("query") {
+			if query == "" {
+				return fmt.Errorf("query cannot be empty")
+			}
+
 			ctx, cancel := context.WithCancel(cmd.Context())
 			defer cancel()
+
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+			go func() {
+				select {
+				case <-sigChan:
+					if s.spinner.Active() {
+						s.spinner.Stop()
+					}
+					cancel()
+					os.Exit(1)
+				case <-ctx.Done():
+				}
+			}()
+			defer signal.Stop(sigChan)
 
 			if async {
 				if err := s.nubiClient.TriggerInvestigation(ctx, query); err != nil {
