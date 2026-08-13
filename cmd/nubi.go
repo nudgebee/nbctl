@@ -135,11 +135,7 @@ var nubiCmd = &cobra.Command{
 			go func() {
 				select {
 				case <-sigChan:
-					if s.spinner.Active() {
-						s.spinner.Stop()
-					}
 					cancel()
-					os.Exit(1)
 				case <-ctx.Done():
 				}
 			}()
@@ -167,7 +163,7 @@ var nubiCmd = &cobra.Command{
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					_, _ = fmt.Fprintln(out, "Request canceled.")
-					return err
+					return nil
 				}
 				return fmt.Errorf("error executing query: %w", err)
 			}
