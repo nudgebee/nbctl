@@ -122,7 +122,6 @@ var nubiCmd = &cobra.Command{
 		// Single query mode (non-interactive)
 		if query != "" {
 			ctx, cancel := context.WithCancel(cmd.Context())
-			s.cancel = cancel
 			defer cancel()
 
 			if async {
@@ -156,7 +155,7 @@ var nubiCmd = &cobra.Command{
 			if status == "WAITING" {
 				_, _ = fmt.Fprintln(out, response)
 				gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-				_, _ = fmt.Fprintln(out, gray.Render("\nNote: Nubi is waiting for a followup response. To continue, please use the interactive mode or visit the URL below."))
+				_, _ = fmt.Fprintln(out, gray.Render(fmt.Sprintf("\nNote: Nubi is waiting for a followup response. To continue interactively, run 'nbctl nubi' and switch to this conversation using:\n  /conversation %s\nOr visit the URL below.", s.nubiClient.ConversationID)))
 			} else {
 				rendered, err := renderMarkdown(response)
 				if err != nil {
