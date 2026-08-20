@@ -194,16 +194,27 @@ var nubiCmd = &cobra.Command{
 
 			if format.GetFormat().Get() == "json" {
 				metrics, _ := s.nubiClient.GetUsageMetrics(ctx)
+				details, _ := s.nubiClient.GetConversationDetails(ctx)
+
+				var respObj any
+				trimmedResp := strings.TrimSpace(response)
+				if err := json.Unmarshal([]byte(trimmedResp), &respObj); err != nil {
+					respObj = response
+				}
+
 				result := map[string]interface{}{
 					"account_id":      s.nubiClient.AccountID,
 					"conversation_id": s.nubiClient.ConversationID,
 					"session_id":      s.nubiClient.SessionID,
 					"query":           query,
-					"response":        response,
+					"response":        respObj,
 					"status":          status,
 					"duration":        duration.String(),
 					"duration_ms":     duration.Milliseconds(),
 					"url":             conversationURL,
+				}
+				if details != nil {
+					result["details"] = details
 				}
 				if metrics != "" {
 					result["metrics"] = metrics

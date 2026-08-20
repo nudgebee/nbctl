@@ -2,6 +2,7 @@ package nubi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -359,6 +360,152 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	statusText := fmt.Sprintf("Agent: %s, Tool: %s, Action: %s", latestAgentName, latestToolName, latestToolParams)
 
 	return finalResponse, conv.Conversation.Status, statusText, followupMessageConfig, waitingMessageID, waitingAgentID, nil
+}
+
+type ConversationDetails struct {
+	Conversation struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	} `json:"conversation"`
+	Messages  []map[string]any `json:"messages,omitempty"`
+	Agents    []map[string]any `json:"agents,omitempty"`
+	ToolCalls []map[string]any `json:"tool_calls,omitempty"`
+}
+
+func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
+	req := client.NewRequest(`
+		query GetLlmConversationDetails($accountId: String!, $sessionId: String!) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, session_id: $sessionId}) {
+			conversation {
+			  id
+			  status
+			}
+			messages {
+			  id
+			  status
+			  response
+			  message_type
+			  message_config
+			  parent_agent_id
+			}
+			agents {
+			  id
+			  message_id
+			  agent_name
+			  status
+			  response
+			}
+			tool_calls {
+			  agent_id
+			  tool_name
+			  parameters
+			}
+		  }
+		}
+	`)
+
+	req.Var("accountId", c.AccountID)
+	req.Var("sessionId", c.SessionID)
+
+	var respData struct {
+		AiGetConversationV3 struct {
+			Conversation struct {
+				ID     string `json:"id"`
+				Status string `json:"status"`
+			} `json:"conversation"`
+			Messages []struct {
+				ID            string `json:"id"`
+				Status        string `json:"status"`
+				Response      string `json:"response"`
+				MessageType   string `json:"message_type"`
+				MessageConfig string `json:"message_config"`
+				ParentAgentID string `json:"parent_agent_id"`
+			} `json:"messages"`
+			Agents []struct {
+				ID        string `json:"id"`
+				MessageID string `json:"message_id"`
+				AgentName string `json:"agent_name"`
+				Status    string `json:"status"`
+				Response  string `json:"response"`
+			} `json:"agents"`
+			ToolCalls []struct {
+				AgentID    string `json:"agent_id"`
+				ToolName   string `json:"tool_name"`
+				Parameters string `json:"parameters"`
+			} `json:"tool_calls"`
+		} `json:"ai_get_conversation_v3"`
+	}
+
+	if err := c.Client.Run(ctx, req, &respData); err != nil {
+		return nil, err
+	}
+
+	conv := respData.AiGetConversationV3
+	details := &ConversationDetails{
+		Conversation: conv.Conversation,
+	}
+
+	for _, m := range conv.Messages {
+		msgMap := map[string]any{
+			"id":              m.ID,
+			"status":          m.Status,
+			"message_type":   m.MessageType,
+			"parent_agent_id": m.ParentAgentID,
+		}
+		if m.Response != "" {
+			var respAny any
+			if err := json.Unmarshal([]byte(m.Response), &respAny); err == nil {
+				msgMap["response"] = respAny
+			} else {
+				msgMap["response"] = m.Response
+			}
+		}
+		if m.MessageConfig != "" {
+			var cfgAny any
+			if err := json.Unmarshal([]byte(m.MessageConfig), &cfgAny); err == nil {
+				msgMap["message_config"] = cfgAny
+			} else {
+				msgMap["message_config"] = m.MessageConfig
+			}
+		}
+		details.Messages = append(details.Messages, msgMap)
+	}
+
+	for _, a := range conv.Agents {
+		agentMap := map[string]any{
+			"id":         a.ID,
+			"message_id": a.MessageID,
+			"agent_name": a.AgentName,
+			"status":     a.Status,
+		}
+		if a.Response != "" {
+			var respAny any
+			if err := json.Unmarshal([]byte(a.Response), &respAny); err == nil {
+				agentMap["response"] = respAny
+			} else {
+				agentMap["response"] = a.Response
+			}
+		}
+		details.Agents = append(details.Agents, agentMap)
+	}
+
+	for _, t := range conv.ToolCalls {
+		toolMap := map[string]any{
+			"agent_id":  t.AgentID,
+			"tool_name": t.ToolName,
+		}
+		if t.Parameters != "" {
+			var paramsAny any
+			if err := json.Unmarshal([]byte(t.Parameters), &paramsAny); err == nil {
+				toolMap["parameters"] = paramsAny
+			} else {
+				toolMap["parameters"] = t.Parameters
+			}
+		}
+		details.ToolCalls = append(details.ToolCalls, toolMap)
+	}
+
+	return details, nil
 }
 
 func (c *NubiClient) SendFollowupResponse(ctx context.Context, query, agentID, messageID string) error {
