@@ -125,3 +125,72 @@ func TestNubiCmd_SyncQuery(t *testing.T) {
 	assert.Contains(t, output, "Cost: $0.001000")
 	assert.Contains(t, output, "Response time:")
 }
+
+func TestNubiCmd_SyncQuery_JSON(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	t.Cleanup(resetNubiFlags)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/auth/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
+		case "/api/graphql":
+			resp := map[string]interface{}{
+				"data": map[string]interface{}{
+					"ai_execute_investigation": map[string]interface{}{
+						"data": map[string]interface{}{
+							"response": "started",
+						},
+					},
+					"ai_get_conversation_v3": map[string]interface{}{
+						"conversation": map[string]interface{}{
+							"id":     "conv-123",
+							"status": "COMPLETED",
+						},
+						"messages": []map[string]interface{}{
+							{
+								"id":           "msg-1",
+								"status":       "COMPLETED",
+								"response":     "System status is healthy",
+								"message_type": "generation",
+							},
+						},
+					},
+					"ai_get_conversation_usage_metrics": map[string]interface{}{
+						"data": map[string]interface{}{
+							"conversation": map[string]interface{}{
+								"total_cost":         0.001,
+								"total_input_tokens": 50,
+								"total_output_tokens": 100,
+							},
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	defaults := map[string]any{
+		"api-key":    "dummy",
+		"username":   "dummy-user",
+		"account-id": "dummy-account",
+	}
+	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{"nubi", "test-account-id", "-q", "system status", "--format", "json"})
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test-account-id", result["account_id"])
+	assert.Equal(t, "conv-123", result["conversation_id"])
+	assert.Equal(t, "system status", result["query"])
+	assert.Equal(t, "System status is healthy", result["response"])
+	assert.Equal(t, "COMPLETED", result["status"])
+	assert.NotEmpty(t, result["url"])
+}

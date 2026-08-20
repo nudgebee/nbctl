@@ -145,23 +145,42 @@ var nubiCmd = &cobra.Command{
 				if err := s.nubiClient.TriggerInvestigation(ctx, query); err != nil {
 					return fmt.Errorf("failed to trigger investigation: %w", err)
 				}
+				if format.GetFormat().Get() == "json" {
+					format.GetFormat().Print(map[string]interface{}{
+						"message":    "Investigation triggered asynchronously.",
+						"session_id": s.nubiClient.SessionID,
+						"account_id": s.nubiClient.AccountID,
+						"query":      query,
+					})
+					return nil
+				}
 				out := format.GetFormat().GetOutput()
 				_, _ = fmt.Fprintln(out, "Investigation triggered asynchronously.")
 				_, _ = fmt.Fprintf(out, "Session ID: %s\n", s.nubiClient.SessionID)
 				return nil
 			}
 
-			s.spinner.Start()
+			if format.GetFormat().Get() != "json" {
+				s.spinner.Start()
+			}
 			startTime := time.Now()
 			response, status, err := s.triggerAndPoll(ctx, query)
 			duration := time.Since(startTime)
-			s.spinner.Stop()
+			if s.spinner.Active() {
+				s.spinner.Stop()
+			}
 
 			out := format.GetFormat().GetOutput()
-			grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
+					if format.GetFormat().Get() == "json" {
+						format.GetFormat().Print(map[string]interface{}{
+							"error":  "Request canceled.",
+							"status": "CANCELED",
+						})
+						return nil
+					}
 					_, _ = fmt.Fprintln(out, "Request canceled.")
 					return nil
 				}
@@ -169,6 +188,42 @@ var nubiCmd = &cobra.Command{
 			}
 
 			s.lastResponse = response
+
+			endpoint := strings.TrimSuffix(s.nubiClient.Endpoint, "/")
+			conversationURL := fmt.Sprintf("%s/ask-nudgebee?accountId=%s&conversation_id=%s", endpoint, s.nubiClient.AccountID, s.nubiClient.ConversationID)
+
+			if format.GetFormat().Get() == "json" {
+				metrics, _ := s.nubiClient.GetUsageMetrics(ctx)
+				details, _ := s.nubiClient.GetConversationDetails(ctx)
+
+				var respObj any
+				trimmedResp := strings.TrimSpace(response)
+				if err := json.Unmarshal([]byte(trimmedResp), &respObj); err != nil {
+					respObj = response
+				}
+
+				result := map[string]interface{}{
+					"account_id":      s.nubiClient.AccountID,
+					"conversation_id": s.nubiClient.ConversationID,
+					"session_id":      s.nubiClient.SessionID,
+					"query":           query,
+					"response":        respObj,
+					"status":          status,
+					"duration":        duration.String(),
+					"duration_ms":     duration.Milliseconds(),
+					"url":             conversationURL,
+				}
+				if details != nil {
+					result["details"] = details
+				}
+				if metrics != "" {
+					result["metrics"] = metrics
+				}
+				format.GetFormat().Print(result)
+				return nil
+			}
+
+			grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 			if status == "WAITING" {
 				_, _ = fmt.Fprintln(out, response)
@@ -191,9 +246,8 @@ var nubiCmd = &cobra.Command{
 
 			_, _ = fmt.Fprintln(out, grayStyle.Render(fmt.Sprintf("Response time: %s", duration)))
 
-			endpoint := strings.TrimSuffix(s.nubiClient.Endpoint, "/")
-			conversationURL := fmt.Sprintf("For more details: %s/ask-nudgebee?accountId=%s&conversation_id=%s", endpoint, s.nubiClient.AccountID, s.nubiClient.ConversationID)
-			_, _ = fmt.Fprintln(out, grayStyle.Render(conversationURL))
+			conversationURLText := fmt.Sprintf("For more details: %s", conversationURL)
+			_, _ = fmt.Fprintln(out, grayStyle.Render(conversationURLText))
 
 			return nil
 		}

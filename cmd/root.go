@@ -109,7 +109,10 @@ func init() {
 
 	// Add a persistent flag for the output format.
 	var formatVar string
-	rootCmd.PersistentFlags().StringVar(&formatVar, "format", "text", "Output format (json)")
+	rootCmd.PersistentFlags().StringVarP(&formatVar, "format", "o", "text", "Output format (json)")
+	var outputVar string
+	rootCmd.PersistentFlags().StringVar(&outputVar, "output", "", "Output format alias (json)")
+	_ = rootCmd.PersistentFlags().MarkHidden("output")
 	rootCmd.PersistentFlags().String("profile", "", "Use a specific profile from your config file")
 	_ = viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile"))
 
@@ -121,6 +124,9 @@ func init() {
 
 		// Set the format from the flag.
 		formatValue, _ := cmd.Flags().GetString("format")
+		if outputVal, _ := cmd.Flags().GetString("output"); outputVal != "" {
+			formatValue = outputVal
+		}
 		format.GetFormat().Set(formatValue)
 
 		// Initialize the logger.
