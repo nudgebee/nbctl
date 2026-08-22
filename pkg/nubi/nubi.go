@@ -191,8 +191,8 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	// ai_get_conversation_v3 returns a "conversation shell + flat messages/agents/tool_calls deltas".
 	// We re-correlate the flat lists by ID to preserve the previous nested-traversal behavior.
 	req := client.NewRequest(`
-		query GetLlmConversation($accountId: String!, $sessionId: String!) {
-		  ai_get_conversation_v3(request: {account_id: $accountId, session_id: $sessionId}) {
+		query GetLlmConversation($accountId: String!, $conversationId: String, $sessionId: String) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, conversation_id: $conversationId, session_id: $sessionId}) {
 			conversation {
 			  id
 			  status
@@ -222,7 +222,14 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	`)
 
 	req.Var("accountId", c.AccountID)
-	req.Var("sessionId", c.SessionID)
+	idToUse := c.ConversationID
+	if idToUse == "" {
+		idToUse = c.SessionID
+	}
+	if idToUse != "" {
+		req.Var("conversationId", idToUse)
+		req.Var("sessionId", idToUse)
+	}
 
 	var respData struct {
 		AiGetConversationV3 struct {
@@ -373,9 +380,24 @@ type ConversationDetails struct {
 }
 
 func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
+	idToUse := c.ConversationID
+	if idToUse == "" {
+		idToUse = c.SessionID
+	}
+
+	details, err := c.fetchDetails(ctx, idToUse, "")
+	if (err == nil && details != nil && details.Conversation.ID != "") || idToUse == "" {
+		return details, err
+	}
+
+	// Fallback: if querying by conversation_id returned empty, try session_id
+	return c.fetchDetails(ctx, "", idToUse)
+}
+
+func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID string) (*ConversationDetails, error) {
 	req := client.NewRequest(`
-		query GetLlmConversationDetails($accountId: String!, $sessionId: String!) {
-		  ai_get_conversation_v3(request: {account_id: $accountId, session_id: $sessionId}) {
+		query GetLlmConversationDetails($accountId: String!, $conversationId: String, $sessionId: String) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, conversation_id: $conversationId, session_id: $sessionId}) {
 			conversation {
 			  id
 			  status
@@ -405,7 +427,12 @@ func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationD
 	`)
 
 	req.Var("accountId", c.AccountID)
-	req.Var("sessionId", c.SessionID)
+	if conversationID != "" {
+		req.Var("conversationId", conversationID)
+	}
+	if sessionID != "" {
+		req.Var("sessionId", sessionID)
+	}
 
 	var respData struct {
 		AiGetConversationV3 struct {
