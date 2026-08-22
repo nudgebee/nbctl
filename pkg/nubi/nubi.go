@@ -278,20 +278,23 @@ func (c *NubiClient) queryConversationV3(ctx context.Context, conversationID, se
 }
 
 func (c *NubiClient) fetchConversation(ctx context.Context) (*conversationResponse, error) {
-	primaryID := c.ConversationID
-	secondaryID := c.SessionID
-	if primaryID == "" {
-		primaryID = c.SessionID
-		secondaryID = ""
+	if c.ConversationID != "" {
+		conv, err := c.queryConversationV3(ctx, c.ConversationID, "")
+		if (err == nil && conv != nil && conv.Conversation.ID != "") || c.SessionID == "" {
+			return conv, err
+		}
+		return c.queryConversationV3(ctx, "", c.SessionID)
 	}
 
-	conv, err := c.queryConversationV3(ctx, primaryID, "")
-	if (err == nil && conv != nil && conv.Conversation.ID != "") || secondaryID == "" {
-		return conv, err
+	if c.SessionID != "" {
+		conv, err := c.queryConversationV3(ctx, "", c.SessionID)
+		if err == nil && conv != nil && conv.Conversation.ID != "" {
+			return conv, nil
+		}
+		return c.queryConversationV3(ctx, c.SessionID, "")
 	}
 
-	// Fallback: query by secondary ID if primary ID returned empty
-	return c.queryConversationV3(ctx, "", secondaryID)
+	return nil, nil
 }
 
 func (c *NubiClient) GetConversation(ctx context.Context) (string, string, string, string, string, string, error) {
@@ -426,18 +429,23 @@ type ConversationDetails struct {
 }
 
 func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
-	idToUse := c.ConversationID
-	if idToUse == "" {
-		idToUse = c.SessionID
+	if c.ConversationID != "" {
+		details, err := c.fetchDetails(ctx, c.ConversationID, "")
+		if (err == nil && details != nil && details.Conversation.ID != "") || c.SessionID == "" {
+			return details, err
+		}
+		return c.fetchDetails(ctx, "", c.SessionID)
 	}
 
-	details, err := c.fetchDetails(ctx, idToUse, "")
-	if (err == nil && details != nil && details.Conversation.ID != "") || idToUse == "" {
-		return details, err
+	if c.SessionID != "" {
+		details, err := c.fetchDetails(ctx, "", c.SessionID)
+		if err == nil && details != nil && details.Conversation.ID != "" {
+			return details, nil
+		}
+		return c.fetchDetails(ctx, c.SessionID, "")
 	}
 
-	// Fallback: if querying by conversation_id returned empty, try session_id
-	return c.fetchDetails(ctx, "", idToUse)
+	return nil, nil
 }
 
 func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID string) (*ConversationDetails, error) {

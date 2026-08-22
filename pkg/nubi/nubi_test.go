@@ -444,3 +444,49 @@ func TestNubiClient_GetConversation_EmptyPollLimit(t *testing.T) {
 	assert.Equal(t, 10, notFoundErr.Attempts)
 	assert.Equal(t, "test-session", notFoundErr.SessionID)
 }
+
+func TestNubiClient_GetConversation_SessionIDFirstLookupWhenConversationIDEmpty(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		vars, _ := body["variables"].(map[string]any)
+
+		convID, _ := vars["conversationId"].(string)
+		sessID, _ := vars["sessionId"].(string)
+
+		var resp map[string]any
+		if sessID == "test-session-123" && convID == "" {
+			resp = map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{"id": "conv-resolved-456", "status": "COMPLETED"},
+						"messages": []map[string]any{
+							{"id": "m-1", "message_type": "generation", "response": "SESSION-LOOKUP-OK", "status": "COMPLETED"},
+						},
+					},
+				},
+			}
+		} else {
+			resp = map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{"id": "", "status": ""},
+					},
+				},
+			}
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+
+	c.ConversationID = ""
+	c.SessionID = "test-session-123"
+
+	resp, status, _, _, _, _, err := c.GetConversation(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETED", status)
+	assert.Equal(t, "SESSION-LOOKUP-OK", resp)
+	assert.Equal(t, "conv-resolved-456", c.ConversationID)
+}
