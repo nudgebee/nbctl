@@ -525,3 +525,71 @@ func TestNubiCmd_Interactive_SlashCommands(t *testing.T) {
 	assert.Contains(t, output, "Alert1")
 	assert.Contains(t, output, "Goodbye!")
 }
+
+func TestNubiCmd_SubcommandAliases(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	t.Run("history alias for list", func(t *testing.T) {
+		mockResponse := map[string]interface{}{
+			"llm_conversations": map[string]interface{}{
+				"rows": []map[string]interface{}{
+					{"id": "conv-history-1", "title": "History Title", "updated_at": "2026-08-20"},
+				},
+			},
+		}
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "history", "-o", "json"})
+		require.NoError(t, err)
+		assert.Contains(t, output, "conv-history-1")
+	})
+
+	t.Run("metrics and usage aliases for stats", func(t *testing.T) {
+		mockResponse := map[string]interface{}{
+			"ai_get_conversation_usage_metrics": map[string]interface{}{
+				"data": map[string]interface{}{
+					"conversation": map[string]interface{}{
+						"total_cost_usd":     0.01,
+						"total_input_tokens": 500,
+					},
+				},
+			},
+		}
+		outMetrics, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "metrics", "c-1", "-o", "json"})
+		require.NoError(t, err)
+		assert.Contains(t, outMetrics, "0.01")
+
+		outUsage, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "usage", "c-1", "-o", "json"})
+		require.NoError(t, err)
+		assert.Contains(t, outUsage, "0.01")
+	})
+
+	t.Run("bookmarks alias for bookmark", func(t *testing.T) {
+		mockResponse := map[string]interface{}{
+			"llm_conversations": map[string]interface{}{
+				"rows": []map[string]interface{}{
+					{"id": "bm-1", "title": "Bookmark 1", "updated_at": "2026-08-20"},
+				},
+			},
+		}
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "bookmarks", "list", "-o", "json"})
+		require.NoError(t, err)
+		assert.Contains(t, output, "bm-1")
+	})
+
+	t.Run("remove and rm aliases for delete", func(t *testing.T) {
+		mockResponse := map[string]interface{}{
+			"ai_delete_llm_conversation_by_id": map[string]interface{}{
+				"data": true,
+			},
+		}
+		outRm, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "rm", "c-del-1", "-o", "json"})
+		require.NoError(t, err)
+		assert.Contains(t, outRm, "c-del-1")
+
+		outRemove, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "remove", "c-del-1", "-o", "json"})
+		require.NoError(t, err)
+		assert.Contains(t, outRemove, "c-del-1")
+	})
+}

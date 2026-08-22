@@ -193,8 +193,10 @@ func (s *nubiShell) executor(in string) {
 		return
 	}
 	s.history = append(s.history, in)
+	historyCopy := make([]string, len(s.history))
+	copy(historyCopy, s.history)
 	go func() {
-		if err := saveHistory(s.historyFile, s.history); err != nil {
+		if err := saveHistory(s.historyFile, historyCopy); err != nil {
 			log.Errorf("Error saving history: %v\n", err)
 		}
 	}()
