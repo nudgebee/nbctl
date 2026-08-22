@@ -12,12 +12,24 @@ import (
 )
 
 type NubiClient struct {
-	Client         *client.Client
-	AccountID      string
-	Username       string
+	Client            *client.Client
+	AccountID         string
+	Username          string
+	SessionID         string
+	ConversationID    string
+	Endpoint          string
+	EmptyPollAttempts int
+}
+
+type ConversationNotFoundError struct {
 	SessionID      string
 	ConversationID string
 	Endpoint       string
+	Attempts       int
+}
+
+func (e *ConversationNotFoundError) Error() string {
+	return fmt.Sprintf("conversation not found after %d attempts (session_id: %s, conversation_id: %s, endpoint: %s)", e.Attempts, e.SessionID, e.ConversationID, e.Endpoint)
 }
 
 func New(client *client.Client, accountID, username, sessionID, endpoint string) *NubiClient {
@@ -187,9 +199,34 @@ func (c *NubiClient) TriggerInvestigation(ctx context.Context, query string) err
 	return c.Client.Run(ctx, req, &respData)
 }
 
-func (c *NubiClient) GetConversation(ctx context.Context) (string, string, string, string, string, string, error) {
-	// ai_get_conversation_v3 returns a "conversation shell + flat messages/agents/tool_calls deltas".
-	// We re-correlate the flat lists by ID to preserve the previous nested-traversal behavior.
+type conversationResponse struct {
+	Conversation struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	} `json:"conversation"`
+	Messages []struct {
+		ID            string `json:"id"`
+		Status        string `json:"status"`
+		Response      string `json:"response"`
+		MessageType   string `json:"message_type"`
+		MessageConfig string `json:"message_config"`
+		ParentAgentID string `json:"parent_agent_id"`
+	} `json:"messages"`
+	Agents []struct {
+		ID        string `json:"id"`
+		MessageID string `json:"message_id"`
+		AgentName string `json:"agent_name"`
+		Status    string `json:"status"`
+		Response  string `json:"response"`
+	} `json:"agents"`
+	ToolCalls []struct {
+		AgentID    string `json:"agent_id"`
+		ToolName   string `json:"tool_name"`
+		Parameters string `json:"parameters"`
+	} `json:"tool_calls"`
+}
+
+func (c *NubiClient) queryConversationV3(ctx context.Context, conversationID, sessionID string) (*conversationResponse, error) {
 	req := client.NewRequest(`
 		query GetLlmConversation($accountId: String!, $conversationId: String, $sessionId: String) {
 		  ai_get_conversation_v3(request: {account_id: $accountId, conversation_id: $conversationId, session_id: $sessionId}) {
@@ -222,53 +259,62 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	`)
 
 	req.Var("accountId", c.AccountID)
-	idToUse := c.ConversationID
-	if idToUse == "" {
-		idToUse = c.SessionID
+	if conversationID != "" {
+		req.Var("conversationId", conversationID)
 	}
-	if idToUse != "" {
-		req.Var("conversationId", idToUse)
-		req.Var("sessionId", idToUse)
+	if sessionID != "" {
+		req.Var("sessionId", sessionID)
 	}
 
 	var respData struct {
-		AiGetConversationV3 struct {
-			Conversation struct {
-				ID     string `json:"id"`
-				Status string `json:"status"`
-			} `json:"conversation"`
-			Messages []struct {
-				ID            string `json:"id"`
-				Status        string `json:"status"`
-				Response      string `json:"response"`
-				MessageType   string `json:"message_type"`
-				MessageConfig string `json:"message_config"`
-				ParentAgentID string `json:"parent_agent_id"`
-			} `json:"messages"`
-			Agents []struct {
-				ID        string `json:"id"`
-				MessageID string `json:"message_id"`
-				AgentName string `json:"agent_name"`
-				Status    string `json:"status"`
-				Response  string `json:"response"`
-			} `json:"agents"`
-			ToolCalls []struct {
-				AgentID    string `json:"agent_id"`
-				ToolName   string `json:"tool_name"`
-				Parameters string `json:"parameters"`
-			} `json:"tool_calls"`
-		} `json:"ai_get_conversation_v3"`
+		AiGetConversationV3 conversationResponse `json:"ai_get_conversation_v3"`
 	}
 
 	if err := c.Client.Run(ctx, req, &respData); err != nil {
+		return nil, err
+	}
+
+	return &respData.AiGetConversationV3, nil
+}
+
+func (c *NubiClient) fetchConversation(ctx context.Context) (*conversationResponse, error) {
+	primaryID := c.ConversationID
+	secondaryID := c.SessionID
+	if primaryID == "" {
+		primaryID = c.SessionID
+		secondaryID = ""
+	}
+
+	conv, err := c.queryConversationV3(ctx, primaryID, "")
+	if (err == nil && conv != nil && conv.Conversation.ID != "") || secondaryID == "" {
+		return conv, err
+	}
+
+	// Fallback: query by secondary ID if primary ID returned empty
+	return c.queryConversationV3(ctx, "", secondaryID)
+}
+
+func (c *NubiClient) GetConversation(ctx context.Context) (string, string, string, string, string, string, error) {
+	conv, err := c.fetchConversation(ctx)
+	if err != nil {
 		return "", "", "", "", "", "", err
 	}
 
-	conv := respData.AiGetConversationV3
-	if conv.Conversation.ID == "" {
-		return "", "IN_PROGRESS", "", "", "", "", nil // Not ready yet
+	if conv == nil || conv.Conversation.ID == "" {
+		c.EmptyPollAttempts++
+		if c.EmptyPollAttempts >= 10 { // Grace period limit: 10 consecutive empty polls (20 seconds)
+			return "", "NOT_FOUND", "", "", "", "", &ConversationNotFoundError{
+				SessionID:      c.SessionID,
+				ConversationID: c.ConversationID,
+				Endpoint:       c.Endpoint,
+				Attempts:       c.EmptyPollAttempts,
+			}
+		}
+		return "", "IN_PROGRESS", "", "", "", "", nil // Initializing/grace period
 	}
 
+	// Successfully resolved conversation ID! Reset empty poll attempts counter
+	c.EmptyPollAttempts = 0
 	c.ConversationID = conv.Conversation.ID
 
 	// Filter messages to generation/followup, matching the prior query.

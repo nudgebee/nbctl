@@ -21,7 +21,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-var nubiQueryAsync bool
+var (
+	nubiQueryAsync   bool
+	nubiQueryTimeout time.Duration
+)
 
 var nubiQueryCmd = &cobra.Command{
 	Use:     "query <prompt>",
@@ -50,7 +53,7 @@ var nubiQueryCmd = &cobra.Command{
 		sessionID := uuid.New().String()
 		nubiClient := nubi.New(client.NewClient(), accountID, username, sessionID, endpoint)
 
-		ctx, cancel := context.WithCancel(cmd.Context())
+		ctx, cancel := context.WithTimeout(cmd.Context(), nubiQueryTimeout)
 		defer cancel()
 
 		sigChan := make(chan os.Signal, 1)
@@ -102,6 +105,22 @@ var nubiQueryCmd = &cobra.Command{
 		out := format.GetFormat().GetOutput()
 
 		if err != nil {
+			var notFoundErr *nubi.ConversationNotFoundError
+			if errors.As(err, &notFoundErr) || errors.Is(err, context.DeadlineExceeded) {
+				if format.GetFormat().Get() == "json" {
+					format.GetFormat().Print(map[string]interface{}{
+						"error":           err.Error(),
+						"status":          "TIMEOUT",
+						"account_id":      nubiClient.AccountID,
+						"conversation_id": nubiClient.ConversationID,
+						"session_id":      nubiClient.SessionID,
+						"endpoint":        nubiClient.Endpoint,
+					})
+					return nil
+				}
+				_, _ = fmt.Fprintf(out, "Error: %v\n", err)
+				return nil
+			}
 			if errors.Is(err, context.Canceled) {
 				if format.GetFormat().Get() == "json" {
 					format.GetFormat().Print(map[string]interface{}{
@@ -212,5 +231,6 @@ func (s *nubiQueryShell) poll(ctx context.Context) (string, string, error) {
 
 func init() {
 	nubiQueryCmd.Flags().BoolVar(&nubiQueryAsync, "async", false, "Trigger query asynchronously without waiting for response")
+	nubiQueryCmd.Flags().DurationVar(&nubiQueryTimeout, "timeout", 15*time.Minute, "Overall polling timeout duration (default: 15m)")
 	nubiCmd.AddCommand(nubiQueryCmd)
 }

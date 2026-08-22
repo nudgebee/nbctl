@@ -3,6 +3,7 @@ package nubi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -361,4 +362,85 @@ func TestNubiClient_ListFunctions(t *testing.T) {
 	assert.Len(t, functions, 1)
 	assert.Equal(t, "func1", functions[0].Name)
 	assert.Equal(t, "desc1", functions[0].Description)
+}
+
+func TestNubiClient_GetConversation_FallbackSessionLookup(t *testing.T) {
+	pollCount := 0
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		pollCount++
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		vars, _ := body["variables"].(map[string]any)
+
+		convID, _ := vars["conversationId"].(string)
+		sessID, _ := vars["sessionId"].(string)
+
+		// If queried by conversationId primary, return empty. If queried by sessionId fallback, return conv!
+		var resp map[string]any
+		if convID != "" {
+			resp = map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{"id": "", "status": ""},
+					},
+				},
+			}
+		} else if sessID == "test-session" {
+			resp = map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{"id": "conv-real-id", "status": "COMPLETED"},
+						"messages": []map[string]any{
+							{"id": "m-1", "message_type": "generation", "response": "CLI-HANG-CHECK", "status": "COMPLETED"},
+						},
+					},
+				},
+			}
+		}
+
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+
+	c.ConversationID = "test-session" // simulating initial session ID passed in conversation_id slot
+	resp, status, _, _, _, _, err := c.GetConversation(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "COMPLETED", status)
+	assert.Equal(t, "CLI-HANG-CHECK", resp)
+	assert.Equal(t, "conv-real-id", c.ConversationID)
+}
+
+func TestNubiClient_GetConversation_EmptyPollLimit(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_get_conversation_v3": map[string]any{
+					"conversation": map[string]any{"id": "", "status": ""},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+
+	// Poll 9 times: should return IN_PROGRESS during grace period
+	for i := 0; i < 9; i++ {
+		_, status, _, _, _, _, err := c.GetConversation(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, "IN_PROGRESS", status)
+	}
+
+	// 10th poll: should trigger ConversationNotFoundError
+	_, status, _, _, _, _, err := c.GetConversation(context.Background())
+	require.Error(t, err)
+	assert.Equal(t, "NOT_FOUND", status)
+
+	var notFoundErr *ConversationNotFoundError
+	require.True(t, errors.As(err, &notFoundErr))
+	assert.Equal(t, 10, notFoundErr.Attempts)
+	assert.Equal(t, "test-session", notFoundErr.SessionID)
 }
