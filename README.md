@@ -636,6 +636,14 @@ The Nubi shell supports various slash commands to manage your session and intera
 *   `/functions`: Lists all available functions that Nubi can execute.
 *   `/exit`: Exits the Nubi interactive shell.
 
+**Subcommands:**
+
+*   `nbctl nubi query "<prompt>"` (aliases `ask`, `exec`, `run`): Execute a single query non-interactively.
+*   `nbctl nubi list` (alias `history`): List recent conversation history.
+*   `nbctl nubi get <conversation-id>`: View details and step messages of a specific conversation.
+*   `nbctl nubi bookmark [add|remove|list] [conversation-id]`: Manage conversation bookmarks.
+*   `nbctl nubi delete <conversation-id>` (alias `remove`, `rm`): Delete a conversation by ID.
+
 **Examples:**
 
 *Start interactive session:*
@@ -646,12 +654,42 @@ nbctl nubi my-dev-account-id
 
 *Single query mode (synchronous):*
 ```bash
-nbctl nubi -q "What is the health status of my services?"
+nbctl nubi query "What is the health status of my services?"
+nbctl nubi ask "How many pods are running?"
 ```
 
 *Single query mode (asynchronous):*
 ```bash
-nbctl nubi -q "Analyze latest deployment logs" --async
+nbctl nubi query "Analyze latest deployment logs" --async
+```
+
+*Single query mode (JSON output):*
+```bash
+nbctl nubi query "Show memory metrics" --output json
+```
+
+*List conversations:*
+```bash
+nbctl nubi list --limit 10
+nbctl nubi list --output json
+```
+
+*Get conversation details:*
+```bash
+nbctl nubi get <conversation-id>
+nbctl nubi get <conversation-id> --output json
+```
+
+*Bookmark management:*
+```bash
+nbctl nubi bookmark list
+nbctl nubi bookmark add <conversation-id>
+nbctl nubi bookmark remove <conversation-id>
+```
+
+*Delete conversation:*
+```bash
+nbctl nubi delete <conversation-id>
 ```
 
 #### `nbctl optimizations`
