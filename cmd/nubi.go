@@ -599,6 +599,28 @@ func saveHistory(file string, history []string) error {
 	return nil
 }
 
+func initNubiClient(args []string) (*nubi.NubiClient, error) {
+	var accountID string
+	if len(args) > 0 {
+		accountID = args[0]
+	} else {
+		accountID = viper.GetString("account-id")
+	}
+
+	if accountID == "" {
+		return nil, fmt.Errorf("account-id is required, please provide it as an argument or set it in your config file")
+	}
+
+	username := viper.GetString("username")
+	if username == "" {
+		return nil, fmt.Errorf("username is required, please set it in your config file")
+	}
+
+	endpoint := viper.GetString("endpoint")
+	sessionID := uuid.New().String()
+	return nubi.New(client.NewClient(), accountID, username, sessionID, endpoint), nil
+}
+
 func init() {
 	rootCmd.AddCommand(nubiCmd)
 }
