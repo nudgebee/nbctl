@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/nudgebee/nbctl/pkg/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,17 @@ func resetNubiFlags() {
 		_ = f.Value.Set("false")
 		f.Changed = false
 	}
+	if f := rootCmd.PersistentFlags().Lookup("format"); f != nil {
+		_ = f.Value.Set("text")
+		f.Changed = false
+	}
+	if f := rootCmd.PersistentFlags().Lookup("output"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
+	format.GetFormat().Set("text")
 	viper.Set("username", "")
+	viper.Set("account-id", "")
 }
 
 func TestNubiCmd_AsyncQuery(t *testing.T) {
@@ -193,4 +204,126 @@ func TestNubiCmd_SyncQuery_JSON(t *testing.T) {
 	assert.Equal(t, "System status is healthy", result["response"])
 	assert.Equal(t, "COMPLETED", result["status"])
 	assert.NotEmpty(t, result["url"])
+}
+
+func TestNubiCmd_List(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"llm_conversations": map[string]interface{}{
+			"rows": []map[string]interface{}{
+				{"id": "conv-1", "title": "First conversation", "updated_at": "2026-08-20T12:00:00Z"},
+				{"id": "conv-2", "title": "Second conversation", "updated_at": "2026-08-21T12:00:00Z"},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "list"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "conv-1")
+	assert.Contains(t, output, "First conversation")
+	assert.Contains(t, output, "conv-2")
+}
+
+func TestNubiCmd_Get(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_v3": map[string]interface{}{
+			"conversation": map[string]interface{}{
+				"id":     "conv-123",
+				"status": "COMPLETED",
+			},
+			"messages": []map[string]interface{}{
+				{
+					"id":           "msg-1",
+					"status":       "COMPLETED",
+					"response":     "Details response",
+					"message_type": "generation",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "conv-123"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "Details")
+	assert.Contains(t, output, "response")
+}
+
+func TestNubiCmd_Get_JSON(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_v3": map[string]interface{}{
+			"conversation": map[string]interface{}{
+				"id":     "conv-123",
+				"status": "COMPLETED",
+			},
+			"messages": []map[string]interface{}{
+				{
+					"id":           "msg-1",
+					"status":       "COMPLETED",
+					"response":     "Details response",
+					"message_type": "generation",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "conv-123", "--output", "json"})
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "conv-123", result["conversation_id"])
+}
+
+func TestNubiCmd_Bookmark(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_bookmark_conversation": map[string]interface{}{
+			"data": "ok",
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "bookmark", "add", "conv-123"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "Added bookmark for conversation conv-123")
+}
+
+func TestNubiCmd_Delete(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_delete_llm_conversation_by_id": map[string]interface{}{
+			"data": "ok",
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "delete", "conv-123"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "Deleted conversation conv-123")
 }
