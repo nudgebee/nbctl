@@ -315,3 +315,172 @@ func TestNubiCmd_Delete(t *testing.T) {
 
 	assert.Contains(t, output, "Deleted conversation conv-123")
 }
+
+func TestNubiCmd_Agents(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_list_agents": map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"name":        "k8s_agent",
+					"description": "Kubernetes management agent",
+					"status":      "active",
+					"tools":       []string{"kubectl_get", "kubectl_logs"},
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "agents"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "k8s_agent")
+	assert.Contains(t, output, "Kubernetes management agent")
+}
+
+func TestNubiCmd_Tools(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_list_tools": map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"name":         "kubectl_get",
+					"description":  "Get Kubernetes resources",
+					"status":       "enabled",
+					"nb_tool_type": "k8s",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "tools"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "kubectl_get")
+	assert.Contains(t, output, "Get Kubernetes resources")
+}
+
+func TestNubiCmd_Functions(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"llm_functions": map[string]interface{}{
+			"rows": []map[string]interface{}{
+				{
+					"name":        "analyze_logs",
+					"description": "Analyze pod log streams",
+					"status":      "active",
+					"variables":   []string{"namespace", "pod_name"},
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "functions"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "analyze_logs")
+	assert.Contains(t, output, "Analyze pod log streams")
+}
+
+func TestNubiCmd_Playbooks(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"agents_list_playbooks": map[string]interface{}{
+			"rows": []map[string]interface{}{
+				{
+					"id":         "pb-101",
+					"alert_name": "HighMemoryUsage",
+					"source":     "Prometheus",
+					"processor":  "auto_triage",
+					"updated_at": "2026-08-20T12:00:00Z",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "playbooks"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "pb-101")
+	assert.Contains(t, output, "HighMemoryUsage")
+}
+
+func TestNubiCmd_Stats(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_usage_metrics": map[string]interface{}{
+			"data": map[string]interface{}{
+				"conversation": map[string]interface{}{
+					"total_cost":         0.005,
+					"total_input_tokens": 1200,
+					"total_output_tokens": 350,
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "stats", "conv-123"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "$0.005000")
+	assert.Contains(t, output, "1200")
+	assert.Contains(t, output, "350")
+}
+
+func TestNubiCmd_Stats_JSON(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_usage_metrics": map[string]interface{}{
+			"data": map[string]interface{}{
+				"conversation": map[string]interface{}{
+					"total_cost_usd":                  0.0275597,
+					"total_input_tokens":             57270,
+					"total_output_tokens":            996,
+					"total_cached_input_tokens":       39857,
+					"total_cache_hit_rate_percentage": 69.59,
+					"model_usage": []map[string]interface{}{
+						{
+							"model_name": "gemini-3.5-flash-lite",
+							"requests":   8,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "stats", "conv-123", "--output", "json"})
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0.0275597, result["total_cost_usd"])
+	assert.Equal(t, float64(57270), result["total_input_tokens"])
+	assert.NotEmpty(t, result["model_usage"])
+}

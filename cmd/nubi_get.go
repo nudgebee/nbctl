@@ -41,14 +41,14 @@ var nubiGetCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to get conversation details: %w", err)
 			}
-			metrics, _ := nubiClient.GetUsageMetrics(ctx)
+			stats, _ := nubiClient.GetConversationStats(ctx, conversationID)
 			result := map[string]interface{}{
 				"account_id":      accountID,
 				"conversation_id": conversationID,
 				"details":         details,
 			}
-			if metrics != "" {
-				result["metrics"] = metrics
+			if stats != nil {
+				result["stats"] = stats
 			}
 			format.GetFormat().Print(result)
 			return nil

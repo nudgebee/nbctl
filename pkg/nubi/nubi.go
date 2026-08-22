@@ -191,8 +191,8 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	// ai_get_conversation_v3 returns a "conversation shell + flat messages/agents/tool_calls deltas".
 	// We re-correlate the flat lists by ID to preserve the previous nested-traversal behavior.
 	req := client.NewRequest(`
-		query GetLlmConversation($accountId: String!, $sessionId: String!) {
-		  ai_get_conversation_v3(request: {account_id: $accountId, session_id: $sessionId}) {
+		query GetLlmConversation($accountId: String!, $conversationId: String, $sessionId: String) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, conversation_id: $conversationId, session_id: $sessionId}) {
 			conversation {
 			  id
 			  status
@@ -222,7 +222,14 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	`)
 
 	req.Var("accountId", c.AccountID)
-	req.Var("sessionId", c.SessionID)
+	idToUse := c.ConversationID
+	if idToUse == "" {
+		idToUse = c.SessionID
+	}
+	if idToUse != "" {
+		req.Var("conversationId", idToUse)
+		req.Var("sessionId", idToUse)
+	}
 
 	var respData struct {
 		AiGetConversationV3 struct {
@@ -373,9 +380,24 @@ type ConversationDetails struct {
 }
 
 func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
+	idToUse := c.ConversationID
+	if idToUse == "" {
+		idToUse = c.SessionID
+	}
+
+	details, err := c.fetchDetails(ctx, idToUse, "")
+	if (err == nil && details != nil && details.Conversation.ID != "") || idToUse == "" {
+		return details, err
+	}
+
+	// Fallback: if querying by conversation_id returned empty, try session_id
+	return c.fetchDetails(ctx, "", idToUse)
+}
+
+func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID string) (*ConversationDetails, error) {
 	req := client.NewRequest(`
-		query GetLlmConversationDetails($accountId: String!, $sessionId: String!) {
-		  ai_get_conversation_v3(request: {account_id: $accountId, session_id: $sessionId}) {
+		query GetLlmConversationDetails($accountId: String!, $conversationId: String, $sessionId: String) {
+		  ai_get_conversation_v3(request: {account_id: $accountId, conversation_id: $conversationId, session_id: $sessionId}) {
 			conversation {
 			  id
 			  status
@@ -405,7 +427,12 @@ func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationD
 	`)
 
 	req.Var("accountId", c.AccountID)
-	req.Var("sessionId", c.SessionID)
+	if conversationID != "" {
+		req.Var("conversationId", conversationID)
+	}
+	if sessionID != "" {
+		req.Var("sessionId", sessionID)
+	}
 
 	var respData struct {
 		AiGetConversationV3 struct {
@@ -554,7 +581,9 @@ func (c *NubiClient) StopConversation() {
 	}()
 }
 
-func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
+type ConversationStats map[string]any
+
+func (c *NubiClient) GetConversationStats(ctx context.Context, conversationID string) (ConversationStats, error) {
 	req := client.NewRequest(`
 		mutation GetConversationUsageMetrics($accountId: String!, $conversationId: String!) {
 		  ai_get_conversation_usage_metrics(request: {account_id: $accountId, conversation_id: $conversationId}) {
@@ -563,31 +592,77 @@ func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
 		}
 	`)
 
-	convID := c.ConversationID
-	if convID == "" {
-		convID = c.SessionID
+	if conversationID == "" {
+		conversationID = c.ConversationID
+		if conversationID == "" {
+			conversationID = c.SessionID
+		}
 	}
 	req.Var("accountId", c.AccountID)
-	req.Var("conversationId", convID)
+	req.Var("conversationId", conversationID)
 
 	var respData struct {
 		AiGetConversationUsageMetrics struct {
 			Data struct {
-				Conversation struct {
-					TotalCost         float64 `json:"total_cost"`
-					TotalInputTokens  int     `json:"total_input_tokens"`
-					TotalOutputTokens int     `json:"total_output_tokens"`
-				} `json:"conversation"`
+				Conversation map[string]any `json:"conversation"`
 			} `json:"data"`
 		} `json:"ai_get_conversation_usage_metrics"`
 	}
 
 	if err := c.Client.Run(ctx, req, &respData); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	metrics := respData.AiGetConversationUsageMetrics.Data.Conversation
-	return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d, Output Tokens: %d", metrics.TotalCost, metrics.TotalInputTokens, metrics.TotalOutputTokens), nil
+	return respData.AiGetConversationUsageMetrics.Data.Conversation, nil
+}
+
+func getFloat64FromMap(m map[string]any, keys ...string) float64 {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			switch val := v.(type) {
+			case float64:
+				return val
+			case int:
+				return float64(val)
+			case int64:
+				return float64(val)
+			}
+		}
+	}
+	return 0
+}
+
+func getIntFromMap(m map[string]any, keys ...string) int {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			switch val := v.(type) {
+			case float64:
+				return int(val)
+			case int:
+				return val
+			case int64:
+				return int(val)
+			}
+		}
+	}
+	return 0
+}
+
+func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
+	stats, err := c.GetConversationStats(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	cost := getFloat64FromMap(stats, "total_cost_usd", "total_cost")
+	inputTokens := getIntFromMap(stats, "total_input_tokens")
+	outputTokens := getIntFromMap(stats, "total_output_tokens")
+	cachedTokens := getIntFromMap(stats, "total_cached_input_tokens")
+	hitRate := getFloat64FromMap(stats, "total_cache_hit_rate_percentage")
+
+	if cachedTokens > 0 {
+		return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d (Cached: %d, %.1f%%), Output Tokens: %d", cost, inputTokens, cachedTokens, hitRate, outputTokens), nil
+	}
+	return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d, Output Tokens: %d", cost, inputTokens, outputTokens), nil
 }
 
 func (c *NubiClient) AddBookmark(conversationID string) error {
@@ -736,6 +811,33 @@ type FunctionItem struct {
 	Variables   []string `json:"variables"`
 }
 
+func (f *FunctionItem) UnmarshalJSON(data []byte) error {
+	type Alias FunctionItem
+	aux := &struct {
+		*Alias
+		RawVars any `json:"variables"`
+	}{
+		Alias: (*Alias)(f),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	switch v := aux.RawVars.(type) {
+	case string:
+		var slice []string
+		if err := json.Unmarshal([]byte(v), &slice); err == nil {
+			f.Variables = slice
+		} else if v != "" {
+			f.Variables = []string{v}
+		}
+	case []any:
+		for _, item := range v {
+			f.Variables = append(f.Variables, fmt.Sprintf("%v", item))
+		}
+	}
+	return nil
+}
+
 func (c *NubiClient) ListFunctions() ([]FunctionItem, error) {
 	req := client.NewRequest(`
 		query GetFunctions($where: LlmFunctionsWhereRequest!) {
@@ -785,4 +887,43 @@ func (c *NubiClient) DeleteConversation(ctx context.Context, conversationID stri
 	}
 
 	return c.Client.Run(ctx, req, &respData)
+}
+
+type PlaybookItem struct {
+	ID        string `json:"id"`
+	AlertName string `json:"alert_name"`
+	Source    string `json:"source"`
+	Processor string `json:"processor"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+func (c *NubiClient) ListPlaybooks(ctx context.Context) ([]PlaybookItem, error) {
+	req := client.NewRequest(`
+		query ListPlaybooks($where: AgentPlaybookWhereRequest!) {
+		  agents_list_playbooks(where: $where) {
+			rows {
+			  id
+			  alert_name
+			  source
+			  processor
+			  updated_at
+			}
+		  }
+		}
+	`)
+	req.Var("where", map[string]any{
+		"cloud_account_id": map[string]any{"_eq": c.AccountID},
+	})
+
+	var respData struct {
+		AgentsListPlaybooks struct {
+			Rows []PlaybookItem `json:"rows"`
+		} `json:"agents_list_playbooks"`
+	}
+
+	if err := c.Client.Run(ctx, req, &respData); err != nil {
+		return nil, err
+	}
+
+	return respData.AgentsListPlaybooks.Rows, nil
 }

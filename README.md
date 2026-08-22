@@ -643,6 +643,11 @@ The Nubi shell supports various slash commands to manage your session and intera
 *   `nbctl nubi get <conversation-id>`: View details and step messages of a specific conversation.
 *   `nbctl nubi bookmark [add|remove|list] [conversation-id]`: Manage conversation bookmarks.
 *   `nbctl nubi delete <conversation-id>` (alias `remove`, `rm`): Delete a conversation by ID.
+*   `nbctl nubi agents`: List registered AI agents, descriptions, and assigned toolsets.
+*   `nbctl nubi tools`: List registered tools accessible by AI agents.
+*   `nbctl nubi functions`: List prompt template functions and variables.
+*   `nbctl nubi playbooks`: List available investigation playbooks.
+*   `nbctl nubi stats <conversation-id>` (aliases `metrics`, `usage`): Retrieve token usage and costs for a specific conversation.
 
 **Examples:**
 
