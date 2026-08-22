@@ -638,6 +638,7 @@ The Nubi shell supports various slash commands to manage your session and intera
 
 **Subcommands:**
 
+*   `nbctl nubi query "<prompt>"` (aliases `ask`, `exec`, `run`): Execute a single query non-interactively.
 *   `nbctl nubi list` (alias `history`): List recent conversation history.
 *   `nbctl nubi get <conversation-id>`: View details and step messages of a specific conversation.
 *   `nbctl nubi bookmark [add|remove|list] [conversation-id]`: Manage conversation bookmarks.
@@ -653,12 +654,18 @@ nbctl nubi my-dev-account-id
 
 *Single query mode (synchronous):*
 ```bash
-nbctl nubi -q "What is the health status of my services?"
+nbctl nubi query "What is the health status of my services?"
+nbctl nubi ask "How many pods are running?"
 ```
 
 *Single query mode (asynchronous):*
 ```bash
-nbctl nubi -q "Analyze latest deployment logs" --async
+nbctl nubi query "Analyze latest deployment logs" --async
+```
+
+*Single query mode (JSON output):*
+```bash
+nbctl nubi query "Show memory metrics" --output json
 ```
 
 *List conversations:*
