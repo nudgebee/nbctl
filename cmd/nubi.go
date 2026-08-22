@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
+	"github.com/mattn/go-isatty"
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/nudgebee/nbctl/pkg/log"
@@ -36,6 +37,7 @@ var suggestions = []prompt.Suggest{
 	{Text: "/agents", Description: "List available agents"},
 	{Text: "/tools", Description: "List available tools"},
 	{Text: "/functions", Description: "List available functions"},
+	{Text: "/playbooks", Description: "List available investigation playbooks"},
 	{Text: "/copy", Description: "Copy the last response to clipboard"},
 	{Text: "/exit", Description: "Exit the Nubi shell"},
 }
@@ -116,6 +118,16 @@ var nubiCmd = &cobra.Command{
 		fmt.Printf("Using account: %s\n\n", style.Render(accountID))
 
 		printNubiHelp()
+
+		if !isatty.IsTerminal(os.Stdin.Fd()) && !isatty.IsCygwinTerminal(os.Stdin.Fd()) {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				line := scanner.Text()
+				fmt.Printf(">>> %s\n", line)
+				s.executor(line)
+			}
+			return scanner.Err()
+		}
 
 		p := prompt.New(
 			s.executor,
@@ -371,6 +383,8 @@ func (s *nubiShell) handleSlashCommand(in string) {
 		fmt.Println("  /agents: List available agents")
 		fmt.Println("  /tools: List available tools")
 		fmt.Println("  /functions: List available functions")
+		fmt.Println("  /playbooks: List available investigation playbooks")
+		fmt.Println("  /copy: Copy the last response to clipboard")
 		fmt.Println("  /exit: Exit the Nubi shell")
 	case "/bookmarks":
 		s.handleBookmarkCommand(parts)
@@ -380,12 +394,21 @@ func (s *nubiShell) handleSlashCommand(in string) {
 			fmt.Printf("Error listing agents: %v\n", err)
 			return
 		}
+		var rows []agentRowDisplay
+		for _, a := range agents {
+			rows = append(rows, agentRowDisplay{
+				Name:        a.Name,
+				Description: a.Description,
+				Status:      a.Status,
+				Tools:       strings.Join(a.Tools, ", "),
+			})
+		}
 		format.GetFormat().Print(format.TabularData{
-			Data: agents,
+			Data: rows,
 			Fields: []format.TableField{
 				{Header: "NAME", Field: "Name"},
-				{Header: "DESCRIPTION", Field: "Description"},
 				{Header: "STATUS", Field: "Status"},
+				{Header: "DESCRIPTION", Field: "Description"},
 				{Header: "TOOLS", Field: "Tools"},
 			},
 		})
@@ -399,9 +422,9 @@ func (s *nubiShell) handleSlashCommand(in string) {
 			Data: tools,
 			Fields: []format.TableField{
 				{Header: "NAME", Field: "Name"},
-				{Header: "DESCRIPTION", Field: "Description"},
 				{Header: "STATUS", Field: "Status"},
 				{Header: "TYPE", Field: "NBToolType"},
+				{Header: "DESCRIPTION", Field: "Description"},
 			},
 		})
 	case "/functions":
@@ -410,13 +433,37 @@ func (s *nubiShell) handleSlashCommand(in string) {
 			fmt.Printf("Error listing functions: %v\n", err)
 			return
 		}
+		var rows []functionRowDisplay
+		for _, f := range functions {
+			rows = append(rows, functionRowDisplay{
+				Name:        f.Name,
+				Description: f.Description,
+				Status:      f.Status,
+				Variables:   strings.Join(f.Variables, ", "),
+			})
+		}
 		format.GetFormat().Print(format.TabularData{
-			Data: functions,
+			Data: rows,
 			Fields: []format.TableField{
 				{Header: "NAME", Field: "Name"},
-				{Header: "DESCRIPTION", Field: "Description"},
 				{Header: "STATUS", Field: "Status"},
+				{Header: "DESCRIPTION", Field: "Description"},
 				{Header: "VARIABLES", Field: "Variables"},
+			},
+		})
+	case "/playbooks":
+		playbooks, err := s.nubiClient.ListPlaybooks(context.Background())
+		if err != nil {
+			fmt.Printf("Error listing playbooks: %v\n", err)
+			return
+		}
+		format.GetFormat().Print(format.TabularData{
+			Data: playbooks,
+			Fields: []format.TableField{
+				{Header: "ID", Field: "ID"},
+				{Header: "ALERT NAME", Field: "AlertName"},
+				{Header: "SOURCE", Field: "Source"},
+				{Header: "PROCESSOR", Field: "Processor"},
 			},
 		})
 	case "/copy":

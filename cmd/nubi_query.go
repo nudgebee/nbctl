@@ -120,7 +120,7 @@ var nubiQueryCmd = &cobra.Command{
 		conversationURL := fmt.Sprintf("%s/ask-nudgebee?accountId=%s&conversation_id=%s", endpointURL, nubiClient.AccountID, nubiClient.ConversationID)
 
 		if format.GetFormat().Get() == "json" {
-			metrics, _ := nubiClient.GetUsageMetrics(ctx)
+			stats, _ := nubiClient.GetConversationStats(ctx, nubiClient.ConversationID)
 			details, _ := nubiClient.GetConversationDetails(ctx)
 
 			var respObj any
@@ -143,8 +143,8 @@ var nubiQueryCmd = &cobra.Command{
 			if details != nil {
 				result["details"] = details
 			}
-			if metrics != "" {
-				result["metrics"] = metrics
+			if stats != nil {
+				result["stats"] = stats
 			}
 			format.GetFormat().Print(result)
 			return nil
