@@ -484,3 +484,44 @@ func TestNubiCmd_Stats_JSON(t *testing.T) {
 	assert.Equal(t, float64(57270), result["total_input_tokens"])
 	assert.NotEmpty(t, result["model_usage"])
 }
+
+func TestNubiCmd_Interactive_SlashCommands(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_list_agents": map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"name": "k8s_agent", "description": "K8s Agent", "status": "active", "tools": []string{"kubectl"}},
+			},
+		},
+		"ai_list_tools": map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"name": "kubectl", "description": "K8s Tool", "status": "active", "nb_tool_type": "read_only"},
+			},
+		},
+		"llm_functions": map[string]interface{}{
+			"rows": []map[string]interface{}{
+				{"name": "fn_test", "description": "Fn Test", "status": "active", "variables": `["ns"]`},
+			},
+		},
+		"agents_list_playbooks": map[string]interface{}{
+			"rows": []map[string]interface{}{
+				{"id": "pb-1", "alert_name": "Alert1", "source": "agent", "processor": "auto"},
+			},
+		},
+	}
+
+	input := "/help\n/agents\n/tools\n/functions\n/playbooks\n/exit\n"
+	output, err := testutil.RunWithSimpleGraphQLAndInput(mockResponse, nubiCmd, []string{"nubi"}, input)
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "Welcome to NuBi")
+	assert.Contains(t, output, "k8s_agent")
+	assert.Contains(t, output, "kubectl")
+	assert.Contains(t, output, "fn_test")
+	assert.Contains(t, output, "Alert1")
+	assert.Contains(t, output, "Goodbye!")
+}

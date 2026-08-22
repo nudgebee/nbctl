@@ -140,6 +140,24 @@ func RunWithSimpleGraphQL(mockData any, cmd *cobra.Command, args []string) (stri
 	return RunWithMockServer(handler, defaults, cmd, args)
 }
 
+// RunWithSimpleGraphQLAndInput runs a command with mock GraphQL and simulated stdin input.
+func RunWithSimpleGraphQLAndInput(mockData any, cmd *cobra.Command, args []string, input string) (string, error) {
+	_ = os.Setenv("NBCTL_TESTING", "true")
+	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
+
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+	_, _ = w.WriteString(input)
+	_ = w.Close()
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	return RunWithSimpleGraphQL(mockData, cmd, args)
+}
+
 // IntegrationEnabled returns true when integration tests are enabled via
 // the NUDGEBEE_INTEGRATION env var.
 func IntegrationEnabled() bool {

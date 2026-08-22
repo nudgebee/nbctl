@@ -94,6 +94,7 @@ var nubiCmd = &cobra.Command{
 			spinner:     spinner.New(spinner.CharSets[9], 100*time.Millisecond),
 			historyFile: historyFile,
 			history:     history,
+			running:     true,
 		}
 
 		signals := make(chan os.Signal, 1)
@@ -107,23 +108,24 @@ var nubiCmd = &cobra.Command{
 			os.Exit(0)
 		}()
 
-		printNubiArt()
+		out := format.GetFormat().GetOutput()
+		printNubiArtTo(out)
 
 		// Welcome message styling
 		style := lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#00B3FF"))
 
-		fmt.Printf("Hello %s!\n", style.Render(username))
-		fmt.Printf("Using account: %s\n\n", style.Render(accountID))
+		_, _ = fmt.Fprintf(out, "Hello %s!\n", style.Render(username))
+		_, _ = fmt.Fprintf(out, "Using account: %s\n\n", style.Render(accountID))
 
-		printNubiHelp()
+		printNubiHelpTo(out)
 
 		if !isatty.IsTerminal(os.Stdin.Fd()) && !isatty.IsCygwinTerminal(os.Stdin.Fd()) {
 			scanner := bufio.NewScanner(os.Stdin)
-			for scanner.Scan() {
+			for s.running && scanner.Scan() {
 				line := scanner.Text()
-				fmt.Printf(">>> %s\n", line)
+				_, _ = fmt.Fprintf(out, ">>> %s\n", line)
 				s.executor(line)
 			}
 			return scanner.Err()
@@ -174,6 +176,7 @@ type nubiShell struct {
 	waitingMessageID string
 	waitingAgentID   string
 	lastResponse     string
+	running          bool
 }
 
 type MessageConfig struct {
@@ -285,6 +288,7 @@ func (s *nubiShell) executor(in string) {
 }
 
 func (s *nubiShell) handleSlashCommand(in string) {
+	out := format.GetFormat().GetOutput()
 	parts := strings.Fields(in)
 	command := parts[0]
 
@@ -374,24 +378,24 @@ func (s *nubiShell) handleSlashCommand(in string) {
 		s.nubiClient.ConversationID = ""
 		fmt.Printf("Switched to account %s\n", accountID)
 	case "/help":
-		fmt.Println("Available commands:")
-		fmt.Println("  /help: Show this help message")
-		fmt.Println("  /bookmarks [add|remove|list]: Manage your bookmarks")
-		fmt.Println("  /conversation [id]: Start a new conversation or switch to a different one")
-		fmt.Println("  /history [n]: Show the last n conversations (default: 10)")
-		fmt.Println("  /account <id>: Switch to a different account")
-		fmt.Println("  /agents: List available agents")
-		fmt.Println("  /tools: List available tools")
-		fmt.Println("  /functions: List available functions")
-		fmt.Println("  /playbooks: List available investigation playbooks")
-		fmt.Println("  /copy: Copy the last response to clipboard")
-		fmt.Println("  /exit: Exit the Nubi shell")
+		_, _ = fmt.Fprintln(out, "Available commands:")
+		_, _ = fmt.Fprintln(out, "  /help: Show this help message")
+		_, _ = fmt.Fprintln(out, "  /bookmarks [add|remove|list]: Manage your bookmarks")
+		_, _ = fmt.Fprintln(out, "  /conversation [id]: Start a new conversation or switch to a different one")
+		_, _ = fmt.Fprintln(out, "  /history [n]: Show the last n conversations (default: 10)")
+		_, _ = fmt.Fprintln(out, "  /account <id>: Switch to a different account")
+		_, _ = fmt.Fprintln(out, "  /agents: List available agents")
+		_, _ = fmt.Fprintln(out, "  /tools: List available tools")
+		_, _ = fmt.Fprintln(out, "  /functions: List available functions")
+		_, _ = fmt.Fprintln(out, "  /playbooks: List available investigation playbooks")
+		_, _ = fmt.Fprintln(out, "  /copy: Copy the last response to clipboard")
+		_, _ = fmt.Fprintln(out, "  /exit: Exit the Nubi shell")
 	case "/bookmarks":
 		s.handleBookmarkCommand(parts)
 	case "/agents":
 		agents, err := s.nubiClient.ListAgents()
 		if err != nil {
-			fmt.Printf("Error listing agents: %v\n", err)
+			_, _ = fmt.Fprintf(out, "Error listing agents: %v\n", err)
 			return
 		}
 		var rows []agentRowDisplay
@@ -415,7 +419,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 	case "/tools":
 		tools, err := s.nubiClient.ListTools()
 		if err != nil {
-			fmt.Printf("Error listing tools: %v\n", err)
+			_, _ = fmt.Fprintf(out, "Error listing tools: %v\n", err)
 			return
 		}
 		format.GetFormat().Print(format.TabularData{
@@ -430,7 +434,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 	case "/functions":
 		functions, err := s.nubiClient.ListFunctions()
 		if err != nil {
-			fmt.Printf("Error listing functions: %v\n", err)
+			_, _ = fmt.Fprintf(out, "Error listing functions: %v\n", err)
 			return
 		}
 		var rows []functionRowDisplay
@@ -454,7 +458,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 	case "/playbooks":
 		playbooks, err := s.nubiClient.ListPlaybooks(context.Background())
 		if err != nil {
-			fmt.Printf("Error listing playbooks: %v\n", err)
+			_, _ = fmt.Fprintf(out, "Error listing playbooks: %v\n", err)
 			return
 		}
 		format.GetFormat().Print(format.TabularData{
@@ -468,19 +472,23 @@ func (s *nubiShell) handleSlashCommand(in string) {
 		})
 	case "/copy":
 		if s.lastResponse == "" {
-			fmt.Println("Nothing to copy.")
+			_, _ = fmt.Fprintln(out, "Nothing to copy.")
 			return
 		}
 		if err := clipboard.WriteAll(s.lastResponse); err != nil {
-			fmt.Printf("Error copying to clipboard: %v\n", err)
+			_, _ = fmt.Fprintf(out, "Error copying to clipboard: %v\n", err)
 		} else {
-			fmt.Println("Copied to clipboard!")
+			_, _ = fmt.Fprintln(out, "Copied to clipboard!")
 		}
 	case "/exit":
-		fmt.Println("Goodbye!")
-		os.Exit(0)
+		_, _ = fmt.Fprintln(out, "Goodbye!")
+		s.running = false
+		if os.Getenv("NBCTL_TESTING") != "true" {
+			os.Exit(0)
+		}
+		return
 	default:
-		fmt.Printf("Unknown command: %s\n", command)
+		_, _ = fmt.Fprintf(out, "Unknown command: %s\n", command)
 	}
 }
 
