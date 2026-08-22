@@ -151,9 +151,9 @@ func (c *NubiClient) ShowHistory(limit int) ([]ConversationHistoryItem, error) {
 
 	var history []ConversationHistoryItem
 	for _, conv := range respData.LlmConversations.Rows {
-		updatedAt, err := time.Parse("2006-01-02T15:04:05.999999", conv.UpdatedAt)
+		updatedAt, err := time.Parse(time.RFC3339, conv.UpdatedAt)
 		if err != nil {
-			return nil, err
+			updatedAt, _ = time.Parse("2006-01-02T15:04:05.999999", conv.UpdatedAt)
 		}
 		history = append(history, ConversationHistoryItem{
 			ID:        conv.ID,
@@ -765,4 +765,24 @@ func (c *NubiClient) ListFunctions() ([]FunctionItem, error) {
 	}
 
 	return respData.LlmFunctions.Rows, nil
+}
+
+func (c *NubiClient) DeleteConversation(ctx context.Context, conversationID string) error {
+	req := client.NewRequest(`
+		mutation DeleteLlmConversation($conversationId: String!) {
+		  ai_delete_llm_conversation_by_id(request: {conversation_id: $conversationId}) {
+			data
+		  }
+		}
+	`)
+
+	req.Var("conversationId", conversationID)
+
+	var respData struct {
+		AiDeleteLlmConversationById struct {
+			Data any `json:"data"`
+		} `json:"ai_delete_llm_conversation_by_id"`
+	}
+
+	return c.Client.Run(ctx, req, &respData)
 }
