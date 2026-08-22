@@ -75,6 +75,55 @@ var nubiGetCmd = &cobra.Command{
 			}
 		}
 
+		details, _ := nubiClient.GetConversationDetails(ctx)
+		if details != nil && len(details.ToolCalls) > 0 {
+			_, _ = fmt.Fprintf(out, "\nTool Executions (%d):\n", len(details.ToolCalls))
+			type toolRow struct {
+				ToolName  string
+				Status    string
+				StartedAt string
+				EndedAt   string
+				Duration  string
+			}
+			var rows []toolRow
+			for _, t := range details.ToolCalls {
+				toolName, _ := t["tool_name"].(string)
+				status, _ := t["status"].(string)
+				if status == "" {
+					status = "SUCCESS"
+				}
+				startedAt, _ := t["created_at"].(string)
+				if startedAt == "" {
+					startedAt = "-"
+				}
+				endedAt, _ := t["updated_at"].(string)
+				if endedAt == "" {
+					endedAt = "-"
+				}
+				duration, _ := t["duration"].(string)
+				if duration == "" {
+					duration = "-"
+				}
+				rows = append(rows, toolRow{
+					ToolName:  toolName,
+					Status:    status,
+					StartedAt: startedAt,
+					EndedAt:   endedAt,
+					Duration:  duration,
+				})
+			}
+			format.GetFormat().Print(format.TabularData{
+				Data: rows,
+				Fields: []format.TableField{
+					{Header: "Tool Name", Field: "ToolName"},
+					{Header: "Status", Field: "Status"},
+					{Header: "Started At", Field: "StartedAt"},
+					{Header: "Ended At", Field: "EndedAt"},
+					{Header: "Duration", Field: "Duration"},
+				},
+			})
+		}
+
 		return nil
 	},
 }

@@ -362,3 +362,94 @@ func TestNubiClient_ListFunctions(t *testing.T) {
 	assert.Equal(t, "func1", functions[0].Name)
 	assert.Equal(t, "desc1", functions[0].Description)
 }
+
+func TestNubiClient_GetConversationDetails(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_get_conversation_v3": map[string]any{
+					"conversation": map[string]any{
+						"id":         "test-conv",
+						"status":     "COMPLETED",
+						"created_at": "2026-08-22T17:00:00Z",
+						"updated_at": "2026-08-22T17:00:05Z",
+					},
+					"messages": []map[string]any{
+						{
+							"id":           "msg-1",
+							"status":       "COMPLETED",
+							"response":     "Found pods",
+							"message_type": "generation",
+							"created_at":   "2026-08-22T17:00:00Z",
+							"updated_at":   "2026-08-22T17:00:05Z",
+						},
+					},
+					"agents": []map[string]any{
+						{
+							"id":         "agent-1",
+							"message_id": "msg-1",
+							"agent_name": "k8s_agent",
+							"status":     "COMPLETED",
+							"thought":    "listing pods",
+							"response":   "done",
+							"created_at": "2026-08-22T17:00:00Z",
+							"updated_at": "2026-08-22T17:00:04Z",
+						},
+					},
+					"tool_calls": []map[string]any{
+						{
+							"id":         "tool-1",
+							"agent_id":   "agent-1",
+							"tool_name":  "k8s_get_pods",
+							"parameters": `{"namespace":"default"}`,
+							"status":     "SUCCESS",
+							"thought":    "get all pods",
+							"created_at": "2026-08-22T17:00:01Z",
+							"updated_at": "2026-08-22T17:00:03Z",
+						},
+						{
+							"id":         "tool-2",
+							"agent_id":   "agent-1",
+							"tool_name":  "logs_query",
+							"parameters": `{"query":"error"}`,
+							"status":     "SUCCESS",
+							"thought":    "query logs",
+							"created_at": "2026-08-22T17:00:01Z",
+							"updated_at": "2026-08-22T17:00:04Z",
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+	c.ConversationID = "test-conv"
+
+	details, err := c.GetConversationDetails(context.Background())
+	assert.NoError(t, err)
+	require.NotNil(t, details)
+	assert.Equal(t, "test-conv", details.Conversation.ID)
+	assert.Equal(t, "COMPLETED", details.Conversation.Status)
+	require.Len(t, details.ToolCalls, 2)
+
+	tool1 := details.ToolCalls[0]
+	assert.Equal(t, "tool-1", tool1["id"])
+	assert.Equal(t, "k8s_get_pods", tool1["tool_name"])
+	assert.Equal(t, "SUCCESS", tool1["status"])
+	assert.Equal(t, "2026-08-22T17:00:01Z", tool1["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:03Z", tool1["updated_at"])
+	assert.Equal(t, int64(2000), tool1["duration_ms"])
+	assert.Equal(t, "2s", tool1["duration"])
+
+	tool2 := details.ToolCalls[1]
+	assert.Equal(t, "tool-2", tool2["id"])
+	assert.Equal(t, "logs_query", tool2["tool_name"])
+	assert.Equal(t, "SUCCESS", tool2["status"])
+	assert.Equal(t, "2026-08-22T17:00:01Z", tool2["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:04Z", tool2["updated_at"])
+	assert.Equal(t, int64(3000), tool2["duration_ms"])
+	assert.Equal(t, "3s", tool2["duration"])
+}

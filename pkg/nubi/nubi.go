@@ -204,18 +204,29 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 			  message_type
 			  message_config
 			  parent_agent_id
+			  created_at
+			  updated_at
 			}
 			agents {
 			  id
 			  message_id
 			  agent_name
 			  status
+			  thought
 			  response
+			  created_at
+			  updated_at
 			}
 			tool_calls {
+			  id
 			  agent_id
 			  tool_name
 			  parameters
+			  response
+			  thought
+			  status
+			  created_at
+			  updated_at
 			}
 		  }
 		}
@@ -238,24 +249,35 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 				Status string `json:"status"`
 			} `json:"conversation"`
 			Messages []struct {
-				ID            string `json:"id"`
-				Status        string `json:"status"`
-				Response      string `json:"response"`
-				MessageType   string `json:"message_type"`
-				MessageConfig string `json:"message_config"`
-				ParentAgentID string `json:"parent_agent_id"`
+				ID            string     `json:"id"`
+				Status        string     `json:"status"`
+				Response      string     `json:"response"`
+				MessageType   string     `json:"message_type"`
+				MessageConfig string     `json:"message_config"`
+				ParentAgentID string     `json:"parent_agent_id"`
+				CreatedAt     *time.Time `json:"created_at"`
+				UpdatedAt     *time.Time `json:"updated_at"`
 			} `json:"messages"`
 			Agents []struct {
-				ID        string `json:"id"`
-				MessageID string `json:"message_id"`
-				AgentName string `json:"agent_name"`
-				Status    string `json:"status"`
-				Response  string `json:"response"`
+				ID        string     `json:"id"`
+				MessageID string     `json:"message_id"`
+				AgentName string     `json:"agent_name"`
+				Status    string     `json:"status"`
+				Thought   string     `json:"thought"`
+				Response  string     `json:"response"`
+				CreatedAt *time.Time `json:"created_at"`
+				UpdatedAt *time.Time `json:"updated_at"`
 			} `json:"agents"`
 			ToolCalls []struct {
-				AgentID    string `json:"agent_id"`
-				ToolName   string `json:"tool_name"`
-				Parameters string `json:"parameters"`
+				ID         string     `json:"id"`
+				AgentID    string     `json:"agent_id"`
+				ToolName   string     `json:"tool_name"`
+				Parameters string     `json:"parameters"`
+				Response   string     `json:"response"`
+				Thought    string     `json:"thought"`
+				Status     string     `json:"status"`
+				CreatedAt  *time.Time `json:"created_at"`
+				UpdatedAt  *time.Time `json:"updated_at"`
 			} `json:"tool_calls"`
 		} `json:"ai_get_conversation_v3"`
 	}
@@ -401,6 +423,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			conversation {
 			  id
 			  status
+			  created_at
+			  updated_at
 			}
 			messages {
 			  id
@@ -409,18 +433,29 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			  message_type
 			  message_config
 			  parent_agent_id
+			  created_at
+			  updated_at
 			}
 			agents {
 			  id
 			  message_id
 			  agent_name
 			  status
+			  thought
 			  response
+			  created_at
+			  updated_at
 			}
 			tool_calls {
+			  id
 			  agent_id
 			  tool_name
 			  parameters
+			  response
+			  thought
+			  status
+			  created_at
+			  updated_at
 			}
 		  }
 		}
@@ -441,24 +476,35 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 				Status string `json:"status"`
 			} `json:"conversation"`
 			Messages []struct {
-				ID            string `json:"id"`
-				Status        string `json:"status"`
-				Response      string `json:"response"`
-				MessageType   string `json:"message_type"`
-				MessageConfig string `json:"message_config"`
-				ParentAgentID string `json:"parent_agent_id"`
+				ID            string     `json:"id"`
+				Status        string     `json:"status"`
+				Response      string     `json:"response"`
+				MessageType   string     `json:"message_type"`
+				MessageConfig string     `json:"message_config"`
+				ParentAgentID string     `json:"parent_agent_id"`
+				CreatedAt     *time.Time `json:"created_at"`
+				UpdatedAt     *time.Time `json:"updated_at"`
 			} `json:"messages"`
 			Agents []struct {
-				ID        string `json:"id"`
-				MessageID string `json:"message_id"`
-				AgentName string `json:"agent_name"`
-				Status    string `json:"status"`
-				Response  string `json:"response"`
+				ID        string     `json:"id"`
+				MessageID string     `json:"message_id"`
+				AgentName string     `json:"agent_name"`
+				Status    string     `json:"status"`
+				Thought   string     `json:"thought"`
+				Response  string     `json:"response"`
+				CreatedAt *time.Time `json:"created_at"`
+				UpdatedAt *time.Time `json:"updated_at"`
 			} `json:"agents"`
 			ToolCalls []struct {
-				AgentID    string `json:"agent_id"`
-				ToolName   string `json:"tool_name"`
-				Parameters string `json:"parameters"`
+				ID         string     `json:"id"`
+				AgentID    string     `json:"agent_id"`
+				ToolName   string     `json:"tool_name"`
+				Parameters string     `json:"parameters"`
+				Response   string     `json:"response"`
+				Thought    string     `json:"thought"`
+				Status     string     `json:"status"`
+				CreatedAt  *time.Time `json:"created_at"`
+				UpdatedAt  *time.Time `json:"updated_at"`
 			} `json:"tool_calls"`
 		} `json:"ai_get_conversation_v3"`
 	}
@@ -518,8 +564,32 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 
 	for _, t := range conv.ToolCalls {
 		toolMap := map[string]any{
+			"id":        t.ID,
 			"agent_id":  t.AgentID,
 			"tool_name": t.ToolName,
+			"status":    t.Status,
+		}
+		if t.CreatedAt != nil {
+			toolMap["created_at"] = t.CreatedAt.Format(time.RFC3339Nano)
+		}
+		if t.UpdatedAt != nil {
+			toolMap["updated_at"] = t.UpdatedAt.Format(time.RFC3339Nano)
+		}
+		if t.CreatedAt != nil && t.UpdatedAt != nil && !t.UpdatedAt.Before(*t.CreatedAt) {
+			dur := t.UpdatedAt.Sub(*t.CreatedAt)
+			toolMap["duration_ms"] = dur.Milliseconds()
+			toolMap["duration"] = dur.String()
+		}
+		if t.Thought != "" {
+			toolMap["thought"] = t.Thought
+		}
+		if t.Response != "" {
+			var respAny any
+			if err := json.Unmarshal([]byte(t.Response), &respAny); err == nil {
+				toolMap["response"] = respAny
+			} else {
+				toolMap["response"] = t.Response
+			}
 		}
 		if t.Parameters != "" {
 			var paramsAny any
