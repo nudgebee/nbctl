@@ -13,11 +13,7 @@ import (
 )
 
 func resetNubiFlags() {
-	if f := nubiCmd.Flags().Lookup("query"); f != nil {
-		_ = f.Value.Set("")
-		f.Changed = false
-	}
-	if f := nubiCmd.Flags().Lookup("async"); f != nil {
+	if f := nubiQueryCmd.Flags().Lookup("async"); f != nil {
 		_ = f.Value.Set("false")
 		f.Changed = false
 	}
@@ -37,6 +33,7 @@ func resetNubiFlags() {
 func TestNubiCmd_AsyncQuery(t *testing.T) {
 	resetNubiFlags()
 	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
 	t.Cleanup(resetNubiFlags)
 
 	mockResponse := map[string]interface{}{
@@ -47,29 +44,20 @@ func TestNubiCmd_AsyncQuery(t *testing.T) {
 		},
 	}
 
-	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "test-account-id", "-q", "hello", "--async"})
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "query", "hello", "--async"})
 	require.NoError(t, err)
 
 	assert.Contains(t, output, "Investigation triggered asynchronously.")
 	assert.Contains(t, output, "Session ID:")
 }
 
-func TestNubiCmd_AsyncWithoutQuery(t *testing.T) {
-	resetNubiFlags()
-	viper.Set("username", "test-user")
-	t.Cleanup(resetNubiFlags)
-
-	_, err := testutil.RunWithSimpleGraphQL(nil, nubiCmd, []string{"nubi", "test-account-id", "--async"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--async requires --query / -q")
-}
-
 func TestNubiCmd_EmptyQuery(t *testing.T) {
 	resetNubiFlags()
 	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
 	t.Cleanup(resetNubiFlags)
 
-	_, err := testutil.RunWithSimpleGraphQL(nil, nubiCmd, []string{"nubi", "test-account-id", "-q", "   "})
+	_, err := testutil.RunWithSimpleGraphQL(nil, nubiCmd, []string{"nubi", "query", "   "})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "query cannot be empty")
 }
@@ -128,7 +116,7 @@ func TestNubiCmd_SyncQuery(t *testing.T) {
 		"username":   "dummy-user",
 		"account-id": "dummy-account",
 	}
-	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{"nubi", "test-account-id", "-q", "system status"})
+	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{"nubi", "query", "system status"})
 	require.NoError(t, err)
 
 	assert.Contains(t, output, "System status")
@@ -191,14 +179,14 @@ func TestNubiCmd_SyncQuery_JSON(t *testing.T) {
 		"username":   "dummy-user",
 		"account-id": "dummy-account",
 	}
-	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{"nubi", "test-account-id", "-q", "system status", "--format", "json"})
+	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{"nubi", "query", "system status", "--output", "json"})
 	require.NoError(t, err)
 
 	var result map[string]interface{}
 	err = json.Unmarshal([]byte(output), &result)
 	require.NoError(t, err)
 
-	assert.Equal(t, "test-account-id", result["account_id"])
+	assert.Equal(t, "dummy-account", result["account_id"])
 	assert.Equal(t, "conv-123", result["conversation_id"])
 	assert.Equal(t, "system status", result["query"])
 	assert.Equal(t, "System status is healthy", result["response"])

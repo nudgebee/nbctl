@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -105,152 +104,6 @@ var nubiCmd = &cobra.Command{
 			fmt.Println("\nGoodbye!")
 			os.Exit(0)
 		}()
-
-		query, err := cmd.Flags().GetString("query")
-		if err != nil {
-			return err
-		}
-		async, err := cmd.Flags().GetBool("async")
-		if err != nil {
-			return err
-		}
-
-		query = strings.TrimSpace(query)
-
-		if async && !cmd.Flags().Changed("query") {
-			return fmt.Errorf("--async requires --query / -q")
-		}
-
-		// Single query mode (non-interactive)
-		if cmd.Flags().Changed("query") {
-			if query == "" {
-				return fmt.Errorf("query cannot be empty")
-			}
-
-			ctx, cancel := context.WithCancel(cmd.Context())
-			defer cancel()
-
-			sigChan := make(chan os.Signal, 1)
-			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-			go func() {
-				select {
-				case <-sigChan:
-					cancel()
-				case <-ctx.Done():
-				}
-			}()
-			defer signal.Stop(sigChan)
-
-			if async {
-				if err := s.nubiClient.TriggerInvestigation(ctx, query); err != nil {
-					return fmt.Errorf("failed to trigger investigation: %w", err)
-				}
-				if format.GetFormat().Get() == "json" {
-					format.GetFormat().Print(map[string]interface{}{
-						"message":    "Investigation triggered asynchronously.",
-						"session_id": s.nubiClient.SessionID,
-						"account_id": s.nubiClient.AccountID,
-						"query":      query,
-					})
-					return nil
-				}
-				out := format.GetFormat().GetOutput()
-				_, _ = fmt.Fprintln(out, "Investigation triggered asynchronously.")
-				_, _ = fmt.Fprintf(out, "Session ID: %s\n", s.nubiClient.SessionID)
-				return nil
-			}
-
-			if format.GetFormat().Get() != "json" {
-				s.spinner.Start()
-			}
-			startTime := time.Now()
-			response, status, err := s.triggerAndPoll(ctx, query)
-			duration := time.Since(startTime)
-			if s.spinner.Active() {
-				s.spinner.Stop()
-			}
-
-			out := format.GetFormat().GetOutput()
-
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					if format.GetFormat().Get() == "json" {
-						format.GetFormat().Print(map[string]interface{}{
-							"error":  "Request canceled.",
-							"status": "CANCELED",
-						})
-						return nil
-					}
-					_, _ = fmt.Fprintln(out, "Request canceled.")
-					return nil
-				}
-				return fmt.Errorf("error executing query: %w", err)
-			}
-
-			s.lastResponse = response
-
-			endpoint := strings.TrimSuffix(s.nubiClient.Endpoint, "/")
-			conversationURL := fmt.Sprintf("%s/ask-nudgebee?accountId=%s&conversation_id=%s", endpoint, s.nubiClient.AccountID, s.nubiClient.ConversationID)
-
-			if format.GetFormat().Get() == "json" {
-				metrics, _ := s.nubiClient.GetUsageMetrics(ctx)
-				details, _ := s.nubiClient.GetConversationDetails(ctx)
-
-				var respObj any
-				trimmedResp := strings.TrimSpace(response)
-				if err := json.Unmarshal([]byte(trimmedResp), &respObj); err != nil {
-					respObj = response
-				}
-
-				result := map[string]interface{}{
-					"account_id":      s.nubiClient.AccountID,
-					"conversation_id": s.nubiClient.ConversationID,
-					"session_id":      s.nubiClient.SessionID,
-					"query":           query,
-					"response":        respObj,
-					"status":          status,
-					"duration":        duration.String(),
-					"duration_ms":     duration.Milliseconds(),
-					"url":             conversationURL,
-				}
-				if details != nil {
-					result["details"] = details
-				}
-				if metrics != "" {
-					result["metrics"] = metrics
-				}
-				format.GetFormat().Print(result)
-				return nil
-			}
-
-			grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-
-			if status == "WAITING" {
-				_, _ = fmt.Fprintln(out, response)
-				_, _ = fmt.Fprintln(out, grayStyle.Render(fmt.Sprintf("\nNote: Nubi is waiting for a followup response. To continue interactively, run 'nbctl nubi' and switch to this conversation using:\n  /conversation %s\nOr visit the URL below.", s.nubiClient.ConversationID)))
-			} else {
-				rendered, err := renderMarkdown(response)
-				if err != nil {
-					_, _ = fmt.Fprintf(out, "Error rendering markdown: %v\n", err)
-					_, _ = fmt.Fprintln(out, response)
-				} else {
-					borderStyle := lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1)
-					_, _ = fmt.Fprintln(out, borderStyle.Render(rendered))
-				}
-			}
-
-			metrics, err := s.nubiClient.GetUsageMetrics(ctx)
-			if err == nil && metrics != "" {
-				_, _ = fmt.Fprintln(out, grayStyle.Render(metrics))
-			}
-
-			_, _ = fmt.Fprintln(out, grayStyle.Render(fmt.Sprintf("Response time: %s", duration)))
-
-			conversationURLText := fmt.Sprintf("For more details: %s", conversationURL)
-			_, _ = fmt.Fprintln(out, grayStyle.Render(conversationURLText))
-
-			return nil
-		}
 
 		printNubiArt()
 
@@ -747,7 +600,5 @@ func saveHistory(file string, history []string) error {
 }
 
 func init() {
-	nubiCmd.Flags().StringP("query", "q", "", "Execute a single query non-interactively and exit")
-	nubiCmd.Flags().Bool("async", false, "Trigger query asynchronously without waiting for response (use with --query)")
 	rootCmd.AddCommand(nubiCmd)
 }
