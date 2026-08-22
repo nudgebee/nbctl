@@ -446,3 +446,41 @@ func TestNubiCmd_Stats(t *testing.T) {
 	assert.Contains(t, output, "1200")
 	assert.Contains(t, output, "350")
 }
+
+func TestNubiCmd_Stats_JSON(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_usage_metrics": map[string]interface{}{
+			"data": map[string]interface{}{
+				"conversation": map[string]interface{}{
+					"total_cost_usd":                  0.0275597,
+					"total_input_tokens":             57270,
+					"total_output_tokens":            996,
+					"total_cached_input_tokens":       39857,
+					"total_cache_hit_rate_percentage": 69.59,
+					"model_usage": []map[string]interface{}{
+						{
+							"model_name": "gemini-3.5-flash-lite",
+							"requests":   8,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "stats", "conv-123", "--output", "json"})
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0.0275597, result["total_cost_usd"])
+	assert.Equal(t, float64(57270), result["total_input_tokens"])
+	assert.NotEmpty(t, result["model_usage"])
+}

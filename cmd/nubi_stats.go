@@ -12,16 +12,19 @@ import (
 )
 
 type statsRowDisplay struct {
-	Cost        string `json:"cost"`
-	InputTokens int    `json:"input_tokens"`
-	OutputTokens int   `json:"output_tokens"`
+	Cost         string `json:"cost"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	CachedTokens int    `json:"cached_tokens"`
+	HitRate      string `json:"hit_rate"`
+	WallTime     string `json:"wall_time"`
 }
 
 var nubiStatsCmd = &cobra.Command{
 	Use:     "stats <conversation-id>",
 	Aliases: []string{"metrics", "usage"},
 	Short:   "Get usage metrics and costs for a conversation",
-	Long:    `Retrieve total cost, input tokens, and output tokens consumed by a specific conversation.`,
+	Long:    `Retrieve total cost, input tokens, output tokens, cache savings, and execution duration for a conversation.`,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		conversationID := args[0]
@@ -50,11 +53,26 @@ var nubiStatsCmd = &cobra.Command{
 			return nil
 		}
 
+		costVal := getFloat64FromMap(stats, "total_cost_usd", "total_cost")
+		inputTokens := getIntFromMap(stats, "total_input_tokens")
+		outputTokens := getIntFromMap(stats, "total_output_tokens")
+		cachedTokens := getIntFromMap(stats, "total_cached_input_tokens")
+		hitRateVal := getFloat64FromMap(stats, "total_cache_hit_rate_percentage")
+		wallTimeVal := getFloat64FromMap(stats, "wall_time_seconds")
+
+		wallTimeStr := "-"
+		if wallTimeVal > 0 {
+			wallTimeStr = fmt.Sprintf("%.2fs", wallTimeVal)
+		}
+
 		rows := []statsRowDisplay{
 			{
-				Cost:         fmt.Sprintf("$%.6f", stats.TotalCost),
-				InputTokens:  stats.TotalInputTokens,
-				OutputTokens: stats.TotalOutputTokens,
+				Cost:         fmt.Sprintf("$%.6f", costVal),
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+				CachedTokens: cachedTokens,
+				HitRate:      fmt.Sprintf("%.1f%%", hitRateVal),
+				WallTime:     wallTimeStr,
 			},
 		}
 
@@ -64,10 +82,45 @@ var nubiStatsCmd = &cobra.Command{
 				{Header: "COST", Field: "Cost"},
 				{Header: "INPUT TOKENS", Field: "InputTokens"},
 				{Header: "OUTPUT TOKENS", Field: "OutputTokens"},
+				{Header: "CACHED TOKENS", Field: "CachedTokens"},
+				{Header: "HIT RATE", Field: "HitRate"},
+				{Header: "WALL TIME", Field: "WallTime"},
 			},
 		})
 		return nil
 	},
+}
+
+func getFloat64FromMap(m map[string]any, keys ...string) float64 {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			switch val := v.(type) {
+			case float64:
+				return val
+			case int:
+				return float64(val)
+			case int64:
+				return float64(val)
+			}
+		}
+	}
+	return 0
+}
+
+func getIntFromMap(m map[string]any, keys ...string) int {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			switch val := v.(type) {
+			case float64:
+				return int(val)
+			case int:
+				return val
+			case int64:
+				return int(val)
+			}
+		}
+	}
+	return 0
 }
 
 func init() {

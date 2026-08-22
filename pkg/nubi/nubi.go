@@ -554,13 +554,9 @@ func (c *NubiClient) StopConversation() {
 	}()
 }
 
-type ConversationStats struct {
-	TotalCost         float64 `json:"total_cost"`
-	TotalInputTokens  int     `json:"total_input_tokens"`
-	TotalOutputTokens int     `json:"total_output_tokens"`
-}
+type ConversationStats map[string]any
 
-func (c *NubiClient) GetConversationStats(ctx context.Context, conversationID string) (*ConversationStats, error) {
+func (c *NubiClient) GetConversationStats(ctx context.Context, conversationID string) (ConversationStats, error) {
 	req := client.NewRequest(`
 		mutation GetConversationUsageMetrics($accountId: String!, $conversationId: String!) {
 		  ai_get_conversation_usage_metrics(request: {account_id: $accountId, conversation_id: $conversationId}) {
@@ -581,7 +577,7 @@ func (c *NubiClient) GetConversationStats(ctx context.Context, conversationID st
 	var respData struct {
 		AiGetConversationUsageMetrics struct {
 			Data struct {
-				Conversation ConversationStats `json:"conversation"`
+				Conversation map[string]any `json:"conversation"`
 			} `json:"data"`
 		} `json:"ai_get_conversation_usage_metrics"`
 	}
@@ -590,8 +586,39 @@ func (c *NubiClient) GetConversationStats(ctx context.Context, conversationID st
 		return nil, err
 	}
 
-	stats := respData.AiGetConversationUsageMetrics.Data.Conversation
-	return &stats, nil
+	return respData.AiGetConversationUsageMetrics.Data.Conversation, nil
+}
+
+func getFloat64FromMap(m map[string]any, keys ...string) float64 {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			switch val := v.(type) {
+			case float64:
+				return val
+			case int:
+				return float64(val)
+			case int64:
+				return float64(val)
+			}
+		}
+	}
+	return 0
+}
+
+func getIntFromMap(m map[string]any, keys ...string) int {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			switch val := v.(type) {
+			case float64:
+				return int(val)
+			case int:
+				return val
+			case int64:
+				return int(val)
+			}
+		}
+	}
+	return 0
 }
 
 func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
@@ -599,7 +626,16 @@ func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d, Output Tokens: %d", stats.TotalCost, stats.TotalInputTokens, stats.TotalOutputTokens), nil
+	cost := getFloat64FromMap(stats, "total_cost_usd", "total_cost")
+	inputTokens := getIntFromMap(stats, "total_input_tokens")
+	outputTokens := getIntFromMap(stats, "total_output_tokens")
+	cachedTokens := getIntFromMap(stats, "total_cached_input_tokens")
+	hitRate := getFloat64FromMap(stats, "total_cache_hit_rate_percentage")
+
+	if cachedTokens > 0 {
+		return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d (Cached: %d, %.1f%%), Output Tokens: %d", cost, inputTokens, cachedTokens, hitRate, outputTokens), nil
+	}
+	return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d, Output Tokens: %d", cost, inputTokens, outputTokens), nil
 }
 
 func (c *NubiClient) AddBookmark(conversationID string) error {
