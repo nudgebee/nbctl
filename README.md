@@ -647,6 +647,7 @@ The Nubi shell supports various slash commands to manage your session and intera
 *   `nbctl nubi tools`: List registered tools accessible by AI agents.
 *   `nbctl nubi functions`: List prompt template functions and variables.
 *   `nbctl nubi playbooks`: List available investigation playbooks.
+*   `nbctl nubi stats <conversation-id>` (aliases `metrics`, `usage`): Retrieve token usage and costs for a specific conversation.
 
 **Examples:**
 

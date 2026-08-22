@@ -554,7 +554,13 @@ func (c *NubiClient) StopConversation() {
 	}()
 }
 
-func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
+type ConversationStats struct {
+	TotalCost         float64 `json:"total_cost"`
+	TotalInputTokens  int     `json:"total_input_tokens"`
+	TotalOutputTokens int     `json:"total_output_tokens"`
+}
+
+func (c *NubiClient) GetConversationStats(ctx context.Context, conversationID string) (*ConversationStats, error) {
 	req := client.NewRequest(`
 		mutation GetConversationUsageMetrics($accountId: String!, $conversationId: String!) {
 		  ai_get_conversation_usage_metrics(request: {account_id: $accountId, conversation_id: $conversationId}) {
@@ -563,31 +569,37 @@ func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
 		}
 	`)
 
-	convID := c.ConversationID
-	if convID == "" {
-		convID = c.SessionID
+	if conversationID == "" {
+		conversationID = c.ConversationID
+		if conversationID == "" {
+			conversationID = c.SessionID
+		}
 	}
 	req.Var("accountId", c.AccountID)
-	req.Var("conversationId", convID)
+	req.Var("conversationId", conversationID)
 
 	var respData struct {
 		AiGetConversationUsageMetrics struct {
 			Data struct {
-				Conversation struct {
-					TotalCost         float64 `json:"total_cost"`
-					TotalInputTokens  int     `json:"total_input_tokens"`
-					TotalOutputTokens int     `json:"total_output_tokens"`
-				} `json:"conversation"`
+				Conversation ConversationStats `json:"conversation"`
 			} `json:"data"`
 		} `json:"ai_get_conversation_usage_metrics"`
 	}
 
 	if err := c.Client.Run(ctx, req, &respData); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	metrics := respData.AiGetConversationUsageMetrics.Data.Conversation
-	return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d, Output Tokens: %d", metrics.TotalCost, metrics.TotalInputTokens, metrics.TotalOutputTokens), nil
+	stats := respData.AiGetConversationUsageMetrics.Data.Conversation
+	return &stats, nil
+}
+
+func (c *NubiClient) GetUsageMetrics(ctx context.Context) (string, error) {
+	stats, err := c.GetConversationStats(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Cost: $%.6f, Input Tokens: %d, Output Tokens: %d", stats.TotalCost, stats.TotalInputTokens, stats.TotalOutputTokens), nil
 }
 
 func (c *NubiClient) AddBookmark(conversationID string) error {

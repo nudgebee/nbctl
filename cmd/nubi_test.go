@@ -420,3 +420,29 @@ func TestNubiCmd_Playbooks(t *testing.T) {
 	assert.Contains(t, output, "pb-101")
 	assert.Contains(t, output, "HighMemoryUsage")
 }
+
+func TestNubiCmd_Stats(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_usage_metrics": map[string]interface{}{
+			"data": map[string]interface{}{
+				"conversation": map[string]interface{}{
+					"total_cost":         0.005,
+					"total_input_tokens": 1200,
+					"total_output_tokens": 350,
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "stats", "conv-123"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "$0.005000")
+	assert.Contains(t, output, "1200")
+	assert.Contains(t, output, "350")
+}
