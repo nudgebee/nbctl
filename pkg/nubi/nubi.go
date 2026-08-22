@@ -736,6 +736,33 @@ type FunctionItem struct {
 	Variables   []string `json:"variables"`
 }
 
+func (f *FunctionItem) UnmarshalJSON(data []byte) error {
+	type Alias FunctionItem
+	aux := &struct {
+		*Alias
+		RawVars any `json:"variables"`
+	}{
+		Alias: (*Alias)(f),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	switch v := aux.RawVars.(type) {
+	case string:
+		var slice []string
+		if err := json.Unmarshal([]byte(v), &slice); err == nil {
+			f.Variables = slice
+		} else if v != "" {
+			f.Variables = []string{v}
+		}
+	case []any:
+		for _, item := range v {
+			f.Variables = append(f.Variables, fmt.Sprintf("%v", item))
+		}
+	}
+	return nil
+}
+
 func (c *NubiClient) ListFunctions() ([]FunctionItem, error) {
 	req := client.NewRequest(`
 		query GetFunctions($where: LlmFunctionsWhereRequest!) {
@@ -785,4 +812,43 @@ func (c *NubiClient) DeleteConversation(ctx context.Context, conversationID stri
 	}
 
 	return c.Client.Run(ctx, req, &respData)
+}
+
+type PlaybookItem struct {
+	ID        string `json:"id"`
+	AlertName string `json:"alert_name"`
+	Source    string `json:"source"`
+	Processor string `json:"processor"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+func (c *NubiClient) ListPlaybooks(ctx context.Context) ([]PlaybookItem, error) {
+	req := client.NewRequest(`
+		query ListPlaybooks($where: AgentPlaybookWhereRequest!) {
+		  agents_list_playbooks(where: $where) {
+			rows {
+			  id
+			  alert_name
+			  source
+			  processor
+			  updated_at
+			}
+		  }
+		}
+	`)
+	req.Var("where", map[string]any{
+		"cloud_account_id": map[string]any{"_eq": c.AccountID},
+	})
+
+	var respData struct {
+		AgentsListPlaybooks struct {
+			Rows []PlaybookItem `json:"rows"`
+		} `json:"agents_list_playbooks"`
+	}
+
+	if err := c.Client.Run(ctx, req, &respData); err != nil {
+		return nil, err
+	}
+
+	return respData.AgentsListPlaybooks.Rows, nil
 }

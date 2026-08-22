@@ -315,3 +315,108 @@ func TestNubiCmd_Delete(t *testing.T) {
 
 	assert.Contains(t, output, "Deleted conversation conv-123")
 }
+
+func TestNubiCmd_Agents(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_list_agents": map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"name":        "k8s_agent",
+					"description": "Kubernetes management agent",
+					"status":      "active",
+					"tools":       []string{"kubectl_get", "kubectl_logs"},
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "agents"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "k8s_agent")
+	assert.Contains(t, output, "Kubernetes management agent")
+}
+
+func TestNubiCmd_Tools(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_list_tools": map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"name":         "kubectl_get",
+					"description":  "Get Kubernetes resources",
+					"status":       "enabled",
+					"nb_tool_type": "k8s",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "tools"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "kubectl_get")
+	assert.Contains(t, output, "Get Kubernetes resources")
+}
+
+func TestNubiCmd_Functions(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"llm_functions": map[string]interface{}{
+			"rows": []map[string]interface{}{
+				{
+					"name":        "analyze_logs",
+					"description": "Analyze pod log streams",
+					"status":      "active",
+					"variables":   []string{"namespace", "pod_name"},
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "functions"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "analyze_logs")
+	assert.Contains(t, output, "Analyze pod log streams")
+}
+
+func TestNubiCmd_Playbooks(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"agents_list_playbooks": map[string]interface{}{
+			"rows": []map[string]interface{}{
+				{
+					"id":         "pb-101",
+					"alert_name": "HighMemoryUsage",
+					"source":     "Prometheus",
+					"processor":  "auto_triage",
+					"updated_at": "2026-08-20T12:00:00Z",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "playbooks"})
+	require.NoError(t, err)
+
+	assert.Contains(t, output, "pb-101")
+	assert.Contains(t, output, "HighMemoryUsage")
+}
