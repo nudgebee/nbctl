@@ -527,7 +527,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 		}
 		if m.Response != "" {
 			var respAny any
-			if err := json.Unmarshal([]byte(m.Response), &respAny); err == nil {
+			trimmed := strings.TrimSpace(m.Response)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &respAny) == nil {
 				msgMap["response"] = respAny
 			} else {
 				msgMap["response"] = m.Response
@@ -535,7 +536,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 		}
 		if m.MessageConfig != "" {
 			var cfgAny any
-			if err := json.Unmarshal([]byte(m.MessageConfig), &cfgAny); err == nil {
+			trimmed := strings.TrimSpace(m.MessageConfig)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &cfgAny) == nil {
 				msgMap["message_config"] = cfgAny
 			} else {
 				msgMap["message_config"] = m.MessageConfig
@@ -553,7 +555,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 		}
 		if a.Response != "" {
 			var respAny any
-			if err := json.Unmarshal([]byte(a.Response), &respAny); err == nil {
+			trimmed := strings.TrimSpace(a.Response)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &respAny) == nil {
 				agentMap["response"] = respAny
 			} else {
 				agentMap["response"] = a.Response
@@ -585,7 +588,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 		}
 		if t.Response != "" {
 			var respAny any
-			if err := json.Unmarshal([]byte(t.Response), &respAny); err == nil {
+			trimmed := strings.TrimSpace(t.Response)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &respAny) == nil {
 				toolMap["response"] = respAny
 			} else {
 				toolMap["response"] = t.Response
@@ -593,7 +597,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 		}
 		if t.Parameters != "" {
 			var paramsAny any
-			if err := json.Unmarshal([]byte(t.Parameters), &paramsAny); err == nil {
+			trimmed := strings.TrimSpace(t.Parameters)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &paramsAny) == nil {
 				toolMap["parameters"] = paramsAny
 			} else {
 				toolMap["parameters"] = t.Parameters

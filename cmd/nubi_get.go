@@ -75,8 +75,10 @@ var nubiGetCmd = &cobra.Command{
 			}
 		}
 
-		details, _ := nubiClient.GetConversationDetails(ctx)
-		if details != nil && len(details.ToolCalls) > 0 {
+		details, err := nubiClient.GetConversationDetails(ctx)
+		if err != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\nWarning: failed to retrieve tool executions: %v\n", err)
+		} else if details != nil && len(details.ToolCalls) > 0 {
 			_, _ = fmt.Fprintf(out, "\nTool Executions (%d):\n", len(details.ToolCalls))
 			type toolRow struct {
 				ToolName  string
