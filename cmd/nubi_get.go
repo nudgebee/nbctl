@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var nubiGetSessionID string
+
 var nubiGetCmd = &cobra.Command{
 	Use:   "get <conversation-id>",
 	Short: "Get details of a specific conversation",
@@ -30,7 +32,10 @@ var nubiGetCmd = &cobra.Command{
 		}
 
 		endpoint := viper.GetString("endpoint")
-		sessionID := uuid.New().String()
+		sessionID := nubiGetSessionID
+		if sessionID == "" {
+			sessionID = uuid.New().String()
+		}
 		nubiClient := nubi.New(client.NewClient(), accountID, username, sessionID, endpoint)
 		nubiClient.ConversationID = conversationID
 
@@ -131,5 +136,6 @@ var nubiGetCmd = &cobra.Command{
 }
 
 func init() {
+	nubiGetCmd.Flags().StringVar(&nubiGetSessionID, "session-id", "", "Optional session ID if conversation details lookup by session is explicitly needed")
 	nubiCmd.AddCommand(nubiGetCmd)
 }

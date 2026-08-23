@@ -484,3 +484,29 @@ func TestNubiCmd_Stats_JSON(t *testing.T) {
 	assert.Equal(t, float64(57270), result["total_input_tokens"])
 	assert.NotEmpty(t, result["model_usage"])
 }
+
+func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_v3": map[string]interface{}{
+			"conversation": map[string]interface{}{"id": "conv-123", "status": "COMPLETED"},
+			"messages": []map[string]interface{}{
+				{"id": "msg-1", "message_type": "generation", "response": "get-output", "status": "COMPLETED"},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "conv-123", "--session-id", "sess-999", "-o", "json"})
+	require.NoError(t, err)
+
+	var result map[string]interface{}
+	err = json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "conv-123", result["conversation_id"])
+	assert.NotNil(t, result["details"])
+}
