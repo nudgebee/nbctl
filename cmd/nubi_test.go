@@ -493,20 +493,36 @@ func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
 
 	mockResponse := map[string]interface{}{
 		"ai_get_conversation_v3": map[string]interface{}{
-			"conversation": map[string]interface{}{"id": "conv-123", "status": "COMPLETED"},
+			"conversation": map[string]interface{}{"id": "conv-real-id", "status": "COMPLETED"},
 			"messages": []map[string]interface{}{
 				{"id": "msg-1", "message_type": "generation", "response": "get-output", "status": "COMPLETED"},
 			},
 		},
 	}
 
-	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "conv-123", "--session-id", "sess-999", "-o", "json"})
-	require.NoError(t, err)
+	t.Run("session-id flag with no positional argument", func(t *testing.T) {
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "--session-id", "sess-999", "-o", "json"})
+		require.NoError(t, err)
 
-	var result map[string]interface{}
-	err = json.Unmarshal([]byte(output), &result)
-	require.NoError(t, err)
+		var result map[string]interface{}
+		err = json.Unmarshal([]byte(output), &result)
+		require.NoError(t, err)
 
-	assert.Equal(t, "conv-123", result["conversation_id"])
-	assert.NotNil(t, result["details"])
+		assert.Equal(t, "conv-real-id", result["conversation_id"])
+		assert.Equal(t, "sess-999", result["session_id"])
+		assert.NotNil(t, result["details"])
+	})
+
+	t.Run("session-id flag with positional argument fallback", func(t *testing.T) {
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "conv-123", "--session-id", "sess-999", "-o", "json"})
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal([]byte(output), &result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "conv-real-id", result["conversation_id"])
+		assert.Equal(t, "sess-999", result["session_id"])
+		assert.NotNil(t, result["details"])
+	})
 }

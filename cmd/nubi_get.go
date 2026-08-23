@@ -15,12 +15,20 @@ import (
 var nubiGetSessionID string
 
 var nubiGetCmd = &cobra.Command{
-	Use:   "get <conversation-id>",
+	Use:   "get [conversation-id]",
 	Short: "Get details of a specific conversation",
-	Long:  `Retrieve all messages, sub-agent steps, tool calls, and details for a specific conversation ID.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Retrieve all messages, sub-agent steps, tool calls, and details for a specific conversation ID or session ID.`,
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		conversationID := args[0]
+		var conversationID string
+		if len(args) > 0 {
+			conversationID = args[0]
+		}
+
+		if conversationID == "" && nubiGetSessionID == "" {
+			return fmt.Errorf("either conversation-id argument or --session-id flag must be provided")
+		}
+
 		accountID := viper.GetString("account-id")
 		if accountID == "" {
 			return fmt.Errorf("account-id is required, please set it in your config file or pass via flag")
@@ -36,8 +44,13 @@ var nubiGetCmd = &cobra.Command{
 		if sessionID == "" {
 			sessionID = uuid.New().String()
 		}
+
 		nubiClient := nubi.New(client.NewClient(), accountID, username, sessionID, endpoint)
-		nubiClient.ConversationID = conversationID
+		if nubiGetSessionID != "" && len(args) == 0 {
+			nubiClient.ConversationID = ""
+		} else {
+			nubiClient.ConversationID = conversationID
+		}
 
 		ctx := cmd.Context()
 
@@ -46,10 +59,15 @@ var nubiGetCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to get conversation details: %w", err)
 			}
-			stats, _ := nubiClient.GetConversationStats(ctx, conversationID)
+			resolvedID := conversationID
+			if details != nil && details.Conversation.ID != "" {
+				resolvedID = details.Conversation.ID
+			}
+			stats, _ := nubiClient.GetConversationStats(ctx, resolvedID)
 			result := map[string]interface{}{
 				"account_id":      accountID,
-				"conversation_id": conversationID,
+				"conversation_id": resolvedID,
+				"session_id":      sessionID,
 				"details":         details,
 			}
 			if stats != nil {
@@ -59,7 +77,11 @@ var nubiGetCmd = &cobra.Command{
 			return nil
 		}
 
-		messages, err := nubiClient.SwitchToConversation(conversationID)
+		targetID := conversationID
+		if targetID == "" {
+			targetID = sessionID
+		}
+		messages, err := nubiClient.SwitchToConversation(targetID)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve conversation: %w", err)
 		}

@@ -402,18 +402,31 @@ type ConversationDetails struct {
 }
 
 func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
-	idToUse := c.ConversationID
-	if idToUse == "" {
-		idToUse = c.SessionID
+	if c.ConversationID == "" && c.SessionID != "" {
+		details, err := c.fetchDetails(ctx, "", c.SessionID)
+		if err == nil && details != nil && details.Conversation.ID != "" {
+			return details, nil
+		}
+		return c.fetchDetails(ctx, c.SessionID, "")
 	}
 
-	details, err := c.fetchDetails(ctx, idToUse, "")
-	if (err == nil && details != nil && details.Conversation.ID != "") || idToUse == "" {
-		return details, err
+	if c.ConversationID != "" {
+		details, err := c.fetchDetails(ctx, c.ConversationID, "")
+		if (err == nil && details != nil && details.Conversation.ID != "") || c.SessionID == "" {
+			return details, err
+		}
+		return c.fetchDetails(ctx, "", c.SessionID)
 	}
 
-	// Fallback: if querying by conversation_id returned empty, try session_id
-	return c.fetchDetails(ctx, "", idToUse)
+	if c.SessionID != "" {
+		details, err := c.fetchDetails(ctx, "", c.SessionID)
+		if err == nil && details != nil && details.Conversation.ID != "" {
+			return details, nil
+		}
+		return c.fetchDetails(ctx, c.SessionID, "")
+	}
+
+	return nil, nil
 }
 
 func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID string) (*ConversationDetails, error) {
