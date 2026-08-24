@@ -453,3 +453,98 @@ func TestNubiClient_GetConversationDetails(t *testing.T) {
 	assert.Equal(t, int64(3000), tool2["duration_ms"])
 	assert.Equal(t, "3s", tool2["duration"])
 }
+
+func TestNubiClient_GetConversationDetails_SessionID(t *testing.T) {
+	t.Run("empty conversation and session IDs", func(t *testing.T) {
+		c, teardown := newTestNubiClient(func(w http.ResponseWriter, r *http.Request) {})
+		defer teardown()
+		c.ConversationID = ""
+		c.SessionID = ""
+
+		details, err := c.GetConversationDetails(context.Background())
+		assert.NoError(t, err)
+		assert.Nil(t, details)
+	})
+
+	t.Run("lookup by session_id", func(t *testing.T) {
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Variables map[string]any `json:"variables"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, "sess-123", body.Variables["sessionId"])
+
+			resp := map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{
+							"id":     "conv-from-sess",
+							"status": "COMPLETED",
+						},
+					},
+				},
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resp))
+		}
+
+		c, teardown := newTestNubiClient(handler)
+		defer teardown()
+		c.ConversationID = ""
+		c.SessionID = "sess-123"
+
+		details, err := c.GetConversationDetails(context.Background())
+		assert.NoError(t, err)
+		require.NotNil(t, details)
+		assert.Equal(t, "conv-from-sess", details.Conversation.ID)
+	})
+
+	t.Run("lookup by conversation_id fallback to session_id", func(t *testing.T) {
+		callCount := 0
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			var body struct {
+				Variables map[string]any `json:"variables"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+
+			if callCount == 1 {
+				// First call with conversationId returns empty conversation
+				assert.Equal(t, "conv-not-found", body.Variables["conversationId"])
+				resp := map[string]any{
+					"data": map[string]any{
+						"ai_get_conversation_v3": map[string]any{
+							"conversation": map[string]any{"id": ""},
+						},
+					},
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
+				return
+			}
+
+			// Second call with sessionId succeeds
+			assert.Equal(t, "sess-fallback", body.Variables["sessionId"])
+			resp := map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{
+							"id":     "conv-found-by-session",
+							"status": "COMPLETED",
+						},
+					},
+				},
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resp))
+		}
+
+		c, teardown := newTestNubiClient(handler)
+		defer teardown()
+		c.ConversationID = "conv-not-found"
+		c.SessionID = "sess-fallback"
+
+		details, err := c.GetConversationDetails(context.Background())
+		assert.NoError(t, err)
+		require.NotNil(t, details)
+		assert.Equal(t, "conv-found-by-session", details.Conversation.ID)
+		assert.Equal(t, 2, callCount)
+	})
+}

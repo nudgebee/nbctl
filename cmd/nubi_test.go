@@ -17,6 +17,11 @@ func resetNubiFlags() {
 		_ = f.Value.Set("false")
 		f.Changed = false
 	}
+	if f := nubiGetCmd.Flags().Lookup("session-id"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
+	nubiGetSessionID = ""
 	if f := rootCmd.PersistentFlags().Lookup("format"); f != nil {
 		_ = f.Value.Set("text")
 		f.Changed = false
@@ -489,7 +494,10 @@ func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
 	resetNubiFlags()
 	viper.Set("username", "test-user")
 	viper.Set("account-id", "test-account-id")
-	t.Cleanup(resetNubiFlags)
+	t.Cleanup(func() {
+		nubiGetSessionID = ""
+		resetNubiFlags()
+	})
 
 	mockResponse := map[string]interface{}{
 		"ai_get_conversation_v3": map[string]interface{}{

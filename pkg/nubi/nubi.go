@@ -402,14 +402,6 @@ type ConversationDetails struct {
 }
 
 func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
-	if c.ConversationID == "" && c.SessionID != "" {
-		details, err := c.fetchDetails(ctx, "", c.SessionID)
-		if err == nil && details != nil && details.Conversation.ID != "" {
-			return details, nil
-		}
-		return c.fetchDetails(ctx, c.SessionID, "")
-	}
-
 	if c.ConversationID != "" {
 		details, err := c.fetchDetails(ctx, c.ConversationID, "")
 		if (err == nil && details != nil && details.Conversation.ID != "") || c.SessionID == "" {

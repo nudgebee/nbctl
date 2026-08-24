@@ -46,11 +46,7 @@ var nubiGetCmd = &cobra.Command{
 		}
 
 		nubiClient := nubi.New(client.NewClient(), accountID, username, sessionID, endpoint)
-		if nubiGetSessionID != "" && len(args) == 0 {
-			nubiClient.ConversationID = ""
-		} else {
-			nubiClient.ConversationID = conversationID
-		}
+		nubiClient.ConversationID = conversationID
 
 		ctx := cmd.Context()
 
