@@ -433,6 +433,15 @@ func TestNubiClient_GetConversationDetails(t *testing.T) {
 	require.NotNil(t, details)
 	assert.Equal(t, "test-conv", details.Conversation.ID)
 	assert.Equal(t, "COMPLETED", details.Conversation.Status)
+	require.NotNil(t, details.Conversation.CreatedAt)
+	require.NotNil(t, details.Conversation.UpdatedAt)
+	require.Len(t, details.Messages, 1)
+	assert.Equal(t, "2026-08-22T17:00:00Z", details.Messages[0]["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:05Z", details.Messages[0]["updated_at"])
+	require.Len(t, details.Agents, 1)
+	assert.Equal(t, "listing pods", details.Agents[0]["thought"])
+	assert.Equal(t, "2026-08-22T17:00:00Z", details.Agents[0]["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:04Z", details.Agents[0]["updated_at"])
 	require.Len(t, details.ToolCalls, 2)
 
 	tool1 := details.ToolCalls[0]

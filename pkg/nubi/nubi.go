@@ -204,29 +204,18 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 			  message_type
 			  message_config
 			  parent_agent_id
-			  created_at
-			  updated_at
 			}
 			agents {
 			  id
 			  message_id
 			  agent_name
 			  status
-			  thought
 			  response
-			  created_at
-			  updated_at
 			}
 			tool_calls {
-			  id
 			  agent_id
 			  tool_name
 			  parameters
-			  response
-			  thought
-			  status
-			  created_at
-			  updated_at
 			}
 		  }
 		}
@@ -249,35 +238,24 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 				Status string `json:"status"`
 			} `json:"conversation"`
 			Messages []struct {
-				ID            string     `json:"id"`
-				Status        string     `json:"status"`
-				Response      string     `json:"response"`
-				MessageType   string     `json:"message_type"`
-				MessageConfig string     `json:"message_config"`
-				ParentAgentID string     `json:"parent_agent_id"`
-				CreatedAt     *time.Time `json:"created_at"`
-				UpdatedAt     *time.Time `json:"updated_at"`
+				ID            string `json:"id"`
+				Status        string `json:"status"`
+				Response      string `json:"response"`
+				MessageType   string `json:"message_type"`
+				MessageConfig string `json:"message_config"`
+				ParentAgentID string `json:"parent_agent_id"`
 			} `json:"messages"`
 			Agents []struct {
-				ID        string     `json:"id"`
-				MessageID string     `json:"message_id"`
-				AgentName string     `json:"agent_name"`
-				Status    string     `json:"status"`
-				Thought   string     `json:"thought"`
-				Response  string     `json:"response"`
-				CreatedAt *time.Time `json:"created_at"`
-				UpdatedAt *time.Time `json:"updated_at"`
+				ID        string `json:"id"`
+				MessageID string `json:"message_id"`
+				AgentName string `json:"agent_name"`
+				Status    string `json:"status"`
+				Response  string `json:"response"`
 			} `json:"agents"`
 			ToolCalls []struct {
-				ID         string     `json:"id"`
-				AgentID    string     `json:"agent_id"`
-				ToolName   string     `json:"tool_name"`
-				Parameters string     `json:"parameters"`
-				Response   string     `json:"response"`
-				Thought    string     `json:"thought"`
-				Status     string     `json:"status"`
-				CreatedAt  *time.Time `json:"created_at"`
-				UpdatedAt  *time.Time `json:"updated_at"`
+				AgentID    string `json:"agent_id"`
+				ToolName   string `json:"tool_name"`
+				Parameters string `json:"parameters"`
 			} `json:"tool_calls"`
 		} `json:"ai_get_conversation_v3"`
 	}
@@ -393,8 +371,10 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 
 type ConversationDetails struct {
 	Conversation struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
+		ID        string     `json:"id"`
+		Status    string     `json:"status"`
+		CreatedAt *time.Time `json:"created_at,omitempty"`
+		UpdatedAt *time.Time `json:"updated_at,omitempty"`
 	} `json:"conversation"`
 	Messages  []map[string]any `json:"messages,omitempty"`
 	Agents    []map[string]any `json:"agents,omitempty"`
@@ -407,7 +387,14 @@ func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationD
 		if (err == nil && details != nil && details.Conversation.ID != "") || c.SessionID == "" {
 			return details, err
 		}
-		return c.fetchDetails(ctx, "", c.SessionID)
+		fallbackDetails, fallbackErr := c.fetchDetails(ctx, "", c.SessionID)
+		if fallbackErr == nil && fallbackDetails != nil && fallbackDetails.Conversation.ID != "" {
+			return fallbackDetails, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return fallbackDetails, fallbackErr
 	}
 
 	if c.SessionID != "" {
@@ -415,7 +402,14 @@ func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationD
 		if err == nil && details != nil && details.Conversation.ID != "" {
 			return details, nil
 		}
-		return c.fetchDetails(ctx, c.SessionID, "")
+		fallbackDetails, fallbackErr := c.fetchDetails(ctx, c.SessionID, "")
+		if fallbackErr == nil && fallbackDetails != nil && fallbackDetails.Conversation.ID != "" {
+			return fallbackDetails, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return fallbackDetails, fallbackErr
 	}
 
 	return nil, nil
@@ -477,8 +471,10 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 	var respData struct {
 		AiGetConversationV3 struct {
 			Conversation struct {
-				ID     string `json:"id"`
-				Status string `json:"status"`
+				ID        string     `json:"id"`
+				Status    string     `json:"status"`
+				CreatedAt *time.Time `json:"created_at"`
+				UpdatedAt *time.Time `json:"updated_at"`
 			} `json:"conversation"`
 			Messages []struct {
 				ID            string     `json:"id"`
@@ -520,7 +516,17 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 
 	conv := respData.AiGetConversationV3
 	details := &ConversationDetails{
-		Conversation: conv.Conversation,
+		Conversation: struct {
+			ID        string     `json:"id"`
+			Status    string     `json:"status"`
+			CreatedAt *time.Time `json:"created_at,omitempty"`
+			UpdatedAt *time.Time `json:"updated_at,omitempty"`
+		}{
+			ID:        conv.Conversation.ID,
+			Status:    conv.Conversation.Status,
+			CreatedAt: conv.Conversation.CreatedAt,
+			UpdatedAt: conv.Conversation.UpdatedAt,
+		},
 	}
 
 	for _, m := range conv.Messages {
@@ -529,6 +535,12 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			"status":          m.Status,
 			"message_type":   m.MessageType,
 			"parent_agent_id": m.ParentAgentID,
+		}
+		if m.CreatedAt != nil {
+			msgMap["created_at"] = m.CreatedAt.Format(time.RFC3339Nano)
+		}
+		if m.UpdatedAt != nil {
+			msgMap["updated_at"] = m.UpdatedAt.Format(time.RFC3339Nano)
 		}
 		if m.Response != "" {
 			var respAny any
@@ -557,6 +569,15 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			"message_id": a.MessageID,
 			"agent_name": a.AgentName,
 			"status":     a.Status,
+		}
+		if a.Thought != "" {
+			agentMap["thought"] = a.Thought
+		}
+		if a.CreatedAt != nil {
+			agentMap["created_at"] = a.CreatedAt.Format(time.RFC3339Nano)
+		}
+		if a.UpdatedAt != nil {
+			agentMap["updated_at"] = a.UpdatedAt.Format(time.RFC3339Nano)
 		}
 		if a.Response != "" {
 			var respAny any
