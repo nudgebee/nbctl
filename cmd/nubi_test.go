@@ -535,4 +535,15 @@ func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, output, "get-output")
 	})
+
+	t.Run("session-id flag in text mode returns error when conversation not found", func(t *testing.T) {
+		emptyResponse := map[string]interface{}{
+			"ai_get_conversation_v3": map[string]interface{}{
+				"conversation": map[string]interface{}{"id": "", "status": ""},
+			},
+		}
+		_, err := testutil.RunWithSimpleGraphQL(emptyResponse, nubiCmd, []string{"nubi", "get", "--session-id", "sess-unknown"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "conversation not found")
+	})
 }

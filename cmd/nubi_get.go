@@ -60,7 +60,7 @@ var nubiGetCmd = &cobra.Command{
 			if details != nil && details.Conversation.ID != "" {
 				targetID = details.Conversation.ID
 			} else {
-				targetID = sessionID
+				return fmt.Errorf("conversation not found")
 			}
 		}
 
