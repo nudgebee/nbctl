@@ -17,6 +17,10 @@ func resetNubiFlags() {
 		_ = f.Value.Set("false")
 		f.Changed = false
 	}
+	if f := nubiGetCmd.Flags().Lookup("session-id"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
 	if f := rootCmd.PersistentFlags().Lookup("format"); f != nil {
 		_ = f.Value.Set("text")
 		f.Changed = false
@@ -483,4 +487,63 @@ func TestNubiCmd_Stats_JSON(t *testing.T) {
 	assert.Equal(t, 0.0275597, result["total_cost_usd"])
 	assert.Equal(t, float64(57270), result["total_input_tokens"])
 	assert.NotEmpty(t, result["model_usage"])
+}
+
+func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]interface{}{
+		"ai_get_conversation_v3": map[string]interface{}{
+			"conversation": map[string]interface{}{"id": "conv-real-id", "status": "COMPLETED"},
+			"messages": []map[string]interface{}{
+				{"id": "msg-1", "message_type": "generation", "response": "get-output", "status": "COMPLETED"},
+			},
+		},
+	}
+
+	t.Run("session-id flag with no positional argument", func(t *testing.T) {
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "--session-id", "sess-999", "-o", "json"})
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal([]byte(output), &result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "conv-real-id", result["conversation_id"])
+		assert.Equal(t, "sess-999", result["session_id"])
+		assert.NotNil(t, result["details"])
+	})
+
+	t.Run("session-id flag with positional argument fallback", func(t *testing.T) {
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "conv-123", "--session-id", "sess-999", "-o", "json"})
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal([]byte(output), &result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "conv-real-id", result["conversation_id"])
+		assert.Equal(t, "sess-999", result["session_id"])
+		assert.NotNil(t, result["details"])
+	})
+
+	t.Run("session-id flag in text mode resolves conversation and renders", func(t *testing.T) {
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "--session-id", "sess-999"})
+		require.NoError(t, err)
+		assert.Contains(t, output, "get-output")
+	})
+
+	t.Run("session-id flag in text mode returns error when conversation not found", func(t *testing.T) {
+		emptyResponse := map[string]interface{}{
+			"ai_get_conversation_v3": map[string]interface{}{
+				"conversation": map[string]interface{}{"id": "", "status": ""},
+			},
+		}
+		_, err := testutil.RunWithSimpleGraphQL(emptyResponse, nubiCmd, []string{"nubi", "get", "--session-id", "sess-unknown"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "conversation not found")
+	})
 }

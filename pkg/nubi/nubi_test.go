@@ -362,3 +362,198 @@ func TestNubiClient_ListFunctions(t *testing.T) {
 	assert.Equal(t, "func1", functions[0].Name)
 	assert.Equal(t, "desc1", functions[0].Description)
 }
+
+func TestNubiClient_GetConversationDetails(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_get_conversation_v3": map[string]any{
+					"conversation": map[string]any{
+						"id":         "test-conv",
+						"status":     "COMPLETED",
+						"created_at": "2026-08-22T17:00:00Z",
+						"updated_at": "2026-08-22T17:00:05Z",
+					},
+					"messages": []map[string]any{
+						{
+							"id":           "msg-1",
+							"status":       "COMPLETED",
+							"response":     "Found pods",
+							"message_type": "generation",
+							"created_at":   "2026-08-22T17:00:00Z",
+							"updated_at":   "2026-08-22T17:00:05Z",
+						},
+					},
+					"agents": []map[string]any{
+						{
+							"id":         "agent-1",
+							"message_id": "msg-1",
+							"agent_name": "k8s_agent",
+							"status":     "COMPLETED",
+							"thought":    "listing pods",
+							"response":   "done",
+							"created_at": "2026-08-22T17:00:00Z",
+							"updated_at": "2026-08-22T17:00:04Z",
+						},
+					},
+					"tool_calls": []map[string]any{
+						{
+							"id":         "tool-1",
+							"agent_id":   "agent-1",
+							"tool_name":  "k8s_get_pods",
+							"parameters": `{"namespace":"default"}`,
+							"status":     "SUCCESS",
+							"thought":    "get all pods",
+							"created_at": "2026-08-22T17:00:01Z",
+							"updated_at": "2026-08-22T17:00:03Z",
+						},
+						{
+							"id":         "tool-2",
+							"agent_id":   "agent-1",
+							"tool_name":  "logs_query",
+							"parameters": `{"query":"error"}`,
+							"status":     "SUCCESS",
+							"thought":    "query logs",
+							"created_at": "2026-08-22T17:00:01Z",
+							"updated_at": "2026-08-22T17:00:04Z",
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+	c.ConversationID = "test-conv"
+
+	details, err := c.GetConversationDetails(context.Background())
+	assert.NoError(t, err)
+	require.NotNil(t, details)
+	assert.Equal(t, "test-conv", details.Conversation.ID)
+	assert.Equal(t, "COMPLETED", details.Conversation.Status)
+	require.NotNil(t, details.Conversation.CreatedAt)
+	require.NotNil(t, details.Conversation.UpdatedAt)
+	require.Len(t, details.Messages, 1)
+	assert.Equal(t, "2026-08-22T17:00:00Z", details.Messages[0]["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:05Z", details.Messages[0]["updated_at"])
+	require.Len(t, details.Agents, 1)
+	assert.Equal(t, "listing pods", details.Agents[0]["thought"])
+	assert.Equal(t, "2026-08-22T17:00:00Z", details.Agents[0]["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:04Z", details.Agents[0]["updated_at"])
+	require.Len(t, details.ToolCalls, 2)
+
+	tool1 := details.ToolCalls[0]
+	assert.Equal(t, "tool-1", tool1["id"])
+	assert.Equal(t, "k8s_get_pods", tool1["tool_name"])
+	assert.Equal(t, "SUCCESS", tool1["status"])
+	assert.Equal(t, "2026-08-22T17:00:01Z", tool1["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:03Z", tool1["updated_at"])
+	assert.Equal(t, int64(2000), tool1["duration_ms"])
+	assert.Equal(t, "2s", tool1["duration"])
+
+	tool2 := details.ToolCalls[1]
+	assert.Equal(t, "tool-2", tool2["id"])
+	assert.Equal(t, "logs_query", tool2["tool_name"])
+	assert.Equal(t, "SUCCESS", tool2["status"])
+	assert.Equal(t, "2026-08-22T17:00:01Z", tool2["created_at"])
+	assert.Equal(t, "2026-08-22T17:00:04Z", tool2["updated_at"])
+	assert.Equal(t, int64(3000), tool2["duration_ms"])
+	assert.Equal(t, "3s", tool2["duration"])
+}
+
+func TestNubiClient_GetConversationDetails_SessionID(t *testing.T) {
+	t.Run("empty conversation and session IDs", func(t *testing.T) {
+		c, teardown := newTestNubiClient(func(w http.ResponseWriter, r *http.Request) {})
+		defer teardown()
+		c.ConversationID = ""
+		c.SessionID = ""
+
+		details, err := c.GetConversationDetails(context.Background())
+		assert.NoError(t, err)
+		assert.Nil(t, details)
+	})
+
+	t.Run("lookup by session_id", func(t *testing.T) {
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Variables map[string]any `json:"variables"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, "sess-123", body.Variables["sessionId"])
+
+			resp := map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{
+							"id":     "conv-from-sess",
+							"status": "COMPLETED",
+						},
+					},
+				},
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resp))
+		}
+
+		c, teardown := newTestNubiClient(handler)
+		defer teardown()
+		c.ConversationID = ""
+		c.SessionID = "sess-123"
+
+		details, err := c.GetConversationDetails(context.Background())
+		assert.NoError(t, err)
+		require.NotNil(t, details)
+		assert.Equal(t, "conv-from-sess", details.Conversation.ID)
+	})
+
+	t.Run("lookup by conversation_id fallback to session_id", func(t *testing.T) {
+		callCount := 0
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			var body struct {
+				Variables map[string]any `json:"variables"`
+			}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+
+			if callCount == 1 {
+				// First call with conversationId returns empty conversation
+				assert.Equal(t, "conv-not-found", body.Variables["conversationId"])
+				resp := map[string]any{
+					"data": map[string]any{
+						"ai_get_conversation_v3": map[string]any{
+							"conversation": map[string]any{"id": ""},
+						},
+					},
+				}
+				require.NoError(t, json.NewEncoder(w).Encode(resp))
+				return
+			}
+
+			// Second call with sessionId succeeds
+			assert.Equal(t, "sess-fallback", body.Variables["sessionId"])
+			resp := map[string]any{
+				"data": map[string]any{
+					"ai_get_conversation_v3": map[string]any{
+						"conversation": map[string]any{
+							"id":     "conv-found-by-session",
+							"status": "COMPLETED",
+						},
+					},
+				},
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resp))
+		}
+
+		c, teardown := newTestNubiClient(handler)
+		defer teardown()
+		c.ConversationID = "conv-not-found"
+		c.SessionID = "sess-fallback"
+
+		details, err := c.GetConversationDetails(context.Background())
+		assert.NoError(t, err)
+		require.NotNil(t, details)
+		assert.Equal(t, "conv-found-by-session", details.Conversation.ID)
+		assert.Equal(t, 2, callCount)
+	})
+}

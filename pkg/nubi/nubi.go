@@ -369,29 +369,45 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	return finalResponse, conv.Conversation.Status, statusText, followupMessageConfig, waitingMessageID, waitingAgentID, nil
 }
 
+type ConversationSummary struct {
+	ID        string     `json:"id"`
+	Status    string     `json:"status"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
 type ConversationDetails struct {
-	Conversation struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
-	} `json:"conversation"`
-	Messages  []map[string]any `json:"messages,omitempty"`
-	Agents    []map[string]any `json:"agents,omitempty"`
-	ToolCalls []map[string]any `json:"tool_calls,omitempty"`
+	Conversation ConversationSummary `json:"conversation"`
+	Messages     []map[string]any    `json:"messages,omitempty"`
+	Agents       []map[string]any    `json:"agents,omitempty"`
+	ToolCalls    []map[string]any    `json:"tool_calls,omitempty"`
 }
 
 func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
-	idToUse := c.ConversationID
-	if idToUse == "" {
-		idToUse = c.SessionID
+	if c.ConversationID != "" {
+		return c.fetchWithFallback(ctx, c.ConversationID, "", "", c.SessionID)
 	}
+	if c.SessionID != "" {
+		return c.fetchWithFallback(ctx, "", c.SessionID, c.SessionID, "")
+	}
+	return nil, nil
+}
 
-	details, err := c.fetchDetails(ctx, idToUse, "")
-	if (err == nil && details != nil && details.Conversation.ID != "") || idToUse == "" {
+func (c *NubiClient) fetchWithFallback(ctx context.Context, primConv, primSess, fallConv, fallSess string) (*ConversationDetails, error) {
+	details, err := c.fetchDetails(ctx, primConv, primSess)
+	hasFallback := fallConv != "" || fallSess != ""
+	if (err == nil && details != nil && details.Conversation.ID != "") || !hasFallback {
 		return details, err
 	}
 
-	// Fallback: if querying by conversation_id returned empty, try session_id
-	return c.fetchDetails(ctx, "", idToUse)
+	fallbackDetails, fallbackErr := c.fetchDetails(ctx, fallConv, fallSess)
+	if fallbackErr == nil && fallbackDetails != nil && fallbackDetails.Conversation.ID != "" {
+		return fallbackDetails, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return fallbackDetails, fallbackErr
 }
 
 func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID string) (*ConversationDetails, error) {
@@ -401,6 +417,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			conversation {
 			  id
 			  status
+			  created_at
+			  updated_at
 			}
 			messages {
 			  id
@@ -409,18 +427,29 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			  message_type
 			  message_config
 			  parent_agent_id
+			  created_at
+			  updated_at
 			}
 			agents {
 			  id
 			  message_id
 			  agent_name
 			  status
+			  thought
 			  response
+			  created_at
+			  updated_at
 			}
 			tool_calls {
+			  id
 			  agent_id
 			  tool_name
 			  parameters
+			  response
+			  thought
+			  status
+			  created_at
+			  updated_at
 			}
 		  }
 		}
@@ -436,29 +465,37 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 
 	var respData struct {
 		AiGetConversationV3 struct {
-			Conversation struct {
-				ID     string `json:"id"`
-				Status string `json:"status"`
-			} `json:"conversation"`
-			Messages []struct {
-				ID            string `json:"id"`
-				Status        string `json:"status"`
-				Response      string `json:"response"`
-				MessageType   string `json:"message_type"`
-				MessageConfig string `json:"message_config"`
-				ParentAgentID string `json:"parent_agent_id"`
+			Conversation ConversationSummary `json:"conversation"`
+			Messages     []struct {
+				ID            string     `json:"id"`
+				Status        string     `json:"status"`
+				Response      string     `json:"response"`
+				MessageType   string     `json:"message_type"`
+				MessageConfig string     `json:"message_config"`
+				ParentAgentID string     `json:"parent_agent_id"`
+				CreatedAt     *time.Time `json:"created_at"`
+				UpdatedAt     *time.Time `json:"updated_at"`
 			} `json:"messages"`
 			Agents []struct {
-				ID        string `json:"id"`
-				MessageID string `json:"message_id"`
-				AgentName string `json:"agent_name"`
-				Status    string `json:"status"`
-				Response  string `json:"response"`
+				ID        string     `json:"id"`
+				MessageID string     `json:"message_id"`
+				AgentName string     `json:"agent_name"`
+				Status    string     `json:"status"`
+				Thought   string     `json:"thought"`
+				Response  string     `json:"response"`
+				CreatedAt *time.Time `json:"created_at"`
+				UpdatedAt *time.Time `json:"updated_at"`
 			} `json:"agents"`
 			ToolCalls []struct {
-				AgentID    string `json:"agent_id"`
-				ToolName   string `json:"tool_name"`
-				Parameters string `json:"parameters"`
+				ID         string     `json:"id"`
+				AgentID    string     `json:"agent_id"`
+				ToolName   string     `json:"tool_name"`
+				Parameters string     `json:"parameters"`
+				Response   string     `json:"response"`
+				Thought    string     `json:"thought"`
+				Status     string     `json:"status"`
+				CreatedAt  *time.Time `json:"created_at"`
+				UpdatedAt  *time.Time `json:"updated_at"`
 			} `json:"tool_calls"`
 		} `json:"ai_get_conversation_v3"`
 	}
@@ -479,9 +516,16 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			"message_type":   m.MessageType,
 			"parent_agent_id": m.ParentAgentID,
 		}
+		if m.CreatedAt != nil {
+			msgMap["created_at"] = m.CreatedAt.Format(time.RFC3339Nano)
+		}
+		if m.UpdatedAt != nil {
+			msgMap["updated_at"] = m.UpdatedAt.Format(time.RFC3339Nano)
+		}
 		if m.Response != "" {
 			var respAny any
-			if err := json.Unmarshal([]byte(m.Response), &respAny); err == nil {
+			trimmed := strings.TrimSpace(m.Response)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &respAny) == nil {
 				msgMap["response"] = respAny
 			} else {
 				msgMap["response"] = m.Response
@@ -489,7 +533,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 		}
 		if m.MessageConfig != "" {
 			var cfgAny any
-			if err := json.Unmarshal([]byte(m.MessageConfig), &cfgAny); err == nil {
+			trimmed := strings.TrimSpace(m.MessageConfig)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &cfgAny) == nil {
 				msgMap["message_config"] = cfgAny
 			} else {
 				msgMap["message_config"] = m.MessageConfig
@@ -505,9 +550,19 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 			"agent_name": a.AgentName,
 			"status":     a.Status,
 		}
+		if a.Thought != "" {
+			agentMap["thought"] = a.Thought
+		}
+		if a.CreatedAt != nil {
+			agentMap["created_at"] = a.CreatedAt.Format(time.RFC3339Nano)
+		}
+		if a.UpdatedAt != nil {
+			agentMap["updated_at"] = a.UpdatedAt.Format(time.RFC3339Nano)
+		}
 		if a.Response != "" {
 			var respAny any
-			if err := json.Unmarshal([]byte(a.Response), &respAny); err == nil {
+			trimmed := strings.TrimSpace(a.Response)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &respAny) == nil {
 				agentMap["response"] = respAny
 			} else {
 				agentMap["response"] = a.Response
@@ -518,12 +573,38 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 
 	for _, t := range conv.ToolCalls {
 		toolMap := map[string]any{
+			"id":        t.ID,
 			"agent_id":  t.AgentID,
 			"tool_name": t.ToolName,
+			"status":    t.Status,
+		}
+		if t.CreatedAt != nil {
+			toolMap["created_at"] = t.CreatedAt.Format(time.RFC3339Nano)
+		}
+		if t.UpdatedAt != nil {
+			toolMap["updated_at"] = t.UpdatedAt.Format(time.RFC3339Nano)
+		}
+		if t.CreatedAt != nil && t.UpdatedAt != nil && !t.UpdatedAt.Before(*t.CreatedAt) {
+			dur := t.UpdatedAt.Sub(*t.CreatedAt)
+			toolMap["duration_ms"] = dur.Milliseconds()
+			toolMap["duration"] = dur.String()
+		}
+		if t.Thought != "" {
+			toolMap["thought"] = t.Thought
+		}
+		if t.Response != "" {
+			var respAny any
+			trimmed := strings.TrimSpace(t.Response)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &respAny) == nil {
+				toolMap["response"] = respAny
+			} else {
+				toolMap["response"] = t.Response
+			}
 		}
 		if t.Parameters != "" {
 			var paramsAny any
-			if err := json.Unmarshal([]byte(t.Parameters), &paramsAny); err == nil {
+			trimmed := strings.TrimSpace(t.Parameters)
+			if (strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")) && json.Unmarshal([]byte(trimmed), &paramsAny) == nil {
 				toolMap["parameters"] = paramsAny
 			} else {
 				toolMap["parameters"] = t.Parameters

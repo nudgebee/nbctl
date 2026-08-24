@@ -13,12 +13,21 @@ import (
 )
 
 var nubiGetCmd = &cobra.Command{
-	Use:   "get <conversation-id>",
+	Use:   "get [conversation-id]",
 	Short: "Get details of a specific conversation",
-	Long:  `Retrieve all messages, sub-agent steps, tool calls, and details for a specific conversation ID.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Retrieve all messages, sub-agent steps, tool calls, and details for a specific conversation ID or session ID.`,
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		conversationID := args[0]
+		var conversationID string
+		if len(args) > 0 {
+			conversationID = args[0]
+		}
+
+		sessionIDFlag, _ := cmd.Flags().GetString("session-id")
+		if conversationID == "" && sessionIDFlag == "" {
+			return fmt.Errorf("either conversation-id argument or --session-id flag must be provided")
+		}
+
 		accountID := viper.GetString("account-id")
 		if accountID == "" {
 			return fmt.Errorf("account-id is required, please set it in your config file or pass via flag")
@@ -30,21 +39,48 @@ var nubiGetCmd = &cobra.Command{
 		}
 
 		endpoint := viper.GetString("endpoint")
-		sessionID := uuid.New().String()
+		sessionID := sessionIDFlag
+		if sessionID == "" {
+			sessionID = uuid.New().String()
+		}
+
 		nubiClient := nubi.New(client.NewClient(), accountID, username, sessionID, endpoint)
 		nubiClient.ConversationID = conversationID
 
 		ctx := cmd.Context()
 
-		if format.GetFormat().Get() == "json" {
-			details, err := nubiClient.GetConversationDetails(ctx)
+		var details *nubi.ConversationDetails
+		targetID := conversationID
+		if targetID == "" {
+			var err error
+			details, err = nubiClient.GetConversationDetails(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get conversation details: %w", err)
 			}
-			stats, _ := nubiClient.GetConversationStats(ctx, conversationID)
+			if details != nil && details.Conversation.ID != "" {
+				targetID = details.Conversation.ID
+			} else {
+				return fmt.Errorf("conversation not found")
+			}
+		}
+
+		if format.GetFormat().Get() == "json" {
+			if details == nil {
+				var err error
+				details, err = nubiClient.GetConversationDetails(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to get conversation details: %w", err)
+				}
+			}
+			resolvedID := conversationID
+			if details != nil && details.Conversation.ID != "" {
+				resolvedID = details.Conversation.ID
+			}
+			stats, _ := nubiClient.GetConversationStats(ctx, resolvedID)
 			result := map[string]interface{}{
 				"account_id":      accountID,
-				"conversation_id": conversationID,
+				"conversation_id": resolvedID,
+				"session_id":      sessionID,
 				"details":         details,
 			}
 			if stats != nil {
@@ -54,7 +90,7 @@ var nubiGetCmd = &cobra.Command{
 			return nil
 		}
 
-		messages, err := nubiClient.SwitchToConversation(conversationID)
+		messages, err := nubiClient.SwitchToConversation(targetID)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve conversation: %w", err)
 		}
@@ -75,10 +111,67 @@ var nubiGetCmd = &cobra.Command{
 			}
 		}
 
+		if details == nil {
+			var err error
+			details, err = nubiClient.GetConversationDetails(ctx)
+			if err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\nWarning: failed to retrieve tool executions: %v\n", err)
+			}
+		}
+
+		if details != nil && len(details.ToolCalls) > 0 {
+			_, _ = fmt.Fprintf(out, "\nTool Executions (%d):\n", len(details.ToolCalls))
+			type toolRow struct {
+				ToolName  string
+				Status    string
+				StartedAt string
+				EndedAt   string
+				Duration  string
+			}
+			var rows []toolRow
+			for _, t := range details.ToolCalls {
+				toolName, _ := t["tool_name"].(string)
+				status, _ := t["status"].(string)
+				if status == "" {
+					status = "SUCCESS"
+				}
+				startedAt, _ := t["created_at"].(string)
+				if startedAt == "" {
+					startedAt = "-"
+				}
+				endedAt, _ := t["updated_at"].(string)
+				if endedAt == "" {
+					endedAt = "-"
+				}
+				duration, _ := t["duration"].(string)
+				if duration == "" {
+					duration = "-"
+				}
+				rows = append(rows, toolRow{
+					ToolName:  toolName,
+					Status:    status,
+					StartedAt: startedAt,
+					EndedAt:   endedAt,
+					Duration:  duration,
+				})
+			}
+			format.GetFormat().Print(format.TabularData{
+				Data: rows,
+				Fields: []format.TableField{
+					{Header: "Tool Name", Field: "ToolName"},
+					{Header: "Status", Field: "Status"},
+					{Header: "Started At", Field: "StartedAt"},
+					{Header: "Ended At", Field: "EndedAt"},
+					{Header: "Duration", Field: "Duration"},
+				},
+			})
+		}
+
 		return nil
 	},
 }
 
 func init() {
+	nubiGetCmd.Flags().String("session-id", "", "Optional session ID if conversation details lookup by session is explicitly needed")
 	nubiCmd.AddCommand(nubiGetCmd)
 }
