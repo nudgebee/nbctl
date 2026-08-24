@@ -12,8 +12,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-var nubiGetSessionID string
-
 var nubiGetCmd = &cobra.Command{
 	Use:   "get [conversation-id]",
 	Short: "Get details of a specific conversation",
@@ -25,7 +23,8 @@ var nubiGetCmd = &cobra.Command{
 			conversationID = args[0]
 		}
 
-		if conversationID == "" && nubiGetSessionID == "" {
+		sessionIDFlag, _ := cmd.Flags().GetString("session-id")
+		if conversationID == "" && sessionIDFlag == "" {
 			return fmt.Errorf("either conversation-id argument or --session-id flag must be provided")
 		}
 
@@ -40,7 +39,7 @@ var nubiGetCmd = &cobra.Command{
 		}
 
 		endpoint := viper.GetString("endpoint")
-		sessionID := nubiGetSessionID
+		sessionID := sessionIDFlag
 		if sessionID == "" {
 			sessionID = uuid.New().String()
 		}
@@ -50,10 +49,28 @@ var nubiGetCmd = &cobra.Command{
 
 		ctx := cmd.Context()
 
-		if format.GetFormat().Get() == "json" {
-			details, err := nubiClient.GetConversationDetails(ctx)
+		var details *nubi.ConversationDetails
+		targetID := conversationID
+		if targetID == "" {
+			var err error
+			details, err = nubiClient.GetConversationDetails(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get conversation details: %w", err)
+			}
+			if details != nil && details.Conversation.ID != "" {
+				targetID = details.Conversation.ID
+			} else {
+				targetID = sessionID
+			}
+		}
+
+		if format.GetFormat().Get() == "json" {
+			if details == nil {
+				var err error
+				details, err = nubiClient.GetConversationDetails(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to get conversation details: %w", err)
+				}
 			}
 			resolvedID := conversationID
 			if details != nil && details.Conversation.ID != "" {
@@ -73,10 +90,6 @@ var nubiGetCmd = &cobra.Command{
 			return nil
 		}
 
-		targetID := conversationID
-		if targetID == "" {
-			targetID = sessionID
-		}
 		messages, err := nubiClient.SwitchToConversation(targetID)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve conversation: %w", err)
@@ -98,10 +111,15 @@ var nubiGetCmd = &cobra.Command{
 			}
 		}
 
-		details, err := nubiClient.GetConversationDetails(ctx)
-		if err != nil {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\nWarning: failed to retrieve tool executions: %v\n", err)
-		} else if details != nil && len(details.ToolCalls) > 0 {
+		if details == nil {
+			var err error
+			details, err = nubiClient.GetConversationDetails(ctx)
+			if err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\nWarning: failed to retrieve tool executions: %v\n", err)
+			}
+		}
+
+		if details != nil && len(details.ToolCalls) > 0 {
 			_, _ = fmt.Fprintf(out, "\nTool Executions (%d):\n", len(details.ToolCalls))
 			type toolRow struct {
 				ToolName  string
@@ -154,6 +172,6 @@ var nubiGetCmd = &cobra.Command{
 }
 
 func init() {
-	nubiGetCmd.Flags().StringVar(&nubiGetSessionID, "session-id", "", "Optional session ID if conversation details lookup by session is explicitly needed")
+	nubiGetCmd.Flags().String("session-id", "", "Optional session ID if conversation details lookup by session is explicitly needed")
 	nubiCmd.AddCommand(nubiGetCmd)
 }

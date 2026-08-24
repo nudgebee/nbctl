@@ -21,7 +21,6 @@ func resetNubiFlags() {
 		_ = f.Value.Set("")
 		f.Changed = false
 	}
-	nubiGetSessionID = ""
 	if f := rootCmd.PersistentFlags().Lookup("format"); f != nil {
 		_ = f.Value.Set("text")
 		f.Changed = false
@@ -494,10 +493,7 @@ func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
 	resetNubiFlags()
 	viper.Set("username", "test-user")
 	viper.Set("account-id", "test-account-id")
-	t.Cleanup(func() {
-		nubiGetSessionID = ""
-		resetNubiFlags()
-	})
+	t.Cleanup(resetNubiFlags)
 
 	mockResponse := map[string]interface{}{
 		"ai_get_conversation_v3": map[string]interface{}{
@@ -532,5 +528,11 @@ func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
 		assert.Equal(t, "conv-real-id", result["conversation_id"])
 		assert.Equal(t, "sess-999", result["session_id"])
 		assert.NotNil(t, result["details"])
+	})
+
+	t.Run("session-id flag in text mode resolves conversation and renders", func(t *testing.T) {
+		output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "get", "--session-id", "sess-999"})
+		require.NoError(t, err)
+		assert.Contains(t, output, "get-output")
 	})
 }
