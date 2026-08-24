@@ -369,50 +369,45 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	return finalResponse, conv.Conversation.Status, statusText, followupMessageConfig, waitingMessageID, waitingAgentID, nil
 }
 
+type ConversationSummary struct {
+	ID        string     `json:"id"`
+	Status    string     `json:"status"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
 type ConversationDetails struct {
-	Conversation struct {
-		ID        string     `json:"id"`
-		Status    string     `json:"status"`
-		CreatedAt *time.Time `json:"created_at,omitempty"`
-		UpdatedAt *time.Time `json:"updated_at,omitempty"`
-	} `json:"conversation"`
-	Messages  []map[string]any `json:"messages,omitempty"`
-	Agents    []map[string]any `json:"agents,omitempty"`
-	ToolCalls []map[string]any `json:"tool_calls,omitempty"`
+	Conversation ConversationSummary `json:"conversation"`
+	Messages     []map[string]any    `json:"messages,omitempty"`
+	Agents       []map[string]any    `json:"agents,omitempty"`
+	ToolCalls    []map[string]any    `json:"tool_calls,omitempty"`
 }
 
 func (c *NubiClient) GetConversationDetails(ctx context.Context) (*ConversationDetails, error) {
 	if c.ConversationID != "" {
-		details, err := c.fetchDetails(ctx, c.ConversationID, "")
-		if (err == nil && details != nil && details.Conversation.ID != "") || c.SessionID == "" {
-			return details, err
-		}
-		fallbackDetails, fallbackErr := c.fetchDetails(ctx, "", c.SessionID)
-		if fallbackErr == nil && fallbackDetails != nil && fallbackDetails.Conversation.ID != "" {
-			return fallbackDetails, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		return fallbackDetails, fallbackErr
+		return c.fetchWithFallback(ctx, c.ConversationID, "", "", c.SessionID)
 	}
-
 	if c.SessionID != "" {
-		details, err := c.fetchDetails(ctx, "", c.SessionID)
-		if err == nil && details != nil && details.Conversation.ID != "" {
-			return details, nil
-		}
-		fallbackDetails, fallbackErr := c.fetchDetails(ctx, c.SessionID, "")
-		if fallbackErr == nil && fallbackDetails != nil && fallbackDetails.Conversation.ID != "" {
-			return fallbackDetails, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		return fallbackDetails, fallbackErr
+		return c.fetchWithFallback(ctx, "", c.SessionID, c.SessionID, "")
+	}
+	return nil, nil
+}
+
+func (c *NubiClient) fetchWithFallback(ctx context.Context, primConv, primSess, fallConv, fallSess string) (*ConversationDetails, error) {
+	details, err := c.fetchDetails(ctx, primConv, primSess)
+	hasFallback := fallConv != "" || fallSess != ""
+	if (err == nil && details != nil && details.Conversation.ID != "") || !hasFallback {
+		return details, err
 	}
 
-	return nil, nil
+	fallbackDetails, fallbackErr := c.fetchDetails(ctx, fallConv, fallSess)
+	if fallbackErr == nil && fallbackDetails != nil && fallbackDetails.Conversation.ID != "" {
+		return fallbackDetails, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return fallbackDetails, fallbackErr
 }
 
 func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID string) (*ConversationDetails, error) {
@@ -470,13 +465,8 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 
 	var respData struct {
 		AiGetConversationV3 struct {
-			Conversation struct {
-				ID        string     `json:"id"`
-				Status    string     `json:"status"`
-				CreatedAt *time.Time `json:"created_at"`
-				UpdatedAt *time.Time `json:"updated_at"`
-			} `json:"conversation"`
-			Messages []struct {
+			Conversation ConversationSummary `json:"conversation"`
+			Messages     []struct {
 				ID            string     `json:"id"`
 				Status        string     `json:"status"`
 				Response      string     `json:"response"`
@@ -516,17 +506,7 @@ func (c *NubiClient) fetchDetails(ctx context.Context, conversationID, sessionID
 
 	conv := respData.AiGetConversationV3
 	details := &ConversationDetails{
-		Conversation: struct {
-			ID        string     `json:"id"`
-			Status    string     `json:"status"`
-			CreatedAt *time.Time `json:"created_at,omitempty"`
-			UpdatedAt *time.Time `json:"updated_at,omitempty"`
-		}{
-			ID:        conv.Conversation.ID,
-			Status:    conv.Conversation.Status,
-			CreatedAt: conv.Conversation.CreatedAt,
-			UpdatedAt: conv.Conversation.UpdatedAt,
-		},
+		Conversation: conv.Conversation,
 	}
 
 	for _, m := range conv.Messages {
