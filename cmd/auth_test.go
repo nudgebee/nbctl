@@ -227,4 +227,13 @@ func TestGroupRolesField_UnmarshalJSON(t *testing.T) {
 	} else if !strings.Contains(err.Error(), "invalid character") {
 		t.Errorf("expected invalid character error, got: %v", err)
 	}
+
+	// Test null
+	var g6 groupRolesField
+	if err := json.Unmarshal([]byte(`null`), &g6); err != nil {
+		t.Fatalf("unexpected error for null: %v", err)
+	}
+	if len(g6) != 0 {
+		t.Errorf("expected 0 items for null, got %d", len(g6))
+	}
 }

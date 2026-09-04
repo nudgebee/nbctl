@@ -351,6 +351,37 @@ func TestNubiClient_ListAgents_Fallback(t *testing.T) {
 	assert.Equal(t, 2, callCount)
 }
 
+func TestNubiClient_ListAgents_Fallback_BothFail(t *testing.T) {
+	callCount := 0
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			resp := map[string]any{
+				"errors": []map[string]any{
+					{"message": "User does not have access"},
+				},
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resp))
+			return
+		}
+		resp := map[string]any{
+			"errors": []map[string]any{
+				{"message": "server down"},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+	c.AccountID = "acc-restricted"
+
+	_, err := c.ListAgents(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "fallback error")
+	assert.Equal(t, 2, callCount)
+}
+
 func TestNubiClient_ListTools(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
@@ -371,6 +402,40 @@ func TestNubiClient_ListTools(t *testing.T) {
 	assert.Len(t, tools, 1)
 	assert.Equal(t, "tool1", tools[0].Name)
 	assert.Equal(t, "desc1", tools[0].Description)
+}
+
+func TestNubiClient_ListTools_Fallback(t *testing.T) {
+	callCount := 0
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			resp := map[string]any{
+				"errors": []map[string]any{
+					{"message": "access-denied to tools"},
+				},
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resp))
+			return
+		}
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_list_tools": map[string]any{
+					"data": json.RawMessage(`[{"name":"fallback-tool","description":"fallback-tool-desc"}]`),
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+	c.AccountID = "acc-restricted"
+
+	tools, err := c.ListTools(context.Background())
+	assert.NoError(t, err)
+	assert.Len(t, tools, 1)
+	assert.Equal(t, "fallback-tool", tools[0].Name)
+	assert.Equal(t, 2, callCount)
 }
 
 func TestNubiClient_ListFunctions(t *testing.T) {

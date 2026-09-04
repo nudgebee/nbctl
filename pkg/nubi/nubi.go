@@ -3,6 +3,7 @@ package nubi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -832,6 +833,36 @@ type AgentItem struct {
 	Tools       []string `json:"tools"`
 }
 
+func isAccessDeniedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var gqlErrors client.GraphQLErrors
+	if errors.As(err, &gqlErrors) {
+		for _, ge := range gqlErrors {
+			if strings.Contains(strings.ToLower(ge.Message), "user does not have access") ||
+				strings.Contains(strings.ToLower(ge.Message), "access-denied") ||
+				strings.Contains(strings.ToLower(ge.Message), "unauthorized") {
+				return true
+			}
+			if len(ge.Extensions) > 0 {
+				var ext struct {
+					Code string `json:"code"`
+				}
+				if json.Unmarshal(ge.Extensions, &ext) == nil {
+					if strings.EqualFold(ext.Code, "access-denied") || strings.EqualFold(ext.Code, "unauthorized") {
+						return true
+					}
+				}
+			}
+		}
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "user does not have access") ||
+		strings.Contains(errStr, "access-denied") ||
+		strings.Contains(errStr, "unauthorized")
+}
+
 func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName string) (json.RawMessage, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -850,7 +881,7 @@ func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName stri
 	}
 
 	if err := c.Client.Run(ctx, req, &respData); err != nil {
-		if c.AccountID != "" && strings.Contains(strings.ToLower(err.Error()), "user does not have access") {
+		if c.AccountID != "" && isAccessDeniedError(err) {
 			reqFallback := client.NewRequest(fmt.Sprintf(`
 				query {
 				  %s(request: {account_id: ""}) {
@@ -863,6 +894,8 @@ func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName stri
 			}
 			if errFallback := c.Client.Run(ctx, reqFallback, &respDataFallback); errFallback == nil {
 				return respDataFallback[queryName].Data, nil
+			} else {
+				return nil, fmt.Errorf("%w (fallback error: %v)", err, errFallback)
 			}
 		}
 		return nil, err

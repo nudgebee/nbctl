@@ -23,30 +23,33 @@ type groupRoleItem struct {
 type groupRolesField []groupRoleItem
 
 func (g *groupRolesField) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 {
+	if len(data) == 0 || string(data) == "null" || string(data) == `""` {
+		*g = nil
 		return nil
 	}
+
 	var items []groupRoleItem
-	err := json.Unmarshal(data, &items)
-	if err == nil {
+	if err := json.Unmarshal(data, &items); err == nil {
 		*g = items
 		return nil
 	}
 
 	var str string
-	if errStr := json.Unmarshal(data, &str); errStr == nil {
-		if str == "" {
-			return nil
-		}
-		if errArr := json.Unmarshal([]byte(str), &items); errArr == nil {
-			*g = items
-			return nil
-		} else {
-			return errArr
-		}
+	if errStr := json.Unmarshal(data, &str); errStr != nil {
+		return json.Unmarshal(data, &items)
 	}
 
-	return err
+	if str == "" {
+		*g = nil
+		return nil
+	}
+
+	if errArr := json.Unmarshal([]byte(str), &items); errArr != nil {
+		return errArr
+	}
+
+	*g = items
+	return nil
 }
 
 var authGroupsListCmd = &cobra.Command{
