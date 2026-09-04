@@ -16,7 +16,7 @@ var nubiToolsCmd = &cobra.Command{
 			return err
 		}
 
-		tools, err := nubiClient.ListTools()
+		tools, err := nubiClient.ListTools(cmd.Context())
 		if err != nil {
 			return err
 		}

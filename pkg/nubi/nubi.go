@@ -832,7 +832,10 @@ type AgentItem struct {
 	Tools       []string `json:"tools"`
 }
 
-func (c *NubiClient) ListAgents() ([]AgentItem, error) {
+func (c *NubiClient) ListAgents(ctx context.Context) ([]AgentItem, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	req := client.NewRequest(`
 		query ListAgents($accountId: String!) {
 		  ai_list_agents(request: {account_id: $accountId}) {
@@ -848,7 +851,7 @@ func (c *NubiClient) ListAgents() ([]AgentItem, error) {
 		} `json:"ai_list_agents"`
 	}
 
-	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
+	if err := c.Client.Run(ctx, req, &respData); err != nil {
 		if c.AccountID != "" && strings.Contains(strings.ToLower(err.Error()), "user does not have access") {
 			reqFallback := client.NewRequest(`
 				query ListAgents {
@@ -862,7 +865,7 @@ func (c *NubiClient) ListAgents() ([]AgentItem, error) {
 					Data []AgentItem `json:"data"`
 				} `json:"ai_list_agents"`
 			}
-			if errFallback := c.Client.Run(context.Background(), reqFallback, &respDataFallback); errFallback == nil {
+			if errFallback := c.Client.Run(ctx, reqFallback, &respDataFallback); errFallback == nil {
 				return respDataFallback.AiListAgents.Data, nil
 			}
 		}
@@ -879,7 +882,10 @@ type ToolItem struct {
 	NBToolType  string `json:"nb_tool_type"`
 }
 
-func (c *NubiClient) ListTools() ([]ToolItem, error) {
+func (c *NubiClient) ListTools(ctx context.Context) ([]ToolItem, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	req := client.NewRequest(`
 		query ListTools($accountId: String!) {
 		  ai_list_tools(request: {account_id: $accountId}) {
@@ -895,7 +901,7 @@ func (c *NubiClient) ListTools() ([]ToolItem, error) {
 		} `json:"ai_list_tools"`
 	}
 
-	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
+	if err := c.Client.Run(ctx, req, &respData); err != nil {
 		if c.AccountID != "" && strings.Contains(strings.ToLower(err.Error()), "user does not have access") {
 			reqFallback := client.NewRequest(`
 				query ListTools {
@@ -909,7 +915,7 @@ func (c *NubiClient) ListTools() ([]ToolItem, error) {
 					Data []ToolItem `json:"data"`
 				} `json:"ai_list_tools"`
 			}
-			if errFallback := c.Client.Run(context.Background(), reqFallback, &respDataFallback); errFallback == nil {
+			if errFallback := c.Client.Run(ctx, reqFallback, &respDataFallback); errFallback == nil {
 				return respDataFallback.AiListTools.Data, nil
 			}
 		}

@@ -169,15 +169,18 @@ func TestAuthRolesCreate_Unit(t *testing.T) {
 		}
 	}
 
-	// Test invalid permission format (empty module)
-	_, errInvalid := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{
-		"auth", "roles", "create", "test-role",
+	// Test permissions with empty strings and empty modules (should be skipped)
+	got2, err2 := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{
+		"auth", "roles", "create", "test-role-2",
+		"--permission", "",
 		"--permission", ":read",
+		"--permission", "audit:view",
 	})
-	if errInvalid == nil {
-		t.Fatalf("expected error for empty permission module, got nil")
-	} else if !strings.Contains(errInvalid.Error(), "module cannot be empty") {
-		t.Errorf("expected 'module cannot be empty' error, got: %v", errInvalid)
+	if err2 != nil {
+		t.Fatalf("expected empty module and empty string to be skipped without error, got: %v", err2)
+	}
+	if !strings.Contains(got2, "test-role-2") {
+		t.Errorf("expected output to contain test-role-2, got %q", got2)
 	}
 }
 

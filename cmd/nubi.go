@@ -375,7 +375,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 	case "/bookmarks":
 		s.handleBookmarkCommand(parts)
 	case "/agents":
-		agents, err := s.nubiClient.ListAgents()
+		agents, err := s.nubiClient.ListAgents(context.Background())
 		if err != nil {
 			fmt.Printf("Error listing agents: %v\n", err)
 			return
@@ -390,7 +390,7 @@ func (s *nubiShell) handleSlashCommand(in string) {
 			},
 		})
 	case "/tools":
-		tools, err := s.nubiClient.ListTools()
+		tools, err := s.nubiClient.ListTools(context.Background())
 		if err != nil {
 			fmt.Printf("Error listing tools: %v\n", err)
 			return

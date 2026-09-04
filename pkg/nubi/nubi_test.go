@@ -310,7 +310,7 @@ func TestNubiClient_ListAgents(t *testing.T) {
 	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	agents, err := c.ListAgents()
+	agents, err := c.ListAgents(context.Background())
 	assert.NoError(t, err)
 	assert.Len(t, agents, 1)
 	assert.Equal(t, "agent1", agents[0].Name)
@@ -332,7 +332,7 @@ func TestNubiClient_ListTools(t *testing.T) {
 	c, teardown := newTestNubiClient(handler)
 	defer teardown()
 
-	tools, err := c.ListTools()
+	tools, err := c.ListTools(context.Background())
 	assert.NoError(t, err)
 	assert.Len(t, tools, 1)
 	assert.Equal(t, "tool1", tools[0].Name)

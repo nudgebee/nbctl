@@ -25,7 +25,7 @@ var nubiAgentsCmd = &cobra.Command{
 			return err
 		}
 
-		agents, err := nubiClient.ListAgents()
+		agents, err := nubiClient.ListAgents(cmd.Context())
 		if err != nil {
 			return err
 		}
