@@ -452,7 +452,8 @@ func TestNubiClient_ListAgents_EmptyData(t *testing.T) {
 	defer teardown()
 
 	agents, err := c.ListAgents(context.Background())
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "returned no data")
 	assert.Nil(t, agents)
 }
 

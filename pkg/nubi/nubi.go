@@ -893,7 +893,11 @@ func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName stri
 				Data json.RawMessage `json:"data"`
 			}
 			if errFallback := c.Client.Run(ctx, reqFallback, &respDataFallback); errFallback == nil {
-				return respDataFallback[queryName].Data, nil
+				res, ok := respDataFallback[queryName]
+				if !ok || len(res.Data) == 0 {
+					return nil, fmt.Errorf("fallback query %s returned no data", queryName)
+				}
+				return res.Data, nil
 			} else {
 				return nil, fmt.Errorf("%w (fallback error: %v)", err, errFallback)
 			}
@@ -901,7 +905,11 @@ func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName stri
 		return nil, err
 	}
 
-	return respData[queryName].Data, nil
+	res, ok := respData[queryName]
+	if !ok || len(res.Data) == 0 {
+		return nil, fmt.Errorf("query %s returned no data", queryName)
+	}
+	return res.Data, nil
 }
 
 func (c *NubiClient) ListAgents(ctx context.Context) ([]AgentItem, error) {
