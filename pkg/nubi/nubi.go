@@ -857,8 +857,13 @@ func (c *NubiClient) ListAgents() ([]AgentItem, error) {
 				  }
 				}
 			`)
-			if errFallback := c.Client.Run(context.Background(), reqFallback, &respData); errFallback == nil {
-				return respData.AiListAgents.Data, nil
+			var respDataFallback struct {
+				AiListAgents struct {
+					Data []AgentItem `json:"data"`
+				} `json:"ai_list_agents"`
+			}
+			if errFallback := c.Client.Run(context.Background(), reqFallback, &respDataFallback); errFallback == nil {
+				return respDataFallback.AiListAgents.Data, nil
 			}
 		}
 		return nil, err
@@ -899,8 +904,13 @@ func (c *NubiClient) ListTools() ([]ToolItem, error) {
 				  }
 				}
 			`)
-			if errFallback := c.Client.Run(context.Background(), reqFallback, &respData); errFallback == nil {
-				return respData.AiListTools.Data, nil
+			var respDataFallback struct {
+				AiListTools struct {
+					Data []ToolItem `json:"data"`
+				} `json:"ai_list_tools"`
+			}
+			if errFallback := c.Client.Run(context.Background(), reqFallback, &respDataFallback); errFallback == nil {
+				return respDataFallback.AiListTools.Data, nil
 			}
 		}
 		return nil, err
