@@ -600,6 +600,14 @@ func saveHistory(file string, history []string) error {
 }
 
 func initNubiClient(args []string) (*nubi.NubiClient, error) {
+	return initNubiClientWithAccountRequirement(args, true)
+}
+
+func initNubiClientOptionalAccount(args []string) (*nubi.NubiClient, error) {
+	return initNubiClientWithAccountRequirement(args, false)
+}
+
+func initNubiClientWithAccountRequirement(args []string, requireAccount bool) (*nubi.NubiClient, error) {
 	var accountID string
 	if len(args) > 0 {
 		accountID = args[0]
@@ -607,7 +615,7 @@ func initNubiClient(args []string) (*nubi.NubiClient, error) {
 		accountID = viper.GetString("account-id")
 	}
 
-	if accountID == "" {
+	if requireAccount && accountID == "" {
 		return nil, fmt.Errorf("account-id is required, please provide it as an argument or set it in your config file")
 	}
 

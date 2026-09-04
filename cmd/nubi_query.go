@@ -36,9 +36,9 @@ var nubiQueryCmd = &cobra.Command{
 			return fmt.Errorf("query cannot be empty")
 		}
 
-		accountID := viper.GetString("account-id")
-		if accountID == "" {
-			return fmt.Errorf("account-id is required, please set it in your config file or pass via flag")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		username := viper.GetString("username")
@@ -212,5 +212,6 @@ func (s *nubiQueryShell) poll(ctx context.Context) (string, string, error) {
 
 func init() {
 	nubiQueryCmd.Flags().BoolVar(&nubiQueryAsync, "async", false, "Trigger query asynchronously without waiting for response")
+	nubiQueryCmd.Flags().String("account-id", "", "Account ID to execute the query against")
 	nubiCmd.AddCommand(nubiQueryCmd)
 }

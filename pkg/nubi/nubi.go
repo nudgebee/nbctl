@@ -849,6 +849,18 @@ func (c *NubiClient) ListAgents() ([]AgentItem, error) {
 	}
 
 	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
+		if c.AccountID != "" && strings.Contains(err.Error(), "user does not have access") {
+			reqFallback := client.NewRequest(`
+				query ListAgents {
+				  ai_list_agents(request: {account_id: ""}) {
+					data
+				  }
+				}
+			`)
+			if errFallback := c.Client.Run(context.Background(), reqFallback, &respData); errFallback == nil {
+				return respData.AiListAgents.Data, nil
+			}
+		}
 		return nil, err
 	}
 
@@ -879,6 +891,18 @@ func (c *NubiClient) ListTools() ([]ToolItem, error) {
 	}
 
 	if err := c.Client.Run(context.Background(), req, &respData); err != nil {
+		if c.AccountID != "" && strings.Contains(err.Error(), "user does not have access") {
+			reqFallback := client.NewRequest(`
+				query ListTools {
+				  ai_list_tools(request: {account_id: ""}) {
+					data
+				  }
+				}
+			`)
+			if errFallback := c.Client.Run(context.Background(), reqFallback, &respData); errFallback == nil {
+				return respData.AiListTools.Data, nil
+			}
+		}
 		return nil, err
 	}
 

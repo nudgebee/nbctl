@@ -20,7 +20,7 @@ var nubiAgentsCmd = &cobra.Command{
 	Long:  `Display registered AI agents, descriptions, status, and assigned toolsets.`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		nubiClient, err := initNubiClient(args)
+		nubiClient, err := initNubiClientOptionalAccount(args)
 		if err != nil {
 			return err
 		}
