@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -26,8 +27,8 @@ var authGroupsListCmd = &cobra.Command{
 						id
 						name
 						description
-						roles
-						user_count
+						group_roles
+						member_count
 						created_at
 					}
 				}
@@ -37,18 +38,24 @@ var authGroupsListCmd = &cobra.Command{
 		var respData struct {
 			UsergroupsList struct {
 				Rows []struct {
-					ID          string   `json:"id"`
-					Name        string   `json:"name"`
-					Description string   `json:"description"`
-					Roles       []string `json:"roles"`
-					UserCount   int      `json:"user_count"`
-					CreatedAt   string   `json:"created_at"`
+					ID          string `json:"id"`
+					Name        string `json:"name"`
+					Description string `json:"description"`
+					GroupRoles  any    `json:"group_roles"`
+					MemberCount int    `json:"member_count"`
+					CreatedAt   string `json:"created_at"`
 				} `json:"rows"`
 			} `json:"usergroups_list"`
 		}
 
 		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
+		}
+
+		type groupRoleItem struct {
+			Role       string `json:"role"`
+			EntityType string `json:"entity_type"`
+			EntityID   string `json:"entity_id"`
 		}
 
 		type groupRow struct {
@@ -61,16 +68,32 @@ var authGroupsListCmd = &cobra.Command{
 		}
 		var rows []groupRow
 		for _, r := range respData.UsergroupsList.Rows {
+			var roleItems []groupRoleItem
+			switch v := r.GroupRoles.(type) {
+			case string:
+				_ = json.Unmarshal([]byte(v), &roleItems)
+			case []any:
+				b, _ := json.Marshal(v)
+				_ = json.Unmarshal(b, &roleItems)
+			}
+
+			var roles []string
+			for _, item := range roleItems {
+				if item.Role != "" {
+					roles = append(roles, item.Role)
+				}
+			}
+
 			rolesStr := "-"
-			if len(r.Roles) > 0 {
-				rolesStr = strings.Join(r.Roles, ", ")
+			if len(roles) > 0 {
+				rolesStr = strings.Join(roles, ", ")
 			}
 			rows = append(rows, groupRow{
 				ID:          r.ID,
 				Name:        r.Name,
 				Description: r.Description,
 				Roles:       rolesStr,
-				UserCount:   r.UserCount,
+				UserCount:   r.MemberCount,
 				CreatedAt:   r.CreatedAt,
 			})
 		}
@@ -103,24 +126,20 @@ var authGroupsCreateCmd = &cobra.Command{
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
-			mutation CreateUserGroup($request: UserGroupCreateInput!) {
-				usergroup_create(request: $request) {
+			mutation CreateUserGroup($name: String!, $description: String) {
+				usergroup_create(name: $name, description: $description) {
 					id
-					name
-					status
 				}
 			}
 		`)
-		req.Var("request", map[string]any{
-			"name":        groupName,
-			"description": desc,
-		})
+		req.Var("name", groupName)
+		if desc != "" {
+			req.Var("description", desc)
+		}
 
 		var respData struct {
 			UsergroupCreate struct {
-				ID     string `json:"id"`
-				Name   string `json:"name"`
-				Status string `json:"status"`
+				ID string `json:"id"`
 			} `json:"usergroup_create"`
 		}
 
@@ -128,7 +147,15 @@ var authGroupsCreateCmd = &cobra.Command{
 			return err
 		}
 
-		format.GetFormat().Print(respData.UsergroupCreate)
+		format.GetFormat().Print(struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		}{
+			ID:     respData.UsergroupCreate.ID,
+			Name:   groupName,
+			Status: "created",
+		})
 		return nil
 	},
 }

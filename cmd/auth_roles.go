@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
@@ -26,9 +27,11 @@ var authRolesListCmd = &cobra.Command{
 					value
 				}
 				customroles_list {
-					id
-					name
-					description
+					roles {
+						id
+						name
+						description
+					}
 				}
 			}
 		`)
@@ -38,10 +41,12 @@ var authRolesListCmd = &cobra.Command{
 				DisplayName string `json:"display_name"`
 				Value       string `json:"value"`
 			} `json:"roles_list"`
-			CustomrolesList []struct {
-				ID          string `json:"id"`
-				Name        string `json:"name"`
-				Description string `json:"description"`
+			CustomrolesList struct {
+				Roles []struct {
+					ID          string `json:"id"`
+					Name        string `json:"name"`
+					Description string `json:"description"`
+				} `json:"roles"`
 			} `json:"customroles_list"`
 		}
 
@@ -76,7 +81,7 @@ var authRolesListCmd = &cobra.Command{
 				Description: "-",
 			})
 		}
-		for _, cr := range respData.CustomrolesList {
+		for _, cr := range respData.CustomrolesList.Roles {
 			rows = append(rows, roleRow{
 				Type:        "Custom",
 				Name:        cr.Name,
@@ -111,28 +116,44 @@ var authRolesCreateCmd = &cobra.Command{
 
 		graphqlClient := client.NewClient()
 
+		type customRolePermissionInput struct {
+			Module string `json:"module"`
+			Class  string `json:"class"`
+		}
+
+		var permInputs []customRolePermissionInput
+		for _, p := range permissions {
+			parts := strings.SplitN(p, ":", 2)
+			if len(parts) == 2 {
+				permInputs = append(permInputs, customRolePermissionInput{
+					Module: parts[0],
+					Class:  parts[1],
+				})
+			} else {
+				permInputs = append(permInputs, customRolePermissionInput{
+					Module: p,
+				})
+			}
+		}
+
 		req := client.NewRequest(`
-			mutation CreateCustomRole($request: CustomRoleCreateInput!) {
-				customroles_create(request: $request) {
+			mutation CreateCustomRole($name: String!, $description: String, $permissions: [CustomRolePermissionInput!]) {
+				customroles_create(name: $name, description: $description, permissions: $permissions) {
 					id
-					name
-					status
 				}
 			}
 		`)
-
-		input := map[string]any{
-			"name":        roleName,
-			"description": desc,
-			"permissions": permissions,
+		req.Var("name", roleName)
+		if desc != "" {
+			req.Var("description", desc)
 		}
-		req.Var("request", input)
+		if len(permInputs) > 0 {
+			req.Var("permissions", permInputs)
+		}
 
 		var respData struct {
 			CustomrolesCreate struct {
-				ID     string `json:"id"`
-				Name   string `json:"name"`
-				Status string `json:"status"`
+				ID string `json:"id"`
 			} `json:"customroles_create"`
 		}
 
@@ -140,7 +161,15 @@ var authRolesCreateCmd = &cobra.Command{
 			return err
 		}
 
-		format.GetFormat().Print(respData.CustomrolesCreate)
+		format.GetFormat().Print(struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		}{
+			ID:     respData.CustomrolesCreate.ID,
+			Name:   roleName,
+			Status: "created",
+		})
 		return nil
 	},
 }
