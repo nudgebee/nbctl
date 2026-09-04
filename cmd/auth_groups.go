@@ -27,22 +27,24 @@ func (g *groupRolesField) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	var items []groupRoleItem
-	if err := json.Unmarshal(data, &items); err == nil {
+	err := json.Unmarshal(data, &items)
+	if err == nil {
 		*g = items
 		return nil
 	}
+
 	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
+	if errStr := json.Unmarshal(data, &str); errStr == nil {
+		if str == "" {
+			return nil
+		}
+		if errArr := json.Unmarshal([]byte(str), &items); errArr == nil {
+			*g = items
+			return nil
+		}
 	}
-	if str == "" {
-		return nil
-	}
-	if err := json.Unmarshal([]byte(str), &items); err != nil {
-		return err
-	}
-	*g = items
-	return nil
+
+	return err
 }
 
 var authGroupsListCmd = &cobra.Command{

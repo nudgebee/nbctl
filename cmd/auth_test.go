@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -166,5 +167,42 @@ func TestAuthRolesCreate_Unit(t *testing.T) {
 		if !strings.Contains(got, exp) {
 			t.Errorf("expected output to contain %q, got %q", exp, got)
 		}
+	}
+}
+
+func TestGroupRolesField_UnmarshalJSON(t *testing.T) {
+	// Test direct array
+	var g1 groupRolesField
+	if err := json.Unmarshal([]byte(`[{"role":"admin","entity_type":"tenant","entity_id":"t-1"}]`), &g1); err != nil {
+		t.Fatalf("unexpected error for direct array: %v", err)
+	}
+	if len(g1) != 1 || g1[0].Role != "admin" {
+		t.Errorf("unexpected content for direct array: %+v", g1)
+	}
+
+	// Test stringified array
+	var g2 groupRolesField
+	if err := json.Unmarshal([]byte(`"[{\"role\":\"viewer\"}]"`), &g2); err != nil {
+		t.Fatalf("unexpected error for stringified array: %v", err)
+	}
+	if len(g2) != 1 || g2[0].Role != "viewer" {
+		t.Errorf("unexpected content for stringified array: %+v", g2)
+	}
+
+	// Test empty string
+	var g3 groupRolesField
+	if err := json.Unmarshal([]byte(`""`), &g3); err != nil {
+		t.Fatalf("unexpected error for empty string: %v", err)
+	}
+	if len(g3) != 0 {
+		t.Errorf("expected 0 items for empty string, got %d", len(g3))
+	}
+
+	// Test invalid structure returns meaningful array unmarshal error
+	var g4 groupRolesField
+	if err := json.Unmarshal([]byte(`[123]`), &g4); err == nil {
+		t.Fatalf("expected error for invalid array element, got nil")
+	} else if !strings.Contains(err.Error(), "cannot unmarshal number") {
+		t.Errorf("expected error about number unmarshaling, got: %v", err)
 	}
 }
