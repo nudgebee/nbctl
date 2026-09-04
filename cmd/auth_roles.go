@@ -118,7 +118,7 @@ var authRolesCreateCmd = &cobra.Command{
 
 		type customRolePermissionInput struct {
 			Module string `json:"module"`
-			Class  string `json:"class"`
+			Class  string `json:"class,omitempty"`
 		}
 
 		var permInputs []customRolePermissionInput

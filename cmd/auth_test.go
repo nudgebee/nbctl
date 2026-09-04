@@ -140,3 +140,31 @@ func TestAuthUsersGet_Unit(t *testing.T) {
 		t.Errorf("expected output to contain alice@example.com, got %q", got)
 	}
 }
+
+func TestAuthRolesCreate_Unit(t *testing.T) {
+	mockData := map[string]any{
+		"customroles_create": map[string]any{
+			"id": "cr-100",
+		},
+	}
+
+	got, err := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{
+		"auth", "roles", "create", "test-role",
+		"--description", "test role description",
+		"--permission", "events:read",
+		"--permission", "logs",
+	})
+	if err != nil {
+		t.Fatalf("auth roles create failed: %v", err)
+	}
+	if got == "" {
+		t.Fatalf("expected output, got empty string")
+	}
+
+	expected := []string{"cr-100", "test-role", "created"}
+	for _, exp := range expected {
+		if !strings.Contains(got, exp) {
+			t.Errorf("expected output to contain %q, got %q", exp, got)
+		}
+	}
+}
