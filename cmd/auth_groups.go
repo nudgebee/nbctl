@@ -29,14 +29,15 @@ func (g *groupRolesField) UnmarshalJSON(data []byte) error {
 	}
 
 	var items []groupRoleItem
-	if err := json.Unmarshal(data, &items); err == nil {
+	err := json.Unmarshal(data, &items)
+	if err == nil {
 		*g = items
 		return nil
 	}
 
 	var str string
 	if errStr := json.Unmarshal(data, &str); errStr != nil {
-		return json.Unmarshal(data, &items)
+		return err
 	}
 
 	if str == "" {

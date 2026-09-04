@@ -438,6 +438,44 @@ func TestNubiClient_ListTools_Fallback(t *testing.T) {
 	assert.Equal(t, 2, callCount)
 }
 
+func TestNubiClient_ListAgents_EmptyData(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_list_agents": map[string]any{},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+
+	agents, err := c.ListAgents(context.Background())
+	assert.NoError(t, err)
+	assert.Nil(t, agents)
+}
+
+func TestNubiClient_ListTools_NullData(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_list_tools": map[string]any{
+					"data": nil,
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+
+	tools, err := c.ListTools(context.Background())
+	assert.NoError(t, err)
+	assert.Nil(t, tools)
+}
+
 func TestNubiClient_ListFunctions(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{

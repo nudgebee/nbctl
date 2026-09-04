@@ -909,6 +909,9 @@ func (c *NubiClient) ListAgents(ctx context.Context) ([]AgentItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(rawData) == 0 || string(rawData) == "null" {
+		return nil, nil
+	}
 	var agents []AgentItem
 	if err := json.Unmarshal(rawData, &agents); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal agents data: %w", err)
@@ -927,6 +930,9 @@ func (c *NubiClient) ListTools(ctx context.Context) ([]ToolItem, error) {
 	rawData, err := c.listWithAccountFallback(ctx, "ai_list_tools")
 	if err != nil {
 		return nil, err
+	}
+	if len(rawData) == 0 || string(rawData) == "null" {
+		return nil, nil
 	}
 	var tools []ToolItem
 	if err := json.Unmarshal(rawData, &tools); err != nil {
