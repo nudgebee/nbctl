@@ -162,6 +162,8 @@ var authGroupsCreateCmd = &cobra.Command{
 		req.Var("name", groupName)
 		if desc != "" {
 			req.Var("description", desc)
+		} else {
+			req.Var("description", nil)
 		}
 
 		var respData struct {
