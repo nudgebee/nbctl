@@ -899,7 +899,7 @@ func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName stri
 				}
 				return res.Data, nil
 			} else {
-				return nil, fmt.Errorf("%w (fallback error: %v)", err, errFallback)
+				return nil, fmt.Errorf("%w (fallback error: %w)", err, errFallback)
 			}
 		}
 		return nil, err

@@ -156,9 +156,7 @@ var authRolesCreateCmd = &cobra.Command{
 		if desc != "" {
 			req.Var("description", desc)
 		}
-		if len(permInputs) > 0 {
-			req.Var("permissions", permInputs)
-		}
+		req.Var("permissions", permInputs)
 
 		var respData struct {
 			CustomrolesCreate struct {
