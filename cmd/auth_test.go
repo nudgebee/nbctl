@@ -19,6 +19,14 @@ func TestAuthGroupsList_Unit(t *testing.T) {
 					"member_count": 5,
 					"created_at":   "2026-01-01T00:00:00Z",
 				},
+				{
+					"id":           "ug-2",
+					"name":         "SRE",
+					"description":  "SRE Team",
+					"group_roles":  []map[string]any{{"role": "account_admin"}},
+					"member_count": 3,
+					"created_at":   "2026-01-02T00:00:00Z",
+				},
 			},
 		},
 	}
@@ -31,7 +39,7 @@ func TestAuthGroupsList_Unit(t *testing.T) {
 		t.Fatalf("expected output, got empty string")
 	}
 
-	expected := []string{"Group Name", "Assigned Roles", "DevOps", "tenant_admin"}
+	expected := []string{"Group Name", "Assigned Roles", "DevOps", "tenant_admin", "SRE", "account_admin"}
 	for _, exp := range expected {
 		if !strings.Contains(got, exp) {
 			t.Errorf("expected output to contain %q, got %q", exp, got)

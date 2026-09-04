@@ -14,6 +14,37 @@ var authGroupsCmd = &cobra.Command{
 	Short: "Manage tenant user groups",
 }
 
+type groupRoleItem struct {
+	Role       string `json:"role"`
+	EntityType string `json:"entity_type"`
+	EntityID   string `json:"entity_id"`
+}
+
+type groupRolesField []groupRoleItem
+
+func (g *groupRolesField) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	var items []groupRoleItem
+	if err := json.Unmarshal(data, &items); err == nil {
+		*g = items
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	if str == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(str), &items); err != nil {
+		return err
+	}
+	*g = items
+	return nil
+}
+
 var authGroupsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List user groups with assigned roles and member count",
@@ -38,24 +69,18 @@ var authGroupsListCmd = &cobra.Command{
 		var respData struct {
 			UsergroupsList struct {
 				Rows []struct {
-					ID          string `json:"id"`
-					Name        string `json:"name"`
-					Description string `json:"description"`
-					GroupRoles  any    `json:"group_roles"`
-					MemberCount int    `json:"member_count"`
-					CreatedAt   string `json:"created_at"`
+					ID          string          `json:"id"`
+					Name        string          `json:"name"`
+					Description string          `json:"description"`
+					GroupRoles  groupRolesField `json:"group_roles"`
+					MemberCount int             `json:"member_count"`
+					CreatedAt   string          `json:"created_at"`
 				} `json:"rows"`
 			} `json:"usergroups_list"`
 		}
 
 		if err := graphqlClient.Run(cmd.Context(), req, &respData); err != nil {
 			return err
-		}
-
-		type groupRoleItem struct {
-			Role       string `json:"role"`
-			EntityType string `json:"entity_type"`
-			EntityID   string `json:"entity_id"`
 		}
 
 		type groupRow struct {
@@ -68,17 +93,8 @@ var authGroupsListCmd = &cobra.Command{
 		}
 		var rows []groupRow
 		for _, r := range respData.UsergroupsList.Rows {
-			var roleItems []groupRoleItem
-			switch v := r.GroupRoles.(type) {
-			case string:
-				_ = json.Unmarshal([]byte(v), &roleItems)
-			case []any:
-				b, _ := json.Marshal(v)
-				_ = json.Unmarshal(b, &roleItems)
-			}
-
 			var roles []string
-			for _, item := range roleItems {
+			for _, item := range r.GroupRoles {
 				if item.Role != "" {
 					roles = append(roles, item.Role)
 				}

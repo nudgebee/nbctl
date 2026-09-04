@@ -123,11 +123,15 @@ var authRolesCreateCmd = &cobra.Command{
 
 		var permInputs []customRolePermissionInput
 		for _, p := range permissions {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
 			parts := strings.SplitN(p, ":", 2)
 			if len(parts) == 2 {
 				permInputs = append(permInputs, customRolePermissionInput{
-					Module: parts[0],
-					Class:  parts[1],
+					Module: strings.TrimSpace(parts[0]),
+					Class:  strings.TrimSpace(parts[1]),
 				})
 			} else {
 				permInputs = append(permInputs, customRolePermissionInput{
