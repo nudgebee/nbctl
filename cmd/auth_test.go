@@ -230,10 +230,19 @@ func TestGroupRolesField_UnmarshalJSON(t *testing.T) {
 
 	// Test null
 	var g6 groupRolesField
-	if err := json.Unmarshal([]byte(`null`), &g6); err != nil {
-		t.Fatalf("unexpected error for null: %v", err)
+	if err := json.Unmarshal([]byte(`  null  `), &g6); err != nil {
+		t.Fatalf("unexpected error for null with whitespace: %v", err)
 	}
 	if len(g6) != 0 {
 		t.Errorf("expected 0 items for null, got %d", len(g6))
+	}
+
+	// Test string with whitespace
+	var g7 groupRolesField
+	if err := json.Unmarshal([]byte(`  "  "  `), &g7); err != nil {
+		t.Fatalf("unexpected error for empty string with whitespace: %v", err)
+	}
+	if len(g7) != 0 {
+		t.Errorf("expected 0 items for empty string with whitespace, got %d", len(g7))
 	}
 }

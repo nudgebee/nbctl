@@ -864,6 +864,13 @@ func isAccessDeniedError(err error) bool {
 }
 
 func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName string) (json.RawMessage, error) {
+	switch queryName {
+	case "ai_list_agents", "ai_list_tools":
+		// Allowed query names
+	default:
+		return nil, fmt.Errorf("invalid or disallowed query name: %q", queryName)
+	}
+
 	if ctx == nil {
 		ctx = context.Background()
 	}

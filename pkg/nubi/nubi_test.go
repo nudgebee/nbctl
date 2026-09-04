@@ -477,6 +477,13 @@ func TestNubiClient_ListTools_NullData(t *testing.T) {
 	assert.Nil(t, tools)
 }
 
+func TestNubiClient_ListWithAccountFallback_DisallowedQuery(t *testing.T) {
+	c := &NubiClient{}
+	_, err := c.listWithAccountFallback(context.Background(), "malicious_query")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid or disallowed query name")
+}
+
 func TestNubiClient_ListFunctions(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{

@@ -155,6 +155,8 @@ var authRolesCreateCmd = &cobra.Command{
 		req.Var("name", roleName)
 		if desc != "" {
 			req.Var("description", desc)
+		} else {
+			req.Var("description", nil)
 		}
 		req.Var("permissions", permInputs)
 

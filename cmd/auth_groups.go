@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 
@@ -23,24 +24,26 @@ type groupRoleItem struct {
 type groupRolesField []groupRoleItem
 
 func (g *groupRolesField) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || string(data) == "null" || string(data) == `""` {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" || string(trimmed) == `""` {
 		*g = nil
 		return nil
 	}
 
 	var items []groupRoleItem
-	err := json.Unmarshal(data, &items)
+	err := json.Unmarshal(trimmed, &items)
 	if err == nil {
 		*g = items
 		return nil
 	}
 
 	var str string
-	if errStr := json.Unmarshal(data, &str); errStr != nil {
+	if errStr := json.Unmarshal(trimmed, &str); errStr != nil {
 		return err
 	}
 
-	if str == "" {
+	str = strings.TrimSpace(str)
+	if str == "" || str == "null" {
 		*g = nil
 		return nil
 	}
