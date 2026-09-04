@@ -168,6 +168,17 @@ func TestAuthRolesCreate_Unit(t *testing.T) {
 			t.Errorf("expected output to contain %q, got %q", exp, got)
 		}
 	}
+
+	// Test invalid permission format (empty module)
+	_, errInvalid := testutil.RunWithSimpleGraphQL(mockData, rootCmd, []string{
+		"auth", "roles", "create", "test-role",
+		"--permission", ":read",
+	})
+	if errInvalid == nil {
+		t.Fatalf("expected error for empty permission module, got nil")
+	} else if !strings.Contains(errInvalid.Error(), "module cannot be empty") {
+		t.Errorf("expected 'module cannot be empty' error, got: %v", errInvalid)
+	}
 }
 
 func TestGroupRolesField_UnmarshalJSON(t *testing.T) {

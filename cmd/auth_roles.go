@@ -129,8 +129,12 @@ var authRolesCreateCmd = &cobra.Command{
 			}
 			parts := strings.SplitN(p, ":", 2)
 			if len(parts) == 2 {
+				module := strings.TrimSpace(parts[0])
+				if module == "" {
+					return fmt.Errorf("invalid permission format %q: module cannot be empty", p)
+				}
 				permInputs = append(permInputs, customRolePermissionInput{
-					Module: strings.TrimSpace(parts[0]),
+					Module: module,
 					Class:  strings.TrimSpace(parts[1]),
 				})
 			} else {
