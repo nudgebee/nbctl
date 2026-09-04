@@ -317,6 +317,40 @@ func TestNubiClient_ListAgents(t *testing.T) {
 	assert.Equal(t, "desc1", agents[0].Description)
 }
 
+func TestNubiClient_ListAgents_Fallback(t *testing.T) {
+	callCount := 0
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			resp := map[string]any{
+				"errors": []map[string]any{
+					{"message": "User does not have access"},
+				},
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(resp))
+			return
+		}
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_list_agents": map[string]any{
+					"data": json.RawMessage(`[{"name":"fallback-agent","description":"fallback-desc"}]`),
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+	c.AccountID = "acc-restricted"
+
+	agents, err := c.ListAgents(context.Background())
+	assert.NoError(t, err)
+	assert.Len(t, agents, 1)
+	assert.Equal(t, "fallback-agent", agents[0].Name)
+	assert.Equal(t, 2, callCount)
+}
+
 func TestNubiClient_ListTools(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{

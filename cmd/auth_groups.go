@@ -41,6 +41,8 @@ func (g *groupRolesField) UnmarshalJSON(data []byte) error {
 		if errArr := json.Unmarshal([]byte(str), &items); errArr == nil {
 			*g = items
 			return nil
+		} else {
+			return errArr
 		}
 	}
 

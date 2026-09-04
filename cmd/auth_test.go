@@ -219,4 +219,12 @@ func TestGroupRolesField_UnmarshalJSON(t *testing.T) {
 	} else if !strings.Contains(err.Error(), "cannot unmarshal number") {
 		t.Errorf("expected error about number unmarshaling, got: %v", err)
 	}
+
+	// Test stringified invalid JSON returns string unmarshal error
+	var g5 groupRolesField
+	if err := json.Unmarshal([]byte(`"not a valid json array"`), &g5); err == nil {
+		t.Fatalf("expected error for stringified invalid JSON, got nil")
+	} else if !strings.Contains(err.Error(), "invalid character") {
+		t.Errorf("expected invalid character error, got: %v", err)
+	}
 }

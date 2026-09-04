@@ -832,47 +832,55 @@ type AgentItem struct {
 	Tools       []string `json:"tools"`
 }
 
-func (c *NubiClient) ListAgents(ctx context.Context) ([]AgentItem, error) {
+func (c *NubiClient) listWithAccountFallback(ctx context.Context, queryName string) (json.RawMessage, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	req := client.NewRequest(`
-		query ListAgents($accountId: String!) {
-		  ai_list_agents(request: {account_id: $accountId}) {
+	req := client.NewRequest(fmt.Sprintf(`
+		query ($accountId: String!) {
+		  %s(request: {account_id: $accountId}) {
 			data
 		  }
 		}
-	`)
+	`, queryName))
 	req.Var("accountId", c.AccountID)
 
-	var respData struct {
-		AiListAgents struct {
-			Data []AgentItem `json:"data"`
-		} `json:"ai_list_agents"`
+	var respData map[string]struct {
+		Data json.RawMessage `json:"data"`
 	}
 
 	if err := c.Client.Run(ctx, req, &respData); err != nil {
 		if c.AccountID != "" && strings.Contains(strings.ToLower(err.Error()), "user does not have access") {
-			reqFallback := client.NewRequest(`
-				query ListAgents {
-				  ai_list_agents(request: {account_id: ""}) {
+			reqFallback := client.NewRequest(fmt.Sprintf(`
+				query {
+				  %s(request: {account_id: ""}) {
 					data
 				  }
 				}
-			`)
-			var respDataFallback struct {
-				AiListAgents struct {
-					Data []AgentItem `json:"data"`
-				} `json:"ai_list_agents"`
+			`, queryName))
+			var respDataFallback map[string]struct {
+				Data json.RawMessage `json:"data"`
 			}
 			if errFallback := c.Client.Run(ctx, reqFallback, &respDataFallback); errFallback == nil {
-				return respDataFallback.AiListAgents.Data, nil
+				return respDataFallback[queryName].Data, nil
 			}
 		}
 		return nil, err
 	}
 
-	return respData.AiListAgents.Data, nil
+	return respData[queryName].Data, nil
+}
+
+func (c *NubiClient) ListAgents(ctx context.Context) ([]AgentItem, error) {
+	rawData, err := c.listWithAccountFallback(ctx, "ai_list_agents")
+	if err != nil {
+		return nil, err
+	}
+	var agents []AgentItem
+	if err := json.Unmarshal(rawData, &agents); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal agents data: %w", err)
+	}
+	return agents, nil
 }
 
 type ToolItem struct {
@@ -883,46 +891,15 @@ type ToolItem struct {
 }
 
 func (c *NubiClient) ListTools(ctx context.Context) ([]ToolItem, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	req := client.NewRequest(`
-		query ListTools($accountId: String!) {
-		  ai_list_tools(request: {account_id: $accountId}) {
-			data
-		  }
-		}
-	`)
-	req.Var("accountId", c.AccountID)
-
-	var respData struct {
-		AiListTools struct {
-			Data []ToolItem `json:"data"`
-		} `json:"ai_list_tools"`
-	}
-
-	if err := c.Client.Run(ctx, req, &respData); err != nil {
-		if c.AccountID != "" && strings.Contains(strings.ToLower(err.Error()), "user does not have access") {
-			reqFallback := client.NewRequest(`
-				query ListTools {
-				  ai_list_tools(request: {account_id: ""}) {
-					data
-				  }
-				}
-			`)
-			var respDataFallback struct {
-				AiListTools struct {
-					Data []ToolItem `json:"data"`
-				} `json:"ai_list_tools"`
-			}
-			if errFallback := c.Client.Run(ctx, reqFallback, &respDataFallback); errFallback == nil {
-				return respDataFallback.AiListTools.Data, nil
-			}
-		}
+	rawData, err := c.listWithAccountFallback(ctx, "ai_list_tools")
+	if err != nil {
 		return nil, err
 	}
-
-	return respData.AiListTools.Data, nil
+	var tools []ToolItem
+	if err := json.Unmarshal(rawData, &tools); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal tools data: %w", err)
+	}
+	return tools, nil
 }
 
 type FunctionItem struct {
