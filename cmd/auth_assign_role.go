@@ -27,17 +27,21 @@ var authAssignRoleCmd = &cobra.Command{
 		if accountID != "" {
 			// Account-scoped role assignment
 			req := client.NewRequest(`
-				mutation AssignAccountGroupRole($request: UserRolesUpsertAccountGroupInput!) {
-					userroles_upsert_account_group(request: $request) {
+				mutation AssignAccountGroupRole($role: auth_account_group_roles_upsert_one_input!) {
+					userroles_upsert_account_group(role: $role) {
 						status
 						message
 					}
 				}
 			`)
-			req.Var("request", map[string]any{
-				"group_id":   groupID,
-				"role":       role,
-				"account_id": accountID,
+			req.Var("role", map[string]any{
+				"group_id": groupID,
+				"account_roles": []map[string]string{
+					{
+						"account_id": accountID,
+						"role":       role,
+					},
+				},
 			})
 
 			var respData struct {
@@ -59,14 +63,14 @@ var authAssignRoleCmd = &cobra.Command{
 		} else {
 			// Tenant-level role assignment
 			req := client.NewRequest(`
-				mutation AssignGroupRole($request: UserRolesUpsertGroupInput!) {
-					userroles_upsert_group(request: $request) {
+				mutation AssignGroupRole($role: auth_tenant_group_roles_upsert_one_input!) {
+					userroles_upsert_group(role: $role) {
 						status
 						message
 					}
 				}
 			`)
-			req.Var("request", map[string]any{
+			req.Var("role", map[string]any{
 				"group_id": groupID,
 				"role":     role,
 			})

@@ -11,12 +11,12 @@ var nubiToolsCmd = &cobra.Command{
 	Long:  `Display registered tools, descriptions, status, and tool types.`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		nubiClient, err := initNubiClient(args)
+		nubiClient, err := initNubiClientOptionalAccount(args)
 		if err != nil {
 			return err
 		}
 
-		tools, err := nubiClient.ListTools()
+		tools, err := nubiClient.ListTools(cmd.Context())
 		if err != nil {
 			return err
 		}

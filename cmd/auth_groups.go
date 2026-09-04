@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -11,6 +13,47 @@ import (
 var authGroupsCmd = &cobra.Command{
 	Use:   "groups",
 	Short: "Manage tenant user groups",
+}
+
+type groupRoleItem struct {
+	Role       string `json:"role"`
+	EntityType string `json:"entity_type"`
+	EntityID   string `json:"entity_id"`
+}
+
+type groupRolesField []groupRoleItem
+
+func (g *groupRolesField) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" || string(trimmed) == `""` {
+		*g = nil
+		return nil
+	}
+
+	var items []groupRoleItem
+	err := json.Unmarshal(trimmed, &items)
+	if err == nil {
+		*g = items
+		return nil
+	}
+
+	var str string
+	if errStr := json.Unmarshal(trimmed, &str); errStr != nil {
+		return err
+	}
+
+	str = strings.TrimSpace(str)
+	if str == "" || str == "null" {
+		*g = nil
+		return nil
+	}
+
+	if errArr := json.Unmarshal([]byte(str), &items); errArr != nil {
+		return errArr
+	}
+
+	*g = items
+	return nil
 }
 
 var authGroupsListCmd = &cobra.Command{
@@ -26,8 +69,8 @@ var authGroupsListCmd = &cobra.Command{
 						id
 						name
 						description
-						roles
-						user_count
+						group_roles
+						member_count
 						created_at
 					}
 				}
@@ -37,12 +80,12 @@ var authGroupsListCmd = &cobra.Command{
 		var respData struct {
 			UsergroupsList struct {
 				Rows []struct {
-					ID          string   `json:"id"`
-					Name        string   `json:"name"`
-					Description string   `json:"description"`
-					Roles       []string `json:"roles"`
-					UserCount   int      `json:"user_count"`
-					CreatedAt   string   `json:"created_at"`
+					ID          string          `json:"id"`
+					Name        string          `json:"name"`
+					Description string          `json:"description"`
+					GroupRoles  groupRolesField `json:"group_roles"`
+					MemberCount int             `json:"member_count"`
+					CreatedAt   string          `json:"created_at"`
 				} `json:"rows"`
 			} `json:"usergroups_list"`
 		}
@@ -61,16 +104,23 @@ var authGroupsListCmd = &cobra.Command{
 		}
 		var rows []groupRow
 		for _, r := range respData.UsergroupsList.Rows {
+			var roles []string
+			for _, item := range r.GroupRoles {
+				if item.Role != "" {
+					roles = append(roles, item.Role)
+				}
+			}
+
 			rolesStr := "-"
-			if len(r.Roles) > 0 {
-				rolesStr = strings.Join(r.Roles, ", ")
+			if len(roles) > 0 {
+				rolesStr = strings.Join(roles, ", ")
 			}
 			rows = append(rows, groupRow{
 				ID:          r.ID,
 				Name:        r.Name,
 				Description: r.Description,
 				Roles:       rolesStr,
-				UserCount:   r.UserCount,
+				UserCount:   r.MemberCount,
 				CreatedAt:   r.CreatedAt,
 			})
 		}
@@ -103,24 +153,22 @@ var authGroupsCreateCmd = &cobra.Command{
 		graphqlClient := client.NewClient()
 
 		req := client.NewRequest(`
-			mutation CreateUserGroup($request: UserGroupCreateInput!) {
-				usergroup_create(request: $request) {
+			mutation CreateUserGroup($name: String!, $description: String) {
+				usergroup_create(name: $name, description: $description) {
 					id
-					name
-					status
 				}
 			}
 		`)
-		req.Var("request", map[string]any{
-			"name":        groupName,
-			"description": desc,
-		})
+		req.Var("name", groupName)
+		if desc != "" {
+			req.Var("description", desc)
+		} else {
+			req.Var("description", nil)
+		}
 
 		var respData struct {
 			UsergroupCreate struct {
-				ID     string `json:"id"`
-				Name   string `json:"name"`
-				Status string `json:"status"`
+				ID string `json:"id"`
 			} `json:"usergroup_create"`
 		}
 
@@ -128,7 +176,15 @@ var authGroupsCreateCmd = &cobra.Command{
 			return err
 		}
 
-		format.GetFormat().Print(respData.UsergroupCreate)
+		format.GetFormat().Print(struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		}{
+			ID:     respData.UsergroupCreate.ID,
+			Name:   groupName,
+			Status: "created",
+		})
 		return nil
 	},
 }
