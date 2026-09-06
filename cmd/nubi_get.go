@@ -28,9 +28,9 @@ var nubiGetCmd = &cobra.Command{
 			return fmt.Errorf("either conversation-id argument or --session-id flag must be provided")
 		}
 
-		accountID := viper.GetString("account-id")
-		if accountID == "" {
-			return fmt.Errorf("account-id is required, please set it in your config file or pass via flag")
+		accountID, err := resolveAccountID(cmd)
+		if err != nil {
+			return err
 		}
 
 		username := viper.GetString("username")
@@ -60,7 +60,7 @@ var nubiGetCmd = &cobra.Command{
 			if details != nil && details.Conversation.ID != "" {
 				targetID = details.Conversation.ID
 			} else {
-				return fmt.Errorf("conversation not found")
+				return fmt.Errorf("conversation not found for account %s", accountID)
 			}
 		}
 
@@ -72,8 +72,11 @@ var nubiGetCmd = &cobra.Command{
 					return fmt.Errorf("failed to get conversation details: %w", err)
 				}
 			}
+			if details == nil || details.Conversation.ID == "" {
+				return fmt.Errorf("conversation not found for account %s", accountID)
+			}
 			resolvedID := conversationID
-			if details != nil && details.Conversation.ID != "" {
+			if details.Conversation.ID != "" {
 				resolvedID = details.Conversation.ID
 			}
 			stats, _ := nubiClient.GetConversationStats(ctx, resolvedID)
@@ -173,5 +176,6 @@ var nubiGetCmd = &cobra.Command{
 
 func init() {
 	nubiGetCmd.Flags().String("session-id", "", "Optional session ID if conversation details lookup by session is explicitly needed")
+	nubiGetCmd.Flags().String("account-id", "", "Account ID to fetch the conversation from (overrides default profile)")
 	nubiCmd.AddCommand(nubiGetCmd)
 }

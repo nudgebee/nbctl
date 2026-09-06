@@ -21,7 +21,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-var nubiQueryAsync bool
+var (
+	nubiQueryAsync   bool
+	nubiQueryTimeout time.Duration
+)
 
 var nubiQueryCmd = &cobra.Command{
 	Use:     "query <prompt>",
@@ -50,7 +53,13 @@ var nubiQueryCmd = &cobra.Command{
 		sessionID := uuid.New().String()
 		nubiClient := nubi.New(client.NewClient(), accountID, username, sessionID, endpoint)
 
-		ctx, cancel := context.WithCancel(cmd.Context())
+		var ctx context.Context
+		var cancel context.CancelFunc
+		if nubiQueryTimeout > 0 {
+			ctx, cancel = context.WithTimeout(cmd.Context(), nubiQueryTimeout)
+		} else {
+			ctx, cancel = context.WithCancel(cmd.Context())
+		}
 		defer cancel()
 
 		sigChan := make(chan os.Signal, 1)
@@ -67,6 +76,22 @@ var nubiQueryCmd = &cobra.Command{
 		async, _ := cmd.Flags().GetBool("async")
 		if async {
 			if err := nubiClient.TriggerInvestigation(ctx, query); err != nil {
+				if format.GetFormat().Get() == "json" {
+					jsonResp := map[string]interface{}{
+						"error":      fmt.Sprintf("failed to trigger investigation: %v", err),
+						"status":     "ERROR",
+						"account_id": nubiClient.AccountID,
+						"query":      query,
+					}
+					if hint := triggerErrorHint(err, nubiClient.AccountID); hint != "" {
+						jsonResp["hint"] = hint
+					}
+					format.GetFormat().Print(jsonResp)
+					return nil
+				}
+				if hint := triggerErrorHint(err, nubiClient.AccountID); hint != "" {
+					return fmt.Errorf("failed to trigger investigation: %w\nHint: %s", err, hint)
+				}
 				return fmt.Errorf("failed to trigger investigation: %w", err)
 			}
 			if format.GetFormat().Get() == "json" {
@@ -102,17 +127,158 @@ var nubiQueryCmd = &cobra.Command{
 		out := format.GetFormat().GetOutput()
 
 		if err != nil {
-			if errors.Is(err, context.Canceled) {
+			isTimeout := errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded)
+			isCanceled := errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled)
+
+			if isTimeout || isCanceled {
+				statusStr := "TIMED_OUT"
+				durStr := duration.Round(time.Second).String()
+				if duration < time.Second {
+					durStr = duration.Round(time.Millisecond).String()
+					if durStr == "0s" {
+						durStr = "<1ms"
+					}
+				}
+				errMsg := fmt.Sprintf("Query timed out after %s.", durStr)
+				if isCanceled {
+					statusStr = "CANCELED"
+					errMsg = "Request canceled."
+				}
+
+				endpointURL := strings.TrimSuffix(nubiClient.Endpoint, "/")
+				refID := nubiClient.ConversationID
+				if refID == "" {
+					refID = nubiClient.SessionID
+				}
+				conversationURL := fmt.Sprintf("%s/ask-nudgebee?accountId=%s&conversation_id=%s", endpointURL, nubiClient.AccountID, refID)
+
+				recoveryHint := fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get %s --account-id %s' or increase timeout using '--timeout'.", refID, nubiClient.AccountID)
+				if refID == nubiClient.SessionID {
+					recoveryHint = fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get --session-id %s --account-id %s' or increase timeout using '--timeout'.", refID, nubiClient.AccountID)
+				}
+
 				if format.GetFormat().Get() == "json" {
-					format.GetFormat().Print(map[string]interface{}{
-						"error":  "Request canceled.",
-						"status": "CANCELED",
-					})
+					jsonResp := map[string]interface{}{
+						"error":      errMsg,
+						"status":     statusStr,
+						"account_id": nubiClient.AccountID,
+						"session_id": nubiClient.SessionID,
+						"query":      query,
+						"url":        conversationURL,
+						"hint":       recoveryHint,
+					}
+					if nubiClient.ConversationID != "" {
+						jsonResp["conversation_id"] = nubiClient.ConversationID
+					}
+					format.GetFormat().Print(jsonResp)
 					return nil
 				}
-				_, _ = fmt.Fprintln(out, "Request canceled.")
+
+				grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+				boldStyle := lipgloss.NewStyle().Bold(true)
+				yellowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+
+				_, _ = fmt.Fprintln(out, yellowStyle.Render(errMsg))
+				_, _ = fmt.Fprintln(out, grayStyle.Render("\nThe investigation was triggered and may still be running or completed server-side."))
+				if nubiClient.ConversationID != "" {
+					_, _ = fmt.Fprintf(out, "  %s %s\n", boldStyle.Render("Conversation ID:"), nubiClient.ConversationID)
+				}
+				_, _ = fmt.Fprintf(out, "  %s %s\n", boldStyle.Render("Session ID:"), nubiClient.SessionID)
+
+				accountFlag := ""
+				if nubiClient.AccountID != "" {
+					accountFlag = fmt.Sprintf(" --account-id %s", nubiClient.AccountID)
+				}
+				_, _ = fmt.Fprintln(out, grayStyle.Render("\nTo retrieve the response once completed:"))
+				if nubiClient.ConversationID != "" {
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get %s%s\n", nubiClient.ConversationID, accountFlag)
+				} else {
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get --session-id %s%s\n", nubiClient.SessionID, accountFlag)
+				}
+
+				_, _ = fmt.Fprintln(out, grayStyle.Render("\nTo view in browser:"))
+				_, _ = fmt.Fprintf(out, "  %s\n", conversationURL)
+
+				_, _ = fmt.Fprintln(out, grayStyle.Render("\nOptions to increase timeout or run in background:"))
+				_, _ = fmt.Fprintf(out, "  nbctl nubi query %q --timeout 5m\n", query)
+				_, _ = fmt.Fprintf(out, "  nbctl nubi query %q --async\n", query)
+
 				return nil
 			}
+
+			// If polling failed after triggering investigation, provide recovery information
+			if nubiClient.SessionID != "" && !strings.Contains(err.Error(), "triggering investigation") {
+				endpointURL := strings.TrimSuffix(nubiClient.Endpoint, "/")
+				refID := nubiClient.ConversationID
+				if refID == "" {
+					refID = nubiClient.SessionID
+				}
+				conversationURL := fmt.Sprintf("%s/ask-nudgebee?accountId=%s&conversation_id=%s", endpointURL, nubiClient.AccountID, refID)
+
+				recoveryHint := fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get %s --account-id %s'.", refID, nubiClient.AccountID)
+				if refID == nubiClient.SessionID {
+					recoveryHint = fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get --session-id %s --account-id %s'.", refID, nubiClient.AccountID)
+				}
+
+				if format.GetFormat().Get() == "json" {
+					jsonResp := map[string]interface{}{
+						"error":      fmt.Sprintf("error executing query: %v", err),
+						"status":     "ERROR",
+						"account_id": nubiClient.AccountID,
+						"session_id": nubiClient.SessionID,
+						"query":      query,
+						"url":        conversationURL,
+						"hint":       recoveryHint,
+					}
+					if nubiClient.ConversationID != "" {
+						jsonResp["conversation_id"] = nubiClient.ConversationID
+					}
+					format.GetFormat().Print(jsonResp)
+					return nil
+				}
+
+				grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+				boldStyle := lipgloss.NewStyle().Bold(true)
+				redStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+
+				_, _ = fmt.Fprintln(out, redStyle.Render(fmt.Sprintf("Error executing query: %v", err)))
+				_, _ = fmt.Fprintln(out, grayStyle.Render("\nThe investigation was triggered and may still be running or completed server-side."))
+				if nubiClient.ConversationID != "" {
+					_, _ = fmt.Fprintf(out, "  %s %s\n", boldStyle.Render("Conversation ID:"), nubiClient.ConversationID)
+				}
+				_, _ = fmt.Fprintf(out, "  %s %s\n", boldStyle.Render("Session ID:"), nubiClient.SessionID)
+
+				accountFlag := ""
+				if nubiClient.AccountID != "" {
+					accountFlag = fmt.Sprintf(" --account-id %s", nubiClient.AccountID)
+				}
+				_, _ = fmt.Fprintln(out, grayStyle.Render("\nTo retrieve the response once completed:"))
+				if nubiClient.ConversationID != "" {
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get %s%s\n", nubiClient.ConversationID, accountFlag)
+				} else {
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get --session-id %s%s\n", nubiClient.SessionID, accountFlag)
+				}
+				return nil
+			}
+
+			if format.GetFormat().Get() == "json" {
+				jsonResp := map[string]interface{}{
+					"error":      fmt.Sprintf("error executing query: %v", err),
+					"status":     "ERROR",
+					"account_id": nubiClient.AccountID,
+					"query":      query,
+				}
+				if hint := triggerErrorHint(err, nubiClient.AccountID); hint != "" {
+					jsonResp["hint"] = hint
+				}
+				format.GetFormat().Print(jsonResp)
+				return nil
+			}
+
+			if hint := triggerErrorHint(err, nubiClient.AccountID); hint != "" {
+				return fmt.Errorf("error executing query: %w\nHint: %s", err, hint)
+			}
+
 			return fmt.Errorf("error executing query: %w", err)
 		}
 
@@ -193,18 +359,52 @@ func (s *nubiQueryShell) triggerAndPoll(ctx context.Context, query string) (stri
 }
 
 func (s *nubiQueryShell) poll(ctx context.Context) (string, string, error) {
+	consecutiveErrors := 0
+	const maxConsecutiveErrors = 5
+
+	check := func() (string, string, bool, error) {
+		resp, status, statusText, _, _, _, err := s.nubiClient.GetConversation(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				if ctx.Err() != nil {
+					return "", "", false, ctx.Err()
+				}
+				return "", "", false, err
+			}
+			consecutiveErrors++
+			if consecutiveErrors >= maxConsecutiveErrors {
+				return "", "", false, fmt.Errorf("getting conversation: %w", err)
+			}
+			return "", "", false, nil
+		}
+		consecutiveErrors = 0
+
+		if s.spinner != nil && statusText != "" {
+			s.spinner.Suffix = " " + statusText
+		}
+
+		if status != "IN_PROGRESS" {
+			return resp, status, true, nil
+		}
+		return "", "", false, nil
+	}
+
+	// Immediate check
+	if resp, status, done, err := check(); done || err != nil {
+		return resp, status, err
+	}
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return "", "", ctx.Err()
-		case <-time.After(2 * time.Second):
-			resp, status, _, _, _, _, err := s.nubiClient.GetConversation(ctx)
-			if err != nil {
-				return "", "", fmt.Errorf("getting conversation: %w", err)
-			}
-
-			if status != "IN_PROGRESS" {
-				return resp, status, nil
+		case <-ticker.C:
+			if resp, status, done, err := check(); done || err != nil {
+				return resp, status, err
 			}
 		}
 	}
@@ -212,6 +412,17 @@ func (s *nubiQueryShell) poll(ctx context.Context) (string, string, error) {
 
 func init() {
 	nubiQueryCmd.Flags().BoolVar(&nubiQueryAsync, "async", false, "Trigger query asynchronously without waiting for response")
+	nubiQueryCmd.Flags().DurationVarP(&nubiQueryTimeout, "timeout", "t", 0, "Maximum time to wait for query completion (e.g. 2m, 5m). Default is 0 (no timeout)")
 	nubiQueryCmd.Flags().String("account-id", "", "Account ID to execute the query against")
 	nubiCmd.AddCommand(nubiQueryCmd)
+}
+
+func triggerErrorHint(err error, accountID string) string {
+	if err == nil {
+		return ""
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "user does not have access") {
+		return fmt.Sprintf("User does not have access to account %s. Verify the account ID or assign an account role via 'nbctl auth assign-role'.", accountID)
+	}
+	return ""
 }

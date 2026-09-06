@@ -164,6 +164,56 @@ func TestNubiClient_GetConversation(t *testing.T) {
 	assert.Equal(t, "COMPLETED", status)
 }
 
+func TestNubiClient_GetConversation_ParameterIsolation(t *testing.T) {
+	var capturedVars map[string]any
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		var reqBody struct {
+			Variables map[string]any `json:"variables"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		capturedVars = reqBody.Variables
+
+		resp := map[string]any{
+			"data": map[string]any{
+				"ai_get_conversation_v3": map[string]any{
+					"conversation": map[string]any{
+						"id":     "conv-resolved-123",
+						"status": "COMPLETED",
+					},
+					"messages": []map[string]any{
+						{
+							"id":           "msg-1",
+							"status":       "COMPLETED",
+							"response":     "Done",
+							"message_type": "generation",
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
+	}
+
+	c, teardown := newTestNubiClient(handler)
+	defer teardown()
+
+	// 1. When ConversationID is empty, only sessionId should be sent
+	c.ConversationID = ""
+	c.SessionID = "sess-uuid-456"
+	_, _, _, _, _, _, err := c.GetConversation(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "sess-uuid-456", capturedVars["sessionId"])
+	assert.Nil(t, capturedVars["conversationId"])
+	assert.Equal(t, "conv-resolved-123", c.ConversationID)
+
+	// 2. Subsequent call now has ConversationID populated, only conversationId should be sent
+	_, _, _, _, _, _, err = c.GetConversation(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "conv-resolved-123", capturedVars["conversationId"])
+	assert.Nil(t, capturedVars["sessionId"])
+}
+
 func TestNubiClient_SendFollowupResponse(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{

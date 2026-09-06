@@ -85,6 +85,9 @@ func RunCommandCaptureOutput(command *cobra.Command, args []string) (string, err
 // overrides, runs the provided cobra command, and tears down everything.
 // It returns the captured output and any error from running the command.
 func RunWithMockServer(handler http.HandlerFunc, viperOverrides map[string]any, cmd *cobra.Command, args []string) (string, error) {
+	_ = os.Setenv("NBCTL_TESTING", "true")
+	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
+
 	// Reset the singleton client to ensure it picks up the new mock configuration
 	client.ResetClient()
 

@@ -223,13 +223,10 @@ func (c *NubiClient) GetConversation(ctx context.Context) (string, string, strin
 	`)
 
 	req.Var("accountId", c.AccountID)
-	idToUse := c.ConversationID
-	if idToUse == "" {
-		idToUse = c.SessionID
-	}
-	if idToUse != "" {
-		req.Var("conversationId", idToUse)
-		req.Var("sessionId", idToUse)
+	if c.ConversationID != "" {
+		req.Var("conversationId", c.ConversationID)
+	} else if c.SessionID != "" {
+		req.Var("sessionId", c.SessionID)
 	}
 
 	var respData struct {
