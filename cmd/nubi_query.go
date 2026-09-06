@@ -134,7 +134,10 @@ var nubiQueryCmd = &cobra.Command{
 				statusStr := "TIMED_OUT"
 				durStr := duration.Round(time.Second).String()
 				if duration < time.Second {
-					durStr = duration.Round(100 * time.Millisecond).String()
+					durStr = duration.Round(time.Millisecond).String()
+					if durStr == "0s" {
+						durStr = "<1ms"
+					}
 				}
 				errMsg := fmt.Sprintf("Query timed out after %s.", durStr)
 				if isCanceled {
@@ -344,8 +347,12 @@ func (s *nubiQueryShell) poll(ctx context.Context) (string, string, error) {
 	check := func() (string, string, bool, error) {
 		resp, status, statusText, _, _, _, err := s.nubiClient.GetConversation(ctx)
 		if err != nil {
-			if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", "", false, ctx.Err()
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				if ctx.Err() != nil {
+					return "", "", false, ctx.Err()
+				}
+				return "", "", false, err
 			}
 			consecutiveErrors++
 			if consecutiveErrors >= maxConsecutiveErrors {
