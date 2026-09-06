@@ -152,6 +152,11 @@ var nubiQueryCmd = &cobra.Command{
 				}
 				conversationURL := fmt.Sprintf("%s/ask-nudgebee?accountId=%s&conversation_id=%s", endpointURL, nubiClient.AccountID, refID)
 
+				recoveryHint := fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get %s --account-id %s' or increase timeout using '--timeout'.", refID, nubiClient.AccountID)
+				if refID == nubiClient.SessionID {
+					recoveryHint = fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get --session-id %s --account-id %s' or increase timeout using '--timeout'.", refID, nubiClient.AccountID)
+				}
+
 				if format.GetFormat().Get() == "json" {
 					jsonResp := map[string]interface{}{
 						"error":      errMsg,
@@ -160,7 +165,7 @@ var nubiQueryCmd = &cobra.Command{
 						"session_id": nubiClient.SessionID,
 						"query":      query,
 						"url":        conversationURL,
-						"hint":       "The investigation was triggered server-side. Retrieve results using 'nbctl nubi get' or increase timeout using '--timeout'.",
+						"hint":       recoveryHint,
 					}
 					if nubiClient.ConversationID != "" {
 						jsonResp["conversation_id"] = nubiClient.ConversationID
@@ -180,11 +185,15 @@ var nubiQueryCmd = &cobra.Command{
 				}
 				_, _ = fmt.Fprintf(out, "  %s %s\n", boldStyle.Render("Session ID:"), nubiClient.SessionID)
 
+				accountFlag := ""
+				if nubiClient.AccountID != "" {
+					accountFlag = fmt.Sprintf(" --account-id %s", nubiClient.AccountID)
+				}
 				_, _ = fmt.Fprintln(out, grayStyle.Render("\nTo retrieve the response once completed:"))
 				if nubiClient.ConversationID != "" {
-					_, _ = fmt.Fprintf(out, "  nbctl nubi get %s\n", nubiClient.ConversationID)
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get %s%s\n", nubiClient.ConversationID, accountFlag)
 				} else {
-					_, _ = fmt.Fprintf(out, "  nbctl nubi get --session-id %s\n", nubiClient.SessionID)
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get --session-id %s%s\n", nubiClient.SessionID, accountFlag)
 				}
 
 				_, _ = fmt.Fprintln(out, grayStyle.Render("\nTo view in browser:"))
@@ -206,6 +215,11 @@ var nubiQueryCmd = &cobra.Command{
 				}
 				conversationURL := fmt.Sprintf("%s/ask-nudgebee?accountId=%s&conversation_id=%s", endpointURL, nubiClient.AccountID, refID)
 
+				recoveryHint := fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get %s --account-id %s'.", refID, nubiClient.AccountID)
+				if refID == nubiClient.SessionID {
+					recoveryHint = fmt.Sprintf("The investigation was triggered server-side. Retrieve results using 'nbctl nubi get --session-id %s --account-id %s'.", refID, nubiClient.AccountID)
+				}
+
 				if format.GetFormat().Get() == "json" {
 					jsonResp := map[string]interface{}{
 						"error":      fmt.Sprintf("error executing query: %v", err),
@@ -214,7 +228,7 @@ var nubiQueryCmd = &cobra.Command{
 						"session_id": nubiClient.SessionID,
 						"query":      query,
 						"url":        conversationURL,
-						"hint":       "The investigation was triggered server-side. Retrieve results using 'nbctl nubi get'.",
+						"hint":       recoveryHint,
 					}
 					if nubiClient.ConversationID != "" {
 						jsonResp["conversation_id"] = nubiClient.ConversationID
@@ -234,11 +248,15 @@ var nubiQueryCmd = &cobra.Command{
 				}
 				_, _ = fmt.Fprintf(out, "  %s %s\n", boldStyle.Render("Session ID:"), nubiClient.SessionID)
 
+				accountFlag := ""
+				if nubiClient.AccountID != "" {
+					accountFlag = fmt.Sprintf(" --account-id %s", nubiClient.AccountID)
+				}
 				_, _ = fmt.Fprintln(out, grayStyle.Render("\nTo retrieve the response once completed:"))
 				if nubiClient.ConversationID != "" {
-					_, _ = fmt.Fprintf(out, "  nbctl nubi get %s\n", nubiClient.ConversationID)
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get %s%s\n", nubiClient.ConversationID, accountFlag)
 				} else {
-					_, _ = fmt.Fprintf(out, "  nbctl nubi get --session-id %s\n", nubiClient.SessionID)
+					_, _ = fmt.Fprintf(out, "  nbctl nubi get --session-id %s%s\n", nubiClient.SessionID, accountFlag)
 				}
 				return nil
 			}

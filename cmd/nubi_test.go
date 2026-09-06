@@ -21,8 +21,16 @@ func resetNubiFlags() {
 		_ = f.Value.Set("0s")
 		f.Changed = false
 	}
+	if f := nubiQueryCmd.Flags().Lookup("account-id"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
 	nubiQueryTimeout = 0
 	if f := nubiGetCmd.Flags().Lookup("session-id"); f != nil {
+		_ = f.Value.Set("")
+		f.Changed = false
+	}
+	if f := nubiGetCmd.Flags().Lookup("account-id"); f != nil {
 		_ = f.Value.Set("")
 		f.Changed = false
 	}
@@ -322,7 +330,7 @@ func TestNubiCmd_Query_Timeout(t *testing.T) {
 	assert.Contains(t, output, "The investigation was triggered and may still be running or completed server-side.")
 	assert.Contains(t, output, "Conversation ID: conv-timeout-1")
 	assert.Contains(t, output, "Session ID:")
-	assert.Contains(t, output, "nbctl nubi get conv-timeout-1")
+	assert.Contains(t, output, "nbctl nubi get conv-timeout-1 --account-id dummy-account")
 	assert.Contains(t, output, "--timeout 5m")
 	assert.Contains(t, output, "--async")
 }
@@ -376,7 +384,7 @@ func TestNubiCmd_Query_Timeout_JSON(t *testing.T) {
 	assert.Equal(t, "conv-timeout-2", result["conversation_id"])
 	assert.NotEmpty(t, result["session_id"])
 	assert.Contains(t, result["url"], "conv-timeout-2")
-	assert.Contains(t, result["hint"], "nbctl nubi get")
+	assert.Contains(t, result["hint"], "nbctl nubi get conv-timeout-2 --account-id dummy-account")
 }
 
 func TestNubiCmd_Query_TransientRetry(t *testing.T) {
@@ -794,3 +802,226 @@ func TestNubiCmd_Get_WithSessionIDFlag(t *testing.T) {
 		assert.Contains(t, err.Error(), "conversation not found")
 	})
 }
+
+func TestNubiCmd_Get_WithAccountId(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "default-account")
+	t.Cleanup(resetNubiFlags)
+
+	var receivedAccountID string
+	var receivedConvID string
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/auth/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
+		case "/api/graphql":
+			var payload struct {
+				Query     string                 `json:"query"`
+				Variables map[string]interface{} `json:"variables"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err == nil {
+				if acc, ok := payload.Variables["accountId"].(string); ok {
+					receivedAccountID = acc
+				}
+				if conv, ok := payload.Variables["conversationId"].(string); ok {
+					receivedConvID = conv
+				}
+			}
+			resp := map[string]interface{}{
+				"data": map[string]interface{}{
+					"ai_get_conversation_v3": map[string]interface{}{
+						"conversation": map[string]interface{}{
+							"id":     "conv-explicit-1",
+							"status": "COMPLETED",
+						},
+						"messages": []map[string]interface{}{
+							{
+								"id":           "msg-1",
+								"status":       "COMPLETED",
+								"response":     "Scoped to explicit account",
+								"message_type": "generation",
+							},
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	defaults := map[string]any{
+		"api-key":    "dummy",
+		"username":   "dummy-user",
+		"account-id": "default-account",
+	}
+
+	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{
+		"nubi", "get", "conv-explicit-1", "--account-id", "explicit-account-id",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "explicit-account-id", receivedAccountID)
+	assert.Equal(t, "conv-explicit-1", receivedConvID)
+	assert.Contains(t, output, "Scoped")
+	assert.Contains(t, output, "explicit")
+}
+
+func TestNubiCmd_Get_SessionId_WithAccountId(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	viper.Set("account-id", "default-account")
+	t.Cleanup(resetNubiFlags)
+
+	var receivedAccountID string
+	var receivedSessionID string
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/auth/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
+		case "/api/graphql":
+			var payload struct {
+				Query     string                 `json:"query"`
+				Variables map[string]interface{} `json:"variables"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err == nil {
+				if acc, ok := payload.Variables["accountId"].(string); ok {
+					receivedAccountID = acc
+				}
+				if sess, ok := payload.Variables["sessionId"].(string); ok {
+					receivedSessionID = sess
+				}
+			}
+			resp := map[string]interface{}{
+				"data": map[string]interface{}{
+					"ai_get_conversation_v3": map[string]interface{}{
+						"conversation": map[string]interface{}{
+							"id":     "conv-session-1",
+							"status": "COMPLETED",
+						},
+						"messages": []map[string]interface{}{
+							{
+								"id":           "msg-1",
+								"status":       "COMPLETED",
+								"response":     "Found by session ID",
+								"message_type": "generation",
+							},
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	defaults := map[string]any{
+		"api-key":    "dummy",
+		"username":   "dummy-user",
+		"account-id": "default-account",
+	}
+
+	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{
+		"nubi", "get", "--session-id", "sess-explicit-1", "--account-id", "explicit-account-id",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "explicit-account-id", receivedAccountID)
+	assert.Equal(t, "sess-explicit-1", receivedSessionID)
+	assert.Contains(t, output, "Found")
+	assert.Contains(t, output, "session")
+}
+
+func TestNubiCmd_Get_NotFound_JSON(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	t.Cleanup(resetNubiFlags)
+
+	emptyResponse := map[string]interface{}{
+		"ai_get_conversation_v3": map[string]interface{}{
+			"conversation": map[string]interface{}{"id": "", "status": ""},
+		},
+	}
+	_, err := testutil.RunWithSimpleGraphQL(emptyResponse, nubiCmd, []string{"nubi", "get", "conv-missing", "-o", "json"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "conversation not found for account dummy-account")
+}
+
+func TestNubiCmd_SyncQuery_SessionIdDiffersFromConversationId(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("username", "test-user")
+	t.Cleanup(resetNubiFlags)
+
+	var recordedVars []map[string]interface{}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/auth/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
+		case "/api/graphql":
+			var payload struct {
+				Query     string                 `json:"query"`
+				Variables map[string]interface{} `json:"variables"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			recordedVars = append(recordedVars, payload.Variables)
+
+			resp := map[string]interface{}{
+				"data": map[string]interface{}{
+					"ai_execute_investigation": map[string]interface{}{
+						"data": map[string]interface{}{
+							"response": "started",
+						},
+					},
+					"ai_get_conversation_v3": map[string]interface{}{
+						"conversation": map[string]interface{}{
+							"id":     "conv-different-uuid",
+							"status": "COMPLETED",
+						},
+						"messages": []map[string]interface{}{
+							{
+								"id":           "msg-1",
+								"status":       "COMPLETED",
+								"response":     "Polled successfully with distinct session and conversation IDs",
+								"message_type": "generation",
+							},
+						},
+					},
+					"ai_get_conversation_usage_metrics": map[string]interface{}{
+						"data": map[string]interface{}{
+							"conversation": map[string]interface{}{
+								"total_cost": 0.001,
+							},
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	defaults := map[string]any{
+		"api-key":    "dummy",
+		"username":   "dummy-user",
+		"account-id": "dummy-account",
+	}
+
+	output, err := testutil.RunWithMockServer(handler, defaults, nubiCmd, []string{"nubi", "query", "check distinct ids"})
+	require.NoError(t, err)
+	assert.Contains(t, output, "Polled")
+	assert.Contains(t, output, "successfully")
+
+	require.True(t, len(recordedVars) >= 2)
+	pollVars := recordedVars[1]
+	assert.NotEmpty(t, pollVars["sessionId"])
+	assert.Nil(t, pollVars["conversationId"])
+}
+
