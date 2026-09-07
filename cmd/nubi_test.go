@@ -189,8 +189,8 @@ func TestNubiCmd_SyncQuery(t *testing.T) {
 					"ai_get_conversation_usage_metrics": map[string]interface{}{
 						"data": map[string]interface{}{
 							"conversation": map[string]interface{}{
-								"total_cost":         0.001,
-								"total_input_tokens": 50,
+								"total_cost":          0.001,
+								"total_input_tokens":  50,
 								"total_output_tokens": 100,
 							},
 						},
@@ -252,8 +252,8 @@ func TestNubiCmd_SyncQuery_JSON(t *testing.T) {
 					"ai_get_conversation_usage_metrics": map[string]interface{}{
 						"data": map[string]interface{}{
 							"conversation": map[string]interface{}{
-								"total_cost":         0.001,
-								"total_input_tokens": 50,
+								"total_cost":          0.001,
+								"total_input_tokens":  50,
 								"total_output_tokens": 100,
 							},
 						},
@@ -690,8 +690,8 @@ func TestNubiCmd_Stats(t *testing.T) {
 		"ai_get_conversation_usage_metrics": map[string]interface{}{
 			"data": map[string]interface{}{
 				"conversation": map[string]interface{}{
-					"total_cost":         0.005,
-					"total_input_tokens": 1200,
+					"total_cost":          0.005,
+					"total_input_tokens":  1200,
 					"total_output_tokens": 350,
 				},
 			},
@@ -717,8 +717,8 @@ func TestNubiCmd_Stats_JSON(t *testing.T) {
 			"data": map[string]interface{}{
 				"conversation": map[string]interface{}{
 					"total_cost_usd":                  0.0275597,
-					"total_input_tokens":             57270,
-					"total_output_tokens":            996,
+					"total_input_tokens":              57270,
+					"total_output_tokens":             996,
 					"total_cached_input_tokens":       39857,
 					"total_cache_hit_rate_percentage": 69.59,
 					"model_usage": []map[string]interface{}{
@@ -1024,4 +1024,3 @@ func TestNubiCmd_SyncQuery_SessionIdDiffersFromConversationId(t *testing.T) {
 	assert.NotEmpty(t, pollVars["sessionId"])
 	assert.Nil(t, pollVars["conversationId"])
 }
-
