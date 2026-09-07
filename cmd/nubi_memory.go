@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -73,7 +74,7 @@ var nubiMemoryListCmd = &cobra.Command{
 		req.Var("request", input)
 
 		var respData struct {
-			AiListMemory struct {
+			AiListMemory *struct {
 				Data   []memoryItem       `json:"data"`
 				Errors []graphqlErrorItem `json:"errors"`
 			} `json:"ai_list_memory"`
@@ -81,6 +82,10 @@ var nubiMemoryListCmd = &cobra.Command{
 
 		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
+		}
+
+		if respData.AiListMemory == nil {
+			return fmt.Errorf("empty response from backend")
 		}
 
 		if err := joinGraphQLErrors(respData.AiListMemory.Errors); err != nil {

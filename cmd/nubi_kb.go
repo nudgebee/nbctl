@@ -81,7 +81,7 @@ var nubiKbListCmd = &cobra.Command{
 		})
 
 		var respData struct {
-			AiListKb struct {
+			AiListKb *struct {
 				Data   []kbItem           `json:"data"`
 				Errors []graphqlErrorItem `json:"errors"`
 			} `json:"ai_list_kb"`
@@ -89,6 +89,10 @@ var nubiKbListCmd = &cobra.Command{
 
 		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
+		}
+
+		if respData.AiListKb == nil {
+			return fmt.Errorf("empty response from backend")
 		}
 
 		if err := joinGraphQLErrors(respData.AiListKb.Errors); err != nil {
@@ -160,7 +164,7 @@ var nubiKbGetCmd = &cobra.Command{
 		})
 
 		var respData struct {
-			AiGetKb struct {
+			AiGetKb *struct {
 				Data *struct {
 					ID            string  `json:"id"`
 					TenantID      string  `json:"tenant_id"`
@@ -185,6 +189,10 @@ var nubiKbGetCmd = &cobra.Command{
 
 		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
+		}
+
+		if respData.AiGetKb == nil {
+			return fmt.Errorf("empty response from backend")
 		}
 
 		if err := joinGraphQLErrors(respData.AiGetKb.Errors); err != nil {
@@ -231,7 +239,7 @@ var nubiKbSyncCmd = &cobra.Command{
 		})
 
 		var respData struct {
-			AiSyncKb struct {
+			AiSyncKb *struct {
 				Data   any                `json:"data"`
 				Errors []graphqlErrorItem `json:"errors"`
 			} `json:"ai_sync_kb"`
@@ -239,6 +247,10 @@ var nubiKbSyncCmd = &cobra.Command{
 
 		if err := client.Run(cmd.Context(), req, &respData); err != nil {
 			return err
+		}
+
+		if respData.AiSyncKb == nil {
+			return fmt.Errorf("empty response from backend")
 		}
 
 		if err := joinGraphQLErrors(respData.AiSyncKb.Errors); err != nil {
@@ -300,7 +312,7 @@ func toggleKBEnabled(cmd *cobra.Command, rawKBID string, enabled bool) error {
 	})
 
 	var respData struct {
-		AiUpdateKbEnabled struct {
+		AiUpdateKbEnabled *struct {
 			Data   any                `json:"data"`
 			Errors []graphqlErrorItem `json:"errors"`
 		} `json:"ai_update_kb_enabled"`
@@ -308,6 +320,10 @@ func toggleKBEnabled(cmd *cobra.Command, rawKBID string, enabled bool) error {
 
 	if err := client.Run(cmd.Context(), req, &respData); err != nil {
 		return err
+	}
+
+	if respData.AiUpdateKbEnabled == nil {
+		return fmt.Errorf("empty response from backend")
 	}
 
 	if err := joinGraphQLErrors(respData.AiUpdateKbEnabled.Errors); err != nil {
