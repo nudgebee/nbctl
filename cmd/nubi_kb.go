@@ -26,20 +26,34 @@ type kbItem struct {
 	UpdatedAt     string  `json:"updated_at"`
 }
 
+type graphqlErrorItem struct {
+	Message string `json:"message"`
+}
+
+func joinGraphQLErrors(errs []graphqlErrorItem) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	var msgs []string
+	for _, e := range errs {
+		if strings.TrimSpace(e.Message) != "" {
+			msgs = append(msgs, strings.TrimSpace(e.Message))
+		}
+	}
+	if len(msgs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("backend error: %s", strings.Join(msgs, "; "))
+}
+
 var nubiKbListCmd = &cobra.Command{
 	Use:   "list [account-id]",
 	Short: "List Knowledge Base sources",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var accountID string
-		if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-			accountID = strings.TrimSpace(args[0])
-		} else {
-			var err error
-			accountID, err = resolveAccountID(cmd)
-			if err != nil {
-				return fmt.Errorf("resolving account ID: %w", err)
-			}
+		accountID, err := resolveAccountIDWithPositional(cmd, args)
+		if err != nil {
+			return err
 		}
 
 		req := client.NewRequest(`
@@ -68,10 +82,8 @@ var nubiKbListCmd = &cobra.Command{
 
 		var respData struct {
 			AiListKb struct {
-				Data   []kbItem `json:"data"`
-				Errors []struct {
-					Message string `json:"message"`
-				} `json:"errors"`
+				Data   []kbItem           `json:"data"`
+				Errors []graphqlErrorItem `json:"errors"`
 			} `json:"ai_list_kb"`
 		}
 
@@ -79,8 +91,8 @@ var nubiKbListCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.AiListKb.Errors) > 0 {
-			return fmt.Errorf("backend error: %s", respData.AiListKb.Errors[0].Message)
+		if err := joinGraphQLErrors(respData.AiListKb.Errors); err != nil {
+			return err
 		}
 
 		table := format.TabularData{
@@ -167,9 +179,7 @@ var nubiKbGetCmd = &cobra.Command{
 					CreatedAt     string  `json:"created_at"`
 					UpdatedAt     string  `json:"updated_at"`
 				} `json:"data"`
-				Errors []struct {
-					Message string `json:"message"`
-				} `json:"errors"`
+				Errors []graphqlErrorItem `json:"errors"`
 			} `json:"ai_get_kb"`
 		}
 
@@ -177,8 +187,8 @@ var nubiKbGetCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.AiGetKb.Errors) > 0 {
-			return fmt.Errorf("backend error: %s", respData.AiGetKb.Errors[0].Message)
+		if err := joinGraphQLErrors(respData.AiGetKb.Errors); err != nil {
+			return err
 		}
 
 		if respData.AiGetKb.Data == nil {
@@ -222,10 +232,8 @@ var nubiKbSyncCmd = &cobra.Command{
 
 		var respData struct {
 			AiSyncKb struct {
-				Data   any `json:"data"`
-				Errors []struct {
-					Message string `json:"message"`
-				} `json:"errors"`
+				Data   any                `json:"data"`
+				Errors []graphqlErrorItem `json:"errors"`
 			} `json:"ai_sync_kb"`
 		}
 
@@ -233,8 +241,8 @@ var nubiKbSyncCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.AiSyncKb.Errors) > 0 {
-			return fmt.Errorf("backend error: %s", respData.AiSyncKb.Errors[0].Message)
+		if err := joinGraphQLErrors(respData.AiSyncKb.Errors); err != nil {
+			return err
 		}
 
 		format.GetFormat().Print(map[string]any{
@@ -293,10 +301,8 @@ func toggleKBEnabled(cmd *cobra.Command, rawKBID string, enabled bool) error {
 
 	var respData struct {
 		AiUpdateKbEnabled struct {
-			Data   any `json:"data"`
-			Errors []struct {
-				Message string `json:"message"`
-			} `json:"errors"`
+			Data   any                `json:"data"`
+			Errors []graphqlErrorItem `json:"errors"`
 		} `json:"ai_update_kb_enabled"`
 	}
 
@@ -304,8 +310,8 @@ func toggleKBEnabled(cmd *cobra.Command, rawKBID string, enabled bool) error {
 		return err
 	}
 
-	if len(respData.AiUpdateKbEnabled.Errors) > 0 {
-		return fmt.Errorf("backend error: %s", respData.AiUpdateKbEnabled.Errors[0].Message)
+	if err := joinGraphQLErrors(respData.AiUpdateKbEnabled.Errors); err != nil {
+		return err
 	}
 
 	statusStr := "enabled"

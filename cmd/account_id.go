@@ -20,3 +20,23 @@ func resolveAccountID(cmd *cobra.Command) (string, error) {
 	}
 	return accountID, nil
 }
+
+// resolveAccountIDWithPositional returns the account-id prioritizing an explicit
+// --account-id flag (if set), followed by a positional argument, and falling
+// back to profile config via viper.
+func resolveAccountIDWithPositional(cmd *cobra.Command, args []string) (string, error) {
+	if cmd.Flags().Changed("account-id") {
+		flagVal, _ := cmd.Flags().GetString("account-id")
+		if flagVal != "" {
+			return flagVal, nil
+		}
+	}
+	if len(args) > 0 && args[0] != "" {
+		return args[0], nil
+	}
+	accountID, err := resolveAccountID(cmd)
+	if err != nil {
+		return "", fmt.Errorf("resolving account ID: %w", err)
+	}
+	return accountID, nil
+}

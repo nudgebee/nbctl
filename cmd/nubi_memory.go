@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -30,15 +29,9 @@ var nubiMemoryListCmd = &cobra.Command{
 	Short: "List AI operational memory items, architecture decisions, and learned patterns",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var accountID string
-		if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-			accountID = strings.TrimSpace(args[0])
-		} else {
-			var err error
-			accountID, err = resolveAccountID(cmd)
-			if err != nil {
-				return fmt.Errorf("resolving account ID: %w", err)
-			}
+		accountID, err := resolveAccountIDWithPositional(cmd, args)
+		if err != nil {
+			return err
 		}
 
 		memoryType, _ := cmd.Flags().GetString("type")
@@ -81,10 +74,8 @@ var nubiMemoryListCmd = &cobra.Command{
 
 		var respData struct {
 			AiListMemory struct {
-				Data   []memoryItem `json:"data"`
-				Errors []struct {
-					Message string `json:"message"`
-				} `json:"errors"`
+				Data   []memoryItem       `json:"data"`
+				Errors []graphqlErrorItem `json:"errors"`
 			} `json:"ai_list_memory"`
 		}
 
@@ -92,8 +83,8 @@ var nubiMemoryListCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.AiListMemory.Errors) > 0 {
-			return fmt.Errorf("backend error: %s", respData.AiListMemory.Errors[0].Message)
+		if err := joinGraphQLErrors(respData.AiListMemory.Errors); err != nil {
+			return err
 		}
 
 		table := format.TabularData{

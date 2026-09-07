@@ -40,6 +40,27 @@ func TestNubiKbCmd_List(t *testing.T) {
 	assert.Contains(t, output, "active")
 }
 
+func TestNubiKbCmd_List_PositionalAccountPrecedence(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("account-id", "profile-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	mockResponse := map[string]any{
+		"ai_list_kb": map[string]any{
+			"data": []map[string]any{
+				{
+					"id":   "kb-override",
+					"name": "Overridden KB",
+				},
+			},
+		},
+	}
+
+	output, err := testutil.RunWithSimpleGraphQL(mockResponse, nubiCmd, []string{"nubi", "kb", "list", "override-account-id"})
+	require.NoError(t, err)
+	assert.Contains(t, output, "kb-override")
+}
+
 func TestNubiKbCmd_List_JSON(t *testing.T) {
 	resetNubiFlags()
 	viper.Set("account-id", "test-account-id")
