@@ -208,6 +208,12 @@ var nubiKbGetCmd = &cobra.Command{
 	},
 }
 
+type kbActionResponse struct {
+	KBID    string `json:"kb_id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
 var nubiKbSyncCmd = &cobra.Command{
 	Use:   "sync <kb-id>",
 	Short: "Trigger manual re-indexing / vector embedding sync for a Knowledge Base",
@@ -257,10 +263,10 @@ var nubiKbSyncCmd = &cobra.Command{
 			return err
 		}
 
-		format.GetFormat().Print(map[string]any{
-			"status":  "triggered",
-			"kb_id":   kbID,
-			"message": "Knowledge Base vector re-indexing triggered successfully",
+		format.GetFormat().Print(kbActionResponse{
+			KBID:    kbID,
+			Status:  "triggered",
+			Message: "Knowledge Base vector re-indexing triggered successfully",
 		})
 		return nil
 	},
@@ -335,10 +341,10 @@ func toggleKBEnabled(cmd *cobra.Command, rawKBID string, enabled bool) error {
 		statusStr = "disabled"
 	}
 
-	format.GetFormat().Print(map[string]any{
-		"kb_id":   kbID,
-		"status":  statusStr,
-		"message": fmt.Sprintf("Knowledge Base successfully %s", statusStr),
+	format.GetFormat().Print(kbActionResponse{
+		KBID:    kbID,
+		Status:  statusStr,
+		Message: fmt.Sprintf("Knowledge Base successfully %s", statusStr),
 	})
 	return nil
 }
