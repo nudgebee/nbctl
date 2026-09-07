@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -11,7 +12,10 @@ import (
 // prefers an explicit --account-id flag, falls back to the configured
 // profile via viper, and returns an error if neither is set.
 func resolveAccountID(cmd *cobra.Command) (string, error) {
-	accountID, _ := cmd.Flags().GetString("account-id")
+	accountID, err := cmd.Flags().GetString("account-id")
+	if err != nil {
+		accountID = ""
+	}
 	if accountID == "" {
 		accountID = viper.GetString("account-id")
 	}
@@ -26,13 +30,13 @@ func resolveAccountID(cmd *cobra.Command) (string, error) {
 // back to profile config via viper.
 func resolveAccountIDWithPositional(cmd *cobra.Command, args []string) (string, error) {
 	if cmd.Flags().Changed("account-id") {
-		flagVal, _ := cmd.Flags().GetString("account-id")
-		if flagVal != "" {
-			return flagVal, nil
+		flagVal, err := cmd.Flags().GetString("account-id")
+		if err == nil && strings.TrimSpace(flagVal) != "" {
+			return strings.TrimSpace(flagVal), nil
 		}
 	}
-	if len(args) > 0 && args[0] != "" {
-		return args[0], nil
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+		return strings.TrimSpace(args[0]), nil
 	}
 	accountID, err := resolveAccountID(cmd)
 	if err != nil {

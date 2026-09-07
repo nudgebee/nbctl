@@ -351,15 +351,11 @@ func toggleKBEnabled(cmd *cobra.Command, rawKBID string, enabled bool) error {
 
 func init() {
 	nubiCmd.AddCommand(nubiKbCmd)
+	nubiKbCmd.PersistentFlags().String("account-id", "", "Account ID (overrides profile)")
+
 	nubiKbCmd.AddCommand(nubiKbListCmd)
 	nubiKbCmd.AddCommand(nubiKbGetCmd)
 	nubiKbCmd.AddCommand(nubiKbSyncCmd)
 	nubiKbCmd.AddCommand(nubiKbEnableCmd)
 	nubiKbCmd.AddCommand(nubiKbDisableCmd)
-
-	nubiKbListCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	nubiKbGetCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	nubiKbSyncCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	nubiKbEnableCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
-	nubiKbDisableCmd.Flags().String("account-id", "", "Account ID (overrides profile)")
 }
