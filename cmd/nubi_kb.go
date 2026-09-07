@@ -31,12 +31,15 @@ var nubiKbListCmd = &cobra.Command{
 	Short: "List Knowledge Base sources",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		accountID, err := resolveAccountID(cmd)
-		if err != nil && len(args) > 0 {
+		var accountID string
+		if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
 			accountID = strings.TrimSpace(args[0])
-		}
-		if accountID == "" {
-			return fmt.Errorf("account-id is required, please provide it via --account-id flag or argument")
+		} else {
+			var err error
+			accountID, err = resolveAccountID(cmd)
+			if err != nil {
+				return fmt.Errorf("resolving account ID: %w", err)
+			}
 		}
 
 		req := client.NewRequest(`
@@ -109,7 +112,7 @@ var nubiKbGetCmd = &cobra.Command{
 
 		accountID, err := resolveAccountID(cmd)
 		if err != nil {
-			return fmt.Errorf("account-id is required, please provide it via --account-id flag")
+			return fmt.Errorf("resolving account ID: %w", err)
 		}
 
 		req := client.NewRequest(`
@@ -199,7 +202,7 @@ var nubiKbSyncCmd = &cobra.Command{
 
 		accountID, err := resolveAccountID(cmd)
 		if err != nil {
-			return fmt.Errorf("account-id is required, please provide it via --account-id flag")
+			return fmt.Errorf("resolving account ID: %w", err)
 		}
 
 		req := client.NewRequest(`
@@ -269,7 +272,7 @@ func toggleKBEnabled(cmd *cobra.Command, rawKBID string, enabled bool) error {
 
 	accountID, err := resolveAccountID(cmd)
 	if err != nil {
-		return fmt.Errorf("account-id is required, please provide it via --account-id flag")
+		return fmt.Errorf("resolving account ID: %w", err)
 	}
 
 	req := client.NewRequest(`
