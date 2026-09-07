@@ -38,6 +38,9 @@ var nubiMemoryListCmd = &cobra.Command{
 		memoryType, _ := cmd.Flags().GetString("type")
 		queryFilter, _ := cmd.Flags().GetString("query")
 		limit, _ := cmd.Flags().GetInt("limit")
+		if limit <= 0 {
+			return fmt.Errorf("limit must be greater than 0")
+		}
 
 		memoryType = strings.TrimSpace(memoryType)
 		queryFilter = strings.TrimSpace(queryFilter)

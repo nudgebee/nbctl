@@ -65,3 +65,13 @@ func TestNubiMemoryCmd_List_JSON(t *testing.T) {
 	assert.Equal(t, "mem-202", result[0]["id"])
 	assert.Equal(t, "architecture_decision", result[0]["memory_type"])
 }
+
+func TestNubiMemoryCmd_List_InvalidLimit(t *testing.T) {
+	resetNubiFlags()
+	viper.Set("account-id", "test-account-id")
+	t.Cleanup(resetNubiFlags)
+
+	_, err := testutil.RunWithSimpleGraphQL(nil, nubiCmd, []string{"nubi", "memory", "list", "--limit", "0"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "limit must be greater than 0")
+}
