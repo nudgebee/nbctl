@@ -76,8 +76,6 @@ func TestNubiCmd_AsyncQuery_TriggerError_JSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -116,8 +114,6 @@ func TestNubiCmd_Query_AccessDenied_Text(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -162,8 +158,6 @@ func TestNubiCmd_SyncQuery(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			resp := map[string]interface{}{
 				"data": map[string]interface{}{
@@ -225,8 +219,6 @@ func TestNubiCmd_SyncQuery_JSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			resp := map[string]interface{}{
 				"data": map[string]interface{}{
@@ -294,8 +286,6 @@ func TestNubiCmd_Query_Timeout(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			resp := map[string]interface{}{
 				"data": map[string]interface{}{
@@ -343,8 +333,6 @@ func TestNubiCmd_Query_Timeout_JSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			resp := map[string]interface{}{
 				"data": map[string]interface{}{
@@ -396,8 +384,6 @@ func TestNubiCmd_Query_TransientRetry(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			pollCount++
 			if pollCount == 2 {
@@ -815,8 +801,6 @@ func TestNubiCmd_Get_WithAccountId(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			var payload struct {
 				Query     string                 `json:"query"`
@@ -882,8 +866,6 @@ func TestNubiCmd_Get_SessionId_WithAccountId(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			var payload struct {
 				Query     string                 `json:"query"`
@@ -962,8 +944,6 @@ func TestNubiCmd_SyncQuery_SessionIdDiffersFromConversationId(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/api/auth/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
 		case "/api/graphql":
 			var payload struct {
 				Query     string                 `json:"query"`

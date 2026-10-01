@@ -68,11 +68,6 @@ definition:
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/auth/token" {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
-			return
-		}
 		if r.URL.Path == "/api/graphql" {
 			w.Header().Set("Content-Type", "application/json")
 			// Return top-level errors
@@ -186,11 +181,6 @@ definition:
 
 	// We need to use RunWithMockServer to simulate top-level errors (not wrapped in data)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/auth/token" {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
-			return
-		}
 		if r.URL.Path == "/api/graphql" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)

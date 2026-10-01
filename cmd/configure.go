@@ -102,7 +102,7 @@ var configureAddCmd = &cobra.Command{
 
 		// Validate the configuration by making a simple API call
 		fmt.Println("Validating configuration...")
-		gqlClient := client.NewClient(client.WithApiKey(apiKey), client.WithEndpoint(endpoint), client.WithUsername(username))
+		gqlClient := client.NewClient(client.WithApiKey(apiKey), client.WithEndpoint(endpoint))
 		req := client.NewRequest(`
 			query {
 				cloud_accounts: accounts_list(where: {}, limit: 1, offset: 0) {

@@ -8,8 +8,8 @@ Helpers
 The package `pkg/testutil` exposes the following useful helpers:
 
 - `RunWithSimpleGraphQL(mockData any, cmd *cobra.Command, args []string) (string, error)`
-  - Convenience for mocking a GraphQL response. Automatically mocks `/api/auth/token` and
-    returns `{ "data": mockData }` at `/api/graphql`. Useful for simple, static tests.
+  - Convenience for mocking a GraphQL response. Returns `{ "data": mockData }` at
+    `/api/graphql`. Useful for simple, static tests.
 
 - `RunWithMockServer(handler http.HandlerFunc, viperOverrides map[string]any, cmd *cobra.Command, args []string) (string, error)`
   - More flexible: provide a handler to simulate complex behavior, and a small map of viper overrides (e.g. `api-key`, `username`). The helper sets the `endpoint` viper key to the test server URL and restores previous viper values after the test.
