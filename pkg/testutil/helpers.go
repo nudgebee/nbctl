@@ -110,18 +110,14 @@ func RunWithMockServer(handler http.HandlerFunc, viperOverrides map[string]any, 
 }
 
 // RunWithSimpleGraphQL is a convenience helper that starts a mock server which
-// automatically handles the token endpoint and serves the provided mockData as
-// the GraphQL response payload under the "data" field. It's suitable for the
+// serves the provided mockData as the GraphQL response payload under the
+// "data" field. It's suitable for the
 // common case where tests only need to mock returned data.
 func RunWithSimpleGraphQL(mockData any, cmd *cobra.Command, args []string) (string, error) {
 	_ = os.Setenv("NBCTL_TESTING", "true")
 	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/auth/token":
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
-			return
 		case "/api/graphql":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": mockData})

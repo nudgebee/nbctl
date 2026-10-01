@@ -99,7 +99,7 @@ Before using most `nbctl` commands, you need to configure your Nudgebee API cred
 This command interactively guides you through setting up a new configuration profile or updating an existing one. If `profile-name` is not provided, it defaults to `default`. You will be prompted for:
 
 *   **Nudgebee API Endpoint**: The URL of the Nudgebee API (e.g., `https://api.nudgebee.com`).
-*   **Nudgebee API Key**: Your personal API key for authentication.
+*   **Nudgebee API Key**: Your personal API key for authentication, created under Settings → API Tokens. nbctl sends it as the bearer token on every request. Keys start with `sk-nb-`; current Nudgebee servers no longer accept a key without that prefix, so create a new one.
 *   **Nudgebee Username**: Your Nudgebee account username (e.g., your email).
 *   **Default Account ID**: The ID of the Nudgebee account you wish to interact with by default.
 

@@ -3,8 +3,11 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +45,7 @@ func TestTokenFetchAndAuthHeader(t *testing.T) {
 	// Build a client but override transport endpoints to point to test servers
 	transport := &authTransport{
 		apiKey:        "dummy-key",
+		legacy:        true,
 		tokenEndpoint: tokenSrv.URL,
 		wrapped:       http.DefaultTransport,
 		httpClient:    &http.Client{Timeout: 5 * time.Second},
@@ -115,6 +119,7 @@ func TestRetryOn401(t *testing.T) {
 
 	transport := &authTransport{
 		apiKey:        "dummy-key",
+		legacy:        true,
 		tokenEndpoint: tokenSrv.URL,
 		wrapped:       http.DefaultTransport,
 		httpClient:    &http.Client{Timeout: 5 * time.Second},
@@ -129,6 +134,184 @@ func TestRetryOn401(t *testing.T) {
 	var resp map[string]any
 	if err := client.Run(context.Background(), req, &resp); err != nil {
 		t.Fatalf("run failed: %v", err)
+	}
+}
+
+func TestSendsApiKeyAsBearer(t *testing.T) {
+	var paths []string
+	var seenAuth string
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		seenAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data": {"ok": true}}`))
+	}))
+	defer apiSrv.Close()
+
+	client := NewClient(WithEndpoint(apiSrv.URL), WithApiKey("sk-nb-test-key"))
+
+	var resp map[string]any
+	if err := client.Run(context.Background(), NewRequest(`query { ok }`), &resp); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	// A current server accepts the key itself: no exchange call precedes the request.
+	if len(paths) != 1 || paths[0] != "/api/graphql" {
+		t.Fatalf("expected a single call to /api/graphql, got %v", paths)
+	}
+	if seenAuth != "Bearer sk-nb-test-key" {
+		t.Fatalf("expected the API key as the bearer token, got %q", seenAuth)
+	}
+}
+
+func TestFallsBackToExchangeOnOlderServer(t *testing.T) {
+	// An older server refuses the key as a bearer but exchanges it for a session token.
+	directAttempts, exchanges := 0, 0
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/auth/token":
+			exchanges++
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "session-token", "expiry": 3600})
+		case "/api/graphql":
+			if r.Header.Get("Authorization") != "Bearer session-token" {
+				directAttempts++
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			// The retried request must still carry the query.
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), "query { ok }") {
+				t.Errorf("expected the retried request to carry the query, got %q", body)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data": {"ok": true}}`))
+		}
+	}))
+	defer apiSrv.Close()
+
+	client := NewClient(WithEndpoint(apiSrv.URL), WithApiKey("sk-nb-test-key"), WithUsername("a@b.com"))
+
+	for i := 0; i < 2; i++ {
+		var resp map[string]any
+		if err := client.Run(context.Background(), NewRequest(`query { ok }`), &resp); err != nil {
+			t.Fatalf("run %d failed: %v", i, err)
+		}
+		if resp["ok"] != true {
+			t.Fatalf("run %d: expected data, got %v", i, resp)
+		}
+	}
+
+	// Once the server is known to need the exchange, later requests go straight to it.
+	if directAttempts != 1 || exchanges != 1 {
+		t.Fatalf("expected 1 direct attempt and 1 exchange, got %d and %d", directAttempts, exchanges)
+	}
+}
+
+func TestFallbackResendsBodyUnderConcurrency(t *testing.T) {
+	// Several first requests hit an older server at once. Each one is refused,
+	// exchanged and re-sent, and every re-send must carry its full body.
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/auth/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "session-token", "expiry": 3600})
+		case "/api/graphql":
+			if r.Header.Get("Authorization") != "Bearer session-token" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data": {"ok": true}}`))
+		}
+	}))
+	defer apiSrv.Close()
+
+	client := NewClient(WithEndpoint(apiSrv.URL), WithApiKey("sk-nb-test-key"), WithUsername("a@b.com"))
+	query := `query { ok }` + strings.Repeat(" ", 20000)
+
+	const workers = 8
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			var resp map[string]any
+			errs <- client.Run(context.Background(), NewRequest(query), &resp)
+		}()
+	}
+	for i := 0; i < workers; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent fallback request failed: %v", err)
+		}
+	}
+}
+
+func TestUnauthorizedIsAnError(t *testing.T) {
+	// The app's 401 body has neither `data` nor `errors`, so decoding it alone
+	// would report success with an empty result. A current server no longer has
+	// the token endpoint, so the fallback fails too.
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/auth/token" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"not_authenticated","description":"The user does not have an active session"}`))
+	}))
+	defer apiSrv.Close()
+
+	cases := []struct {
+		name   string
+		apiKey string
+		hint   string
+	}{
+		{"no key", "", "no API key configured"},
+		{"key from before the sk-nb- format", "0123456789abcdef", "predates"},
+		{"AI Gateway key", "sk-nb-gw-abc", "AI Gateway key"},
+		{"deleted or expired key", "sk-nb-abc", "rejected"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := NewClient(WithEndpoint(apiSrv.URL), WithApiKey(tc.apiKey))
+			// NewClient falls back to viper for an empty key.
+			client.apiKey = tc.apiKey
+
+			var resp map[string]any
+			err := client.Run(context.Background(), NewRequest(`query { ok }`), &resp)
+			if err == nil {
+				t.Fatal("expected a 401 to be an error")
+			}
+			if !strings.Contains(err.Error(), tc.hint) {
+				t.Fatalf("expected error to mention %q, got %q", tc.hint, err.Error())
+			}
+		})
+	}
+}
+
+func TestVerboseLogOmitsApiKey(t *testing.T) {
+	t.Chdir(t.TempDir())
+	viper.Set("verbose", true)
+	defer viper.Set("verbose", false)
+
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data": {"ok": true}}`))
+	}))
+	defer apiSrv.Close()
+
+	client := NewClient(WithEndpoint(apiSrv.URL), WithApiKey("sk-nb-secret-key"))
+	var resp map[string]any
+	if err := client.Run(context.Background(), NewRequest(`query { ok }`), &resp); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	logged, err := os.ReadFile("nbctl_graphql.log")
+	if err != nil {
+		t.Fatalf("expected a verbose log file: %v", err)
+	}
+	if !strings.Contains(string(logged), "POST /api/graphql") {
+		t.Fatalf("expected the request to be logged, got %q", logged)
+	}
+	if strings.Contains(string(logged), "sk-nb-secret-key") {
+		t.Fatal("the verbose log must not contain the API key")
 	}
 }
 

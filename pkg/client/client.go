@@ -48,6 +48,7 @@ func (r *Request) Header(key, value string) {
 // Client is a GraphQL client.
 type Client struct {
 	endpoint   string
+	apiKey     string
 	httpClient *http.Client
 }
 
@@ -188,8 +189,8 @@ func NewClient(opts ...ClientOption) *Client {
 	}
 	tokenEndpoint := endpoint + "/api/auth/token"
 
-	// create a new http client with the auth header
-	// transport that injects bearer tokens obtained from token endpoint
+	// create a new http client that sends the API key as the bearer token,
+	// falling back to the token endpoint on servers that predate that
 	transport := &authTransport{
 		apiKey:        apiKey,
 		username:      username,
@@ -206,6 +207,8 @@ func NewClient(opts ...ClientOption) *Client {
 			log.Printf("Error opening log file: %v\n", err)
 		} else {
 			logger := log.New(logFile, "", log.LstdFlags)
+			// Wraps the auth transport, so it logs each request before the
+			// Authorization header is added and the API key never reaches the file.
 			finalTransport = &loggingTransport{
 				wrapped: transport,
 				logger:  logger,
@@ -220,6 +223,7 @@ func NewClient(opts ...ClientOption) *Client {
 
 	return &Client{
 		endpoint:   graphqlEndpoint,
+		apiKey:     apiKey,
 		httpClient: httpClient,
 	}
 }
@@ -282,6 +286,19 @@ func NewHTTPClient(opts ...ClientOption) *http.Client {
 	}
 }
 
+// apiKeyPrefix and gatewayKeyPrefix are the formats Nudgebee issues API keys
+// in. A current server accepts a platform key (sk-nb-…) directly as the bearer
+// token; an AI Gateway key (sk-nb-gw-…) only works against the AI Gateway.
+const (
+	apiKeyPrefix     = "sk-nb-"
+	gatewayKeyPrefix = "sk-nb-gw-"
+)
+
+// authTransport sends the API key itself as the bearer token. A server that
+// predates direct API-key auth refuses that with a 401 but still exchanges the
+// key for a session token at tokenEndpoint, so on the first refusal the
+// transport tries the exchange and, if it works, uses exchanged tokens from
+// then on. Drop the exchange once no supported server predates direct auth.
 type authTransport struct {
 	apiKey        string
 	username      string
@@ -293,11 +310,47 @@ type authTransport struct {
 
 	// cached token state
 	mu          sync.Mutex
+	legacy      bool
 	accessToken string
 	expiry      time.Time
 }
 
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.mu.Lock()
+	legacy := t.legacy
+	t.mu.Unlock()
+	if legacy {
+		return t.roundTripExchanged(req)
+	}
+
+	req2, err := replayableRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	req2.Header.Set("Authorization", "Bearer "+t.apiKey)
+	resp, err := t.wrapped.RoundTrip(req2)
+	if err != nil || resp.StatusCode != http.StatusUnauthorized {
+		return resp, err
+	}
+
+	// Refused: either the key is bad, or the server predates direct API-key
+	// auth. Only the exchange can tell the two apart. If it fails too, the
+	// original 401 stands.
+	if err := t.fetchToken(req.Context()); err != nil {
+		return resp, nil
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	t.mu.Lock()
+	t.legacy = true
+	t.mu.Unlock()
+	return t.roundTripExchanged(req)
+}
+
+// roundTripExchanged authenticates with a session token obtained from the
+// token endpoint, for servers that predate direct API-key auth.
+func (t *authTransport) roundTripExchanged(req *http.Request) (*http.Response, error) {
 	// ensure we have a valid access token
 	token, err := t.getAccessToken(req.Context())
 	if err != nil {
@@ -305,7 +358,10 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	// avoid mutating original request
-	req2 := cloneRequest(req)
+	req2, err := replayableRequest(req)
+	if err != nil {
+		return nil, err
+	}
 	req2.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := t.wrapped.RoundTrip(req2)
@@ -334,7 +390,10 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 
-		req3 := cloneRequest(req)
+		req3, err := replayableRequest(req)
+		if err != nil {
+			return nil, err
+		}
 		req3.Header.Set("Authorization", "Bearer "+token)
 		return t.wrapped.RoundTrip(req3)
 	}
@@ -342,11 +401,42 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// replayableRequest clones req with a body of its own. A request can be sent
+// more than once here (after a 401), and a plain clone shares the body reader
+// an earlier attempt may already have drained, which fails with
+// "ContentLength=N with Body length 0".
+func replayableRequest(req *http.Request) (*http.Request, error) {
+	r := cloneRequest(req)
+	if req.GetBody != nil {
+		body, err := req.GetBody()
+		if err != nil {
+			return nil, err
+		}
+		r.Body = body
+	}
+	return r, nil
+}
+
 // cloneRequest creates a deep copy of the request, including the Header
 func cloneRequest(r *http.Request) *http.Request {
 	// Clone returns a deep copy of r with its context changed to ctx.
 	// The Request.Header map is also deep copied.
 	return r.Clone(r.Context())
+}
+
+// unauthorizedError explains a 401. The app's 401 body carries neither `data`
+// nor `errors`, so without this a rejected key would look like an empty result.
+func unauthorizedError(apiKey string) error {
+	switch {
+	case apiKey == "":
+		return errors.New("not authenticated: no API key configured; run `nbctl configure`")
+	case strings.HasPrefix(apiKey, gatewayKeyPrefix):
+		return errors.New("not authenticated: this is an AI Gateway key, which only works against the AI Gateway; create a platform API key in Settings → API Tokens and run `nbctl configure`")
+	case !strings.HasPrefix(apiKey, apiKeyPrefix):
+		return errors.New("not authenticated: this key predates the \"sk-nb-\" format, which current Nudgebee servers no longer accept; create a new key in Settings → API Tokens and run `nbctl configure`")
+	default:
+		return errors.New("not authenticated: the API key was rejected; it may have been deleted, suspended or expired")
+	}
 }
 
 // tokenResponse models the expected JSON response from the token endpoint.
@@ -519,6 +609,10 @@ func (c *Client) Run(ctx context.Context, req *Request, resp any) error {
 	defer func() {
 		_ = httpResp.Body.Close()
 	}()
+
+	if httpResp.StatusCode == http.StatusUnauthorized {
+		return unauthorizedError(c.apiKey)
+	}
 
 	// 4. Decode Response
 	// We want to handle errors specifically, so we decode into a raw map first or a struct with Errors.

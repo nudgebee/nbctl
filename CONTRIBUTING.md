@@ -29,7 +29,7 @@ behavior to **legal@nudgebee.com**.
 
 ```
 cmd/                Cobra command definitions (one file per command)
-pkg/client/         GraphQL client, auth/token handling
+pkg/client/         GraphQL client, API-key auth
 pkg/config/         Profile + viper config loading
 pkg/format/         Tabular / JSON output rendering
 pkg/log/            Logger helpers
