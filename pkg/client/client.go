@@ -228,7 +228,10 @@ func NewClient(opts ...ClientOption) *Client {
 	}
 }
 
-// NewHTTPClient creates a new authenticated http.Client.
+// NewHTTPClient creates a new authenticated http.Client. A request with a body
+// must be replayable, i.e. have GetBody set (http.NewRequest does this for
+// bytes and strings readers): against a server that predates direct API-key
+// auth, the first attempt is refused and the request is sent again.
 func NewHTTPClient(opts ...ClientOption) *http.Client {
 	config := clientOptions{}
 	for _, o := range opts {
