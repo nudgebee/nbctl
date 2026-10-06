@@ -164,6 +164,25 @@ func resolveOptions(opts []ClientOption) clientOptions {
 	return config
 }
 
+var (
+	verboseLogger     *log.Logger
+	verboseLoggerOnce sync.Once
+)
+
+// getVerboseLogger opens nbctl_graphql.log once per process, so long-running
+// callers (e.g. the MCP server) that build many clients don't leak descriptors.
+func getVerboseLogger() *log.Logger {
+	verboseLoggerOnce.Do(func() {
+		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			log.Printf("Error opening log file: %v\n", err)
+			return
+		}
+		verboseLogger = log.New(logFile, "", log.LstdFlags)
+	})
+	return verboseLogger
+}
+
 // newTransport returns the authenticating transport, wrapped in a request
 // logger when --verbose is set.
 func newTransport(apiKey string) http.RoundTripper {
@@ -173,11 +192,7 @@ func newTransport(apiKey string) http.RoundTripper {
 	}
 
 	if viper.GetBool("verbose") {
-		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.Printf("Error opening log file: %v\n", err)
-		} else {
-			logger := log.New(logFile, "", log.LstdFlags)
+		if logger := getVerboseLogger(); logger != nil {
 			transport = &loggingTransport{
 				wrapped: transport,
 				logger:  logger,
@@ -187,23 +202,26 @@ func newTransport(apiKey string) http.RoundTripper {
 	return transport
 }
 
+func newHTTPClient(config clientOptions) *http.Client {
+	return &http.Client{
+		Transport: newTransport(config.apiKey),
+		Timeout:   30 * time.Second,
+	}
+}
+
 // NewClient creates a new GraphQL client.
 func NewClient(opts ...ClientOption) *Client {
 	config := resolveOptions(opts)
 	return &Client{
 		endpoint:   config.endpoint + "/api/graphql",
 		apiKey:     config.apiKey,
-		httpClient: NewHTTPClient(opts...),
+		httpClient: newHTTPClient(config),
 	}
 }
 
 // NewHTTPClient creates a new authenticated http.Client.
 func NewHTTPClient(opts ...ClientOption) *http.Client {
-	config := resolveOptions(opts)
-	return &http.Client{
-		Transport: newTransport(config.apiKey),
-		Timeout:   30 * time.Second,
-	}
+	return newHTTPClient(resolveOptions(opts))
 }
 
 // ApiTokenPrefix is the prefix on every Nudgebee API token (`sk-nb-...`).
