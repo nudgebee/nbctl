@@ -17,11 +17,6 @@ func TestWorkflowCancelExecutionCmd(t *testing.T) {
 	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/auth/token" {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
-			return
-		}
 		if r.URL.Path == "/api/graphql" {
 			var reqBody struct {
 				Query string `json:"query"`
@@ -62,11 +57,6 @@ func TestWorkflowCancelExecutionCmd_JSON(t *testing.T) {
 	defer func() { _ = os.Unsetenv("NBCTL_TESTING") }()
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/auth/token" {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
-			return
-		}
 		if r.URL.Path == "/api/graphql" {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{

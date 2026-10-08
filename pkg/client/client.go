@@ -48,6 +48,7 @@ func (r *Request) Header(key, value string) {
 // Client is a GraphQL client.
 type Client struct {
 	endpoint   string
+	apiKey     string
 	httpClient *http.Client
 }
 
@@ -103,27 +104,10 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 type clientOptions struct {
 	endpoint string
 	apiKey   string
-	username string
 }
 
 type ClientOption interface {
 	apply(opts *clientOptions)
-}
-
-type clientUsernameOption struct {
-	username string
-}
-
-func (o clientUsernameOption) apply(opts *clientOptions) {
-	if o.username != "" {
-		opts.username = o.username
-	}
-}
-
-func WithUsername(username string) ClientOption {
-	return clientUsernameOption{
-		username: username,
-	}
 }
 
 type clientApiKeyOption struct {
@@ -158,287 +142,118 @@ func WithEndpoint(endpoint string) ClientOption {
 	}
 }
 
-// NewClient creates a new GraphQL client.
-func NewClient(opts ...ClientOption) *Client {
+// resolveOptions applies opts and falls back to viper config and defaults.
+// The returned endpoint has no trailing slash.
+func resolveOptions(opts []ClientOption) clientOptions {
 	config := clientOptions{}
 	for _, o := range opts {
 		o.apply(&config)
 	}
 
-	endpoint := config.endpoint
-	if endpoint == "" {
-		endpoint = viper.GetString("endpoint")
+	if config.endpoint == "" {
+		config.endpoint = viper.GetString("endpoint")
 	}
-	if endpoint == "" {
-		endpoint = "https://app.nudgebee.com"
+	if config.endpoint == "" {
+		config.endpoint = "https://app.nudgebee.com"
 	}
-	if endpoint[len(endpoint)-1] == '/' {
-		endpoint = endpoint[:len(endpoint)-1]
-	}
-	graphqlEndpoint := endpoint + "/api/graphql"
+	config.endpoint = strings.TrimRight(config.endpoint, "/")
 
-	apiKey := config.apiKey
-	if apiKey == "" {
-		apiKey = viper.GetString("api-key")
+	if config.apiKey == "" {
+		config.apiKey = viper.GetString("api-key")
 	}
+	return config
+}
 
-	username := config.username
-	if username == "" {
-		username = viper.GetString("username")
-	}
-	tokenEndpoint := endpoint + "/api/auth/token"
+var (
+	verboseLogger     *log.Logger
+	verboseLoggerOnce sync.Once
+)
 
-	// create a new http client with the auth header
-	// transport that injects bearer tokens obtained from token endpoint
-	transport := &authTransport{
-		apiKey:        apiKey,
-		username:      username,
-		tokenEndpoint: tokenEndpoint,
-		wrapped:       http.DefaultTransport,
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
-	}
-
-	var finalTransport http.RoundTripper = transport
-	verbose := viper.GetBool("verbose")
-	if verbose {
+// getVerboseLogger opens nbctl_graphql.log once per process, so long-running
+// callers (e.g. the MCP server) that build many clients don't leak descriptors.
+func getVerboseLogger() *log.Logger {
+	verboseLoggerOnce.Do(func() {
 		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
 			log.Printf("Error opening log file: %v\n", err)
-		} else {
-			logger := log.New(logFile, "", log.LstdFlags)
-			finalTransport = &loggingTransport{
+			return
+		}
+		verboseLogger = log.New(logFile, "", log.LstdFlags)
+	})
+	return verboseLogger
+}
+
+// newTransport returns the authenticating transport, wrapped in a request
+// logger when --verbose is set.
+func newTransport(apiKey string) http.RoundTripper {
+	var transport http.RoundTripper = &authTransport{
+		apiKey:  apiKey,
+		wrapped: http.DefaultTransport,
+	}
+
+	if viper.GetBool("verbose") {
+		if logger := getVerboseLogger(); logger != nil {
+			transport = &loggingTransport{
 				wrapped: transport,
 				logger:  logger,
 			}
 		}
 	}
+	return transport
+}
 
-	httpClient := &http.Client{
-		Transport: finalTransport,
+func newHTTPClient(config clientOptions) *http.Client {
+	return &http.Client{
+		Transport: newTransport(config.apiKey),
 		Timeout:   30 * time.Second,
 	}
+}
 
+// NewClient creates a new GraphQL client.
+func NewClient(opts ...ClientOption) *Client {
+	config := resolveOptions(opts)
 	return &Client{
-		endpoint:   graphqlEndpoint,
-		httpClient: httpClient,
+		endpoint:   config.endpoint + "/api/graphql",
+		apiKey:     config.apiKey,
+		httpClient: newHTTPClient(config),
 	}
 }
 
 // NewHTTPClient creates a new authenticated http.Client.
 func NewHTTPClient(opts ...ClientOption) *http.Client {
-	config := clientOptions{}
-	for _, o := range opts {
-		o.apply(&config)
-	}
-
-	endpoint := config.endpoint
-	if endpoint == "" {
-		endpoint = viper.GetString("endpoint")
-	}
-	if endpoint == "" {
-		endpoint = "https://app.nudgebee.com"
-	}
-	if endpoint[len(endpoint)-1] == '/' {
-		endpoint = endpoint[:len(endpoint)-1]
-	}
-
-	apiKey := config.apiKey
-	if apiKey == "" {
-		apiKey = viper.GetString("api-key")
-	}
-
-	username := config.username
-	if username == "" {
-		username = viper.GetString("username")
-	}
-	tokenEndpoint := endpoint + "/api/auth/token"
-
-	transport := &authTransport{
-		apiKey:        apiKey,
-		username:      username,
-		tokenEndpoint: tokenEndpoint,
-		wrapped:       http.DefaultTransport,
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
-	}
-
-	var finalTransport http.RoundTripper = transport
-	verbose := viper.GetBool("verbose")
-	if verbose {
-		logFile, err := os.OpenFile("nbctl_graphql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.Printf("Error opening log file: %v\n", err)
-		} else {
-			logger := log.New(logFile, "", log.LstdFlags)
-			finalTransport = &loggingTransport{
-				wrapped: transport,
-				logger:  logger,
-			}
-		}
-	}
-
-	return &http.Client{
-		Transport: finalTransport,
-		Timeout:   30 * time.Second,
-	}
+	return newHTTPClient(resolveOptions(opts))
 }
 
+// ApiTokenPrefix is the prefix on every Nudgebee API token (`sk-nb-...`).
+const ApiTokenPrefix = "sk-nb-"
+
+// authTransport sends the configured API token as a Bearer on every request.
+// The gateway authenticates the raw token directly; there is no exchange step.
 type authTransport struct {
-	apiKey        string
-	username      string
-	tokenEndpoint string
-	wrapped       http.RoundTripper
-
-	// http client used to fetch tokens
-	httpClient *http.Client
-
-	// cached token state
-	mu          sync.Mutex
-	accessToken string
-	expiry      time.Time
+	apiKey  string
+	wrapped http.RoundTripper
 }
 
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// ensure we have a valid access token
-	token, err := t.getAccessToken(req.Context())
-	if err != nil {
-		return nil, err
+	if t.apiKey == "" {
+		return nil, errors.New("no API key configured: run 'nbctl configure add' or set api-key")
 	}
-
 	// avoid mutating original request
-	req2 := cloneRequest(req)
-	req2.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := t.wrapped.RoundTrip(req2)
-	if err != nil {
-		return resp, err
-	}
-
-	// if unauthorized, try refreshing token and retry once
-	if resp.StatusCode == http.StatusUnauthorized {
-		// discard body from first response; handle potential copy error
-		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
-			_ = err // intentionally ignore copy error
-		}
-		if err := resp.Body.Close(); err != nil {
-			_ = err // intentionally ignore close error
-		}
-
-		// force refresh
-		if err := t.forceRefresh(req.Context()); err != nil {
-			return nil, err
-		}
-
-		// retry request with new token
-		token, err = t.getAccessToken(req.Context())
-		if err != nil {
-			return nil, err
-		}
-
-		req3 := cloneRequest(req)
-		req3.Header.Set("Authorization", "Bearer "+token)
-		return t.wrapped.RoundTrip(req3)
-	}
-
-	return resp, nil
+	req2 := req.Clone(req.Context())
+	req2.Header.Set("Authorization", "Bearer "+t.apiKey)
+	return t.wrapped.RoundTrip(req2)
 }
 
-// cloneRequest creates a deep copy of the request, including the Header
-func cloneRequest(r *http.Request) *http.Request {
-	// Clone returns a deep copy of r with its context changed to ctx.
-	// The Request.Header map is also deep copied.
-	return r.Clone(r.Context())
-}
-
-// tokenResponse models the expected JSON response from the token endpoint.
-// We accept multiple common field names.
-type tokenResponse struct {
-	Token  string `json:"token"`
-	Expiry int64  `json:"expiry"`
-}
-
-// getAccessToken returns a valid access token, fetching a new one if needed.
-func (t *authTransport) getAccessToken(ctx context.Context) (string, error) {
-	t.mu.Lock()
-	token := t.accessToken
-	exp := t.expiry
-	t.mu.Unlock()
-
-	if token != "" && time.Now().Before(exp) {
-		return token, nil
+// unauthorizedError explains a 401 from the gateway. The most likely causes are
+// a deleted/expired token, or a token created before direct-token auth existed
+// (those must be recreated).
+func unauthorizedError(apiKey string) error {
+	msg := "authentication failed (401 Unauthorized): the API key was rejected"
+	if !strings.HasPrefix(apiKey, ApiTokenPrefix) {
+		msg += fmt.Sprintf("; API keys must start with %q", ApiTokenPrefix)
 	}
-
-	// fetch new token
-	if err := t.fetchToken(ctx); err != nil {
-		return "", err
-	}
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.accessToken, nil
-}
-
-// forceRefresh forces fetching a new token regardless of cached expiry
-func (t *authTransport) forceRefresh(ctx context.Context) error {
-	return t.fetchToken(ctx)
-}
-
-// fetchToken calls the token endpoint with the API key and stores the access token and expiry
-func (t *authTransport) fetchToken(ctx context.Context) error {
-	// prepare request. We POST an empty JSON body and include the api-key in header 'X-Api-Key'.
-	// NOTE: This is an assumption; if your token endpoint expects a different shape (e.g. JSON body),
-	// adjust accordingly or set a custom token-endpoint implementation.
-	bodyBytes, err := json.Marshal(map[string]string{
-		"email":  t.username,
-		"secret": t.apiKey,
-	})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.tokenEndpoint, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := t.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errors.New("token endpoint returned non-2xx status: " + resp.Status)
-	}
-
-	var tr tokenResponse
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&tr); err != nil {
-		return err
-	}
-
-	token := tr.Token
-	if token == "" {
-		return errors.New("token endpoint did not return access_token")
-	}
-
-	// calculate expiry
-	var expiry time.Time
-	if tr.Expiry > 0 {
-		// subtract small buffer
-		expiry = time.Now().Add(time.Duration(tr.Expiry)*time.Second - 10*time.Second)
-	} else {
-		// default to 55 minutes
-		expiry = time.Now().Add(55 * time.Minute)
-	}
-
-	t.mu.Lock()
-	t.accessToken = token
-	t.expiry = expiry
-	t.mu.Unlock()
-
-	return nil
+	return errors.New(msg + ". The token may be deleted, expired, or created before direct token auth was supported. " +
+		"Create a new token under Settings → API Tokens and run 'nbctl configure add'")
 }
 
 type GraphQLError struct {
@@ -519,6 +334,10 @@ func (c *Client) Run(ctx context.Context, req *Request, resp any) error {
 	defer func() {
 		_ = httpResp.Body.Close()
 	}()
+
+	if httpResp.StatusCode == http.StatusUnauthorized {
+		return unauthorizedError(c.apiKey)
+	}
 
 	// 4. Decode Response
 	// We want to handle errors specifically, so we decode into a raw map first or a struct with Errors.

@@ -14,19 +14,8 @@ import (
 )
 
 func newTestNubiClient(handler http.HandlerFunc) (*NubiClient, func()) {
-	// Wrapper handler to handle token endpoint
-	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/auth/token" {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{"token": "fake-token", "expiry": 3600})
-			return
-		}
-		// Delegate to the test-specific handler for other requests (presumably graphql)
-		handler(w, r)
-	})
-
-	srv := httptest.NewServer(wrappedHandler)
-	c := client.NewClient(client.WithEndpoint(srv.URL))
+	srv := httptest.NewServer(handler)
+	c := client.NewClient(client.WithEndpoint(srv.URL), client.WithApiKey("sk-nb-test"))
 	nubiClient := New(c, "test-account", "test-user", "test-session", srv.URL)
 	return nubiClient, srv.Close
 }
