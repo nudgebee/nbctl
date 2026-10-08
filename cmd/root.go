@@ -166,7 +166,8 @@ func restrictCommands(root *cobra.Command, enabled string) {
 	if len(allowed) == 0 {
 		return
 	}
-	for _, c := range root.Commands() {
+	// Iterate over a copy so the loop does not depend on how cobra stores commands.
+	for _, c := range append([]*cobra.Command(nil), root.Commands()...) {
 		if !allowed[c.Name()] && !alwaysEnabledCommands[c.Name()] {
 			root.RemoveCommand(c)
 		}
