@@ -287,6 +287,25 @@ func TestEmptyResultsExplainOnStderr(t *testing.T) {
 	}
 }
 
+func TestNoEmptyNoteWhenJSONDoesNotDecode(t *testing.T) {
+	// Results that don't fit the typed structs still pass through in -o json,
+	// and must not be reported as empty.
+	var data any
+	require.NoError(t, json.Unmarshal([]byte(`{"metrics_list":{"results":[{"query_key":"q","payload":[{"metric":{"le":0.5},"timestamps":[1],"values":[2]}]}]}}`), &data))
+	_, stderr := runCapturingStderr(t, data, "metrics", "query", "--query", "up", "-o", "json")
+	assert.NotContains(t, stderr, "No data")
+
+	_, stderr = runCapturingStderr(t, map[string]any{"logs_list": map[string]any{"logs": map[string]any{"unexpected": true}}},
+		"logs", "query", "--query", "x", "-o", "json")
+	assert.NotContains(t, stderr, "No logs found")
+}
+
+func TestMetricsQueryInstantEmptyNote(t *testing.T) {
+	_, stderr := runCapturingStderr(t, map[string]any{"metrics_list": map[string]any{"results": []any{}}},
+		"metrics", "query", "--query", "up", "--instant", "--end-time", "2026-10-01T01:00:00Z")
+	assert.Contains(t, stderr, "No data: the query returned no series at 2026-10-01T01:00:00Z.")
+}
+
 func TestLogsQueryWarnsWhenLimitReached(t *testing.T) {
 	entry := map[string]any{"timestamp": "t", "severity": "info", "message": "m", "labels": map[string]any{}}
 	data := map[string]any{"logs_list": map[string]any{"logs": []any{entry, entry}}}

@@ -97,11 +97,12 @@ var logsQueryCmd = &cobra.Command{
 		}
 		// JSON output passes entries through, so for JSON only count them.
 		jsonOutput := format.GetFormat().Get() == "json"
-		count := 0
+		count := -1 // unknown until decoded
 		if jsonOutput {
 			var entries []json.RawMessage
-			_ = json.Unmarshal(raw, &entries)
-			count = len(entries)
+			if json.Unmarshal(raw, &entries) == nil {
+				count = len(entries)
+			}
 		} else {
 			if err := json.Unmarshal(raw, &logs); err != nil {
 				return fmt.Errorf("failed to decode logs: %w", err)
@@ -121,7 +122,7 @@ var logsQueryCmd = &cobra.Command{
 		if jsonOutput {
 			return format.GetFormat().PrintRawJSON(raw)
 		}
-		if count == 0 {
+		if count <= 0 {
 			return nil
 		}
 

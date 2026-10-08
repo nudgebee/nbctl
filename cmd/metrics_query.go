@@ -141,8 +141,9 @@ var metricsQueryCmd = &cobra.Command{
 		// decode; for JSON the decode is best-effort, for the warnings below.
 		jsonOutput := format.GetFormat().Get() == "json"
 		var results []MetricsResponse
-		if err := json.Unmarshal(raw, &results); err != nil && !jsonOutput {
-			return fmt.Errorf("failed to decode metrics results: %w", err)
+		decodeErr := json.Unmarshal(raw, &results)
+		if decodeErr != nil && !jsonOutput {
+			return fmt.Errorf("failed to decode metrics results: %w", decodeErr)
 		}
 		series, failed := 0, false
 		for _, r := range results {
@@ -155,11 +156,16 @@ var metricsQueryCmd = &cobra.Command{
 			}
 		}
 
-		// JSON output is the backend's results, unchanged, so scripts can use it as is.
-		if series == 0 && !failed {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No data: the query returned no series between %s and %s.\n", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		// Only when the results decoded: otherwise series is unknown, not zero.
+		if decodeErr == nil && series == 0 && !failed {
+			when := fmt.Sprintf("between %s and %s", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+			if instant {
+				when = "at " + endTime.Format(time.RFC3339)
+			}
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No data: the query returned no series %s.\n", when)
 		}
 
+		// JSON output is the backend's results, unchanged, so scripts can use it as is.
 		if jsonOutput {
 			return format.GetFormat().PrintRawJSON(raw)
 		}
