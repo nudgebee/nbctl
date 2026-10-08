@@ -137,8 +137,11 @@ var metricsQueryCmd = &cobra.Command{
 			raw = json.RawMessage("[]")
 		}
 
+		// JSON output passes results through, so only text output needs them to
+		// decode; for JSON the decode is best-effort, for the warnings below.
+		jsonOutput := format.GetFormat().Get() == "json"
 		var results []MetricsResponse
-		if err := json.Unmarshal(raw, &results); err != nil {
+		if err := json.Unmarshal(raw, &results); err != nil && !jsonOutput {
 			return fmt.Errorf("failed to decode metrics results: %w", err)
 		}
 		for _, r := range results {
@@ -150,7 +153,7 @@ var metricsQueryCmd = &cobra.Command{
 		}
 
 		// JSON output is the backend's results, unchanged, so scripts can use it as is.
-		if format.GetFormat().Get() == "json" {
+		if jsonOutput {
 			return format.GetFormat().PrintRawJSON(raw)
 		}
 

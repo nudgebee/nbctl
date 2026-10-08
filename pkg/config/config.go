@@ -95,7 +95,9 @@ func InitConfig() {
 func applyProfile(name string) {
 	for key, value := range viper.GetStringMapString(fmt.Sprintf("profiles.%s", name)) {
 		envName := "NUDGEBEE_" + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
-		if _, set := os.LookupEnv(envName); set {
+		// Non-empty only: viper ignores an empty env var, so skipping the
+		// profile for one would leave the setting blank.
+		if os.Getenv(envName) != "" {
 			continue
 		}
 		viper.Set(key, value)

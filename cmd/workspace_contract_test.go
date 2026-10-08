@@ -174,6 +174,17 @@ func TestMetricsQueryJSONIsBackendResults(t *testing.T) {
 	assert.JSONEq(t, results, out)
 }
 
+func TestMetricsQueryJSONPassesThroughUnexpectedShapes(t *testing.T) {
+	// A label value that is not a string would not decode into MetricsResult;
+	// JSON output must still print it unchanged.
+	results := `[{"query_key":"query","payload":[{"metric":{"le":0.5,"job":"api"},"timestamps":[1],"values":[2]}]}]`
+	var data any
+	require.NoError(t, json.Unmarshal([]byte(`{"metrics_list":{"results":`+results+`}}`), &data))
+
+	out, _ := runCapturing(t, data, "metrics", "query", "--query", "up", "-o", "json")
+	assert.JSONEq(t, results, out)
+}
+
 func TestMetricsQueryJSONEmpty(t *testing.T) {
 	out, _ := runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": nil}},
 		"metrics", "query", "--query", "up", "-o", "json")

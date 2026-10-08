@@ -112,6 +112,7 @@ current-profile: prof1
 		t.Setenv("HOME", tmpdir)
 		t.Setenv("NUDGEBEE_ENDPOINT", "http://env.com")
 		t.Setenv("NUDGEBEE_API_KEY", "env-key")
+		t.Setenv("NUDGEBEE_ACCOUNT_ID", "") // empty env does not mask the profile
 
 		Reset()
 		InitConfig()
