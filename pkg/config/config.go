@@ -17,10 +17,11 @@ func Reset() {
 	viper.Reset()
 }
 
+// IsConfigured reports whether the settings every API call needs are present.
+// username is not required: the API key authenticates on its own.
 func IsConfigured() bool {
 	return viper.GetString("endpoint") != "" &&
 		viper.GetString("api-key") != "" &&
-		viper.GetString("username") != "" &&
 		viper.GetString("account-id") != ""
 }
 
@@ -62,10 +63,7 @@ func InitConfig() {
 			fmt.Fprintf(os.Stderr, "Error: profile '%s' not found\n", profile)
 			os.Exit(1)
 		}
-		profileSettings := viper.GetStringMapString(fmt.Sprintf("profiles.%s", profile))
-		for key, value := range profileSettings {
-			viper.Set(key, value)
-		}
+		applyProfile(profile)
 		return
 	}
 
@@ -87,9 +85,21 @@ func InitConfig() {
 	}
 
 	if currentProfile != "" {
-		profileSettings := viper.GetStringMapString(fmt.Sprintf("profiles.%s", currentProfile))
-		for key, value := range profileSettings {
-			viper.Set(key, value)
+		applyProfile(currentProfile)
+	}
+}
+
+// applyProfile copies a profile's settings into viper. A setting also given as
+// a NUDGEBEE_* environment variable keeps the env value, so an environment that
+// configures nbctl by env is not overridden by a config file in $HOME.
+func applyProfile(name string) {
+	for key, value := range viper.GetStringMapString(fmt.Sprintf("profiles.%s", name)) {
+		envName := "NUDGEBEE_" + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
+		// Non-empty only: viper ignores an empty env var, so skipping the
+		// profile for one would leave the setting blank.
+		if os.Getenv(envName) != "" {
+			continue
 		}
+		viper.Set(key, value)
 	}
 }

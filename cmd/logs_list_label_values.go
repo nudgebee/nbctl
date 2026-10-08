@@ -10,6 +10,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// LogsListLabelValuesQuery lists the values of a log label in a time window ($query is "start=<ns>&end=<ns>").
+const LogsListLabelValuesQuery = `query FetchLogLabelValues($accountId: String!, $labelName: String!, $query: String!) {
+  logs_list_label_values(request: {account_id: $accountId, label_name: $labelName, request: {query: $query}}) {
+    value
+  }
+}`
+
 var logsListLabelValuesCmd = &cobra.Command{
 	Use:   "list-label-values",
 	Short: "List log label values",
@@ -47,13 +54,7 @@ var logsListLabelValuesCmd = &cobra.Command{
 
 		query := fmt.Sprintf("start=%d&end=%d", startTime.UnixNano(), endTime.UnixNano())
 
-		req := client.NewRequest(`
-			query FetchLogLabelValues($accountId: String!, $labelName: String!, $query: String!) {
-			  logs_list_label_values(request: {account_id: $accountId, label_name: $labelName, request: {query: $query}}) {
-				value
-			  }
-			}
-		`)
+		req := client.NewRequest(LogsListLabelValuesQuery)
 
 		req.Var("accountId", accountId)
 		req.Var("labelName", labelName)
@@ -75,9 +76,7 @@ var logsListLabelValuesCmd = &cobra.Command{
 				{Header: "Value", Field: "Value"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.LogsListLabelValues), fmt.Sprintf("No values found for log label %q between %s and %s (it may be a field inside log lines rather than an indexed label).", labelName, startTime.Format(time.RFC3339), endTime.Format(time.RFC3339)))
 	},
 }
 

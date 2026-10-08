@@ -8,6 +8,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// MetricsListNamesQuery lists metric names. metrics_list is the series query
+// action (see metrics query), so names come from metrics_list_names.
+const MetricsListNamesQuery = `query MetricsListNames($accountId: String!) {
+  metrics_list_names(request: {account_id: $accountId}) {
+    metric
+  }
+}`
+
 var metricsListMetricsCmd = &cobra.Command{
 	Use:   "list-metrics",
 	Short: "List metrics",
@@ -19,20 +27,13 @@ var metricsListMetricsCmd = &cobra.Command{
 			return err
 		}
 
-		req := client.NewRequest(`
-			query MetricsList($accountId: String!) {
-			  metrics_list(request: {account_id: $accountId}) {
-				metric
-			  }
-			}
-		`)
-
+		req := client.NewRequest(MetricsListNamesQuery)
 		req.Var("accountId", accountId)
 
 		var respData struct {
 			MetricsList []struct {
 				Metric string `json:"metric"`
-			} `json:"metrics_list"`
+			} `json:"metrics_list_names"`
 		}
 
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
@@ -45,9 +46,7 @@ var metricsListMetricsCmd = &cobra.Command{
 				{Header: "Metric", Field: "Metric"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.MetricsList), "No metrics found for this account.")
 	},
 }
 

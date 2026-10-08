@@ -2,11 +2,19 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
 	"github.com/spf13/cobra"
 )
+
+// MetricsListLabelsQuery lists the labels of a metric.
+const MetricsListLabelsQuery = `query MetricsLabelList($accountId: String!, $metricName: String!) {
+  metrics_list_labels(request: {account_id: $accountId, metric: $metricName}) {
+    label
+  }
+}`
 
 var metricsListLabelsCmd = &cobra.Command{
 	Use:   "list-labels",
@@ -21,13 +29,7 @@ var metricsListLabelsCmd = &cobra.Command{
 
 		metric, _ := cmd.Flags().GetString("metric")
 
-		req := client.NewRequest(`
-			query MetricsLabelList($accountId: String!, $metricName: String!) {
-			  metrics_list_labels(request: {account_id: $accountId, metric: $metricName}) {
-				label
-			  }
-			}
-		`)
+		req := client.NewRequest(MetricsListLabelsQuery)
 
 		req.Var("accountId", accountId)
 		req.Var("metricName", metric)
@@ -48,9 +50,7 @@ var metricsListLabelsCmd = &cobra.Command{
 				{Header: "Label", Field: "Label"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.MetricsListLabels), fmt.Sprintf("No labels found for metric %q.", metric))
 	},
 }
 

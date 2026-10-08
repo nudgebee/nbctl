@@ -10,6 +10,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// LogsListLabelsQuery lists log labels in a time window ($query is "start=<ns>&end=<ns>").
+const LogsListLabelsQuery = `query FetchLogLabels($accountId: String!, $query: String!) {
+  logs_list_labels(request: {account_id: $accountId, request: {query: $query}}) {
+    label
+  }
+}`
+
 var logsListLabelsCmd = &cobra.Command{
 	Use:   "list-labels",
 	Short: "List log labels",
@@ -46,13 +53,7 @@ var logsListLabelsCmd = &cobra.Command{
 
 		query := fmt.Sprintf("start=%d&end=%d", startTime.UnixNano(), endTime.UnixNano())
 
-		req := client.NewRequest(`
-			query FetchLogLabels($accountId: String!, $query: String!) {
-			  logs_list_labels(request: {account_id: $accountId, request: {query: $query}}) {
-				label
-			  }
-			}
-		`)
+		req := client.NewRequest(LogsListLabelsQuery)
 
 		req.Var("accountId", accountId)
 		req.Var("query", query)
@@ -73,9 +74,7 @@ var logsListLabelsCmd = &cobra.Command{
 				{Header: "Label", Field: "Label"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.LogsListLabels), fmt.Sprintf("No log labels found between %s and %s.", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339)))
 	},
 }
 
