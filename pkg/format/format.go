@@ -1,6 +1,7 @@
 package format
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -81,6 +82,18 @@ func (f *Format) printJSON(obj any) {
 		fmt.Fprintf(os.Stderr, "Error marshaling to JSON: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// PrintRawJSON writes JSON from the API as is, only indented, so values keep
+// their original types and fields instead of passing through Go structs.
+func (f *Format) PrintRawJSON(raw json.RawMessage) error {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return fmt.Errorf("invalid JSON from the API: %w", err)
+	}
+	buf.WriteByte('\n')
+	_, err := f.writer.Write(buf.Bytes())
+	return err
 }
 
 func (f *Format) printText(obj any) {

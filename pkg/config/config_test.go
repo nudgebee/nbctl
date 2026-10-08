@@ -132,7 +132,7 @@ func TestIsConfigured(t *testing.T) {
 		assert.False(t, IsConfigured())
 	})
 
-	t.Run("returns false when username is missing", func(t *testing.T) {
+	t.Run("returns true when username is missing", func(t *testing.T) {
 		defer WithViper(map[string]any{
 			"endpoint":   "http://test.com",
 			"api-key":    "test-key",
@@ -140,7 +140,7 @@ func TestIsConfigured(t *testing.T) {
 			"account-id": "test-account",
 		})()
 
-		assert.False(t, IsConfigured())
+		assert.True(t, IsConfigured())
 	})
 
 	t.Run("returns false when account-id is missing", func(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/nudgebee/nbctl/pkg/config"
 	"github.com/nudgebee/nbctl/pkg/format"
@@ -115,6 +116,8 @@ func init() {
 	_ = rootCmd.PersistentFlags().MarkHidden("output")
 	rootCmd.PersistentFlags().String("profile", "", "Use a specific profile from your config file")
 	_ = viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile"))
+	rootCmd.PersistentFlags().String("http-timeout", "", "Timeout for each API request, e.g. 50s (env NUDGEBEE_HTTP_TIMEOUT; default 30s, 0 disables)")
+	_ = viper.BindPFlag("http-timeout", rootCmd.PersistentFlags().Lookup("http-timeout"))
 
 	// Initialize a logger that writes to the command's stderr. Using PersistentPreRunE
 	// ensures cmd.ErrOrStderr() is available during execution and in tests.
@@ -143,7 +146,35 @@ func init() {
 	}
 }
 
+// enabledCommandsEnv limits nbctl to a comma-separated list of top-level
+// command groups (e.g. "metrics,logs"), for embedding nbctl where only some
+// commands are useful. It hides commands; it is not an access control.
+const enabledCommandsEnv = "NUDGEBEE_ENABLED_COMMANDS"
+
+// alwaysEnabledCommands stay available whatever enabledCommandsEnv says.
+var alwaysEnabledCommands = map[string]bool{"help": true, "version": true, "completion": true}
+
+// restrictCommands removes the top-level commands of root that are not listed
+// in enabled (comma-separated). An empty list leaves root unchanged.
+func restrictCommands(root *cobra.Command, enabled string) {
+	allowed := map[string]bool{}
+	for _, name := range strings.Split(enabled, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			allowed[name] = true
+		}
+	}
+	if len(allowed) == 0 {
+		return
+	}
+	for _, c := range root.Commands() {
+		if !allowed[c.Name()] && !alwaysEnabledCommands[c.Name()] {
+			root.RemoveCommand(c)
+		}
+	}
+}
+
 func Execute() {
+	restrictCommands(rootCmd, os.Getenv(enabledCommandsEnv))
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

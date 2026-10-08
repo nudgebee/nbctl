@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -58,16 +59,36 @@ type loggingTransport struct {
 	logger  *log.Logger
 }
 
+// sensitiveHeaders are never written to the verbose log. The log lands in the
+// current directory, which may be kept or shared (e.g. a Nubi workspace).
+var sensitiveHeaders = []string{"Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key"}
+
+// redactHeaders returns a copy of h with sensitive values replaced.
+func redactHeaders(h http.Header) http.Header {
+	out := h.Clone()
+	for _, name := range sensitiveHeaders {
+		if out.Get(name) != "" {
+			out.Set(name, "[REDACTED]")
+		}
+	}
+	return out
+}
+
 func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Log the request
-	reqDump, err := httputil.DumpRequestOut(req, true)
+	// Log the request. Dump a clone with redacted headers, then send the clone
+	// with the real headers: DumpRequestOut consumes and restores the body of
+	// the request it is given, so the clone is the one with a readable body.
+	logged := req.Clone(req.Context())
+	logged.Header = redactHeaders(req.Header)
+	reqDump, err := httputil.DumpRequestOut(logged, true)
 	if err != nil {
 		t.logger.Printf("Error dumping request: %v", err)
 	} else {
 		t.logger.Printf("Request:\n%s", reqDump)
 	}
+	logged.Header = req.Header.Clone()
 
-	resp, err := t.wrapped.RoundTrip(req)
+	resp, err := t.wrapped.RoundTrip(logged)
 	if err != nil {
 		t.logger.Printf("Error sending request: %v", err)
 		return nil, err
@@ -87,8 +108,10 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	// Create a new response with the same body, so it can be read again.
 	resp.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	// Dump the response for logging.
-	respDump, dumpErr := httputil.DumpResponse(resp, true)
+	// Dump the response for logging, without sensitive headers.
+	loggedResp := *resp
+	loggedResp.Header = redactHeaders(resp.Header)
+	respDump, dumpErr := httputil.DumpResponse(&loggedResp, true)
 	if dumpErr != nil {
 		t.logger.Printf("Error dumping response: %v", dumpErr)
 	} else {
@@ -202,10 +225,31 @@ func newTransport(apiKey string) http.RoundTripper {
 	return transport
 }
 
+// DefaultHTTPTimeout bounds each HTTP request unless http-timeout is set.
+const DefaultHTTPTimeout = 30 * time.Second
+
+// httpTimeout reads http-timeout (flag --http-timeout, env NUDGEBEE_HTTP_TIMEOUT)
+// as a Go duration ("50s", "2m") or a number of seconds. 0 disables the timeout.
+// An invalid value falls back to the default with a warning.
+func httpTimeout() time.Duration {
+	raw := strings.TrimSpace(viper.GetString("http-timeout"))
+	if raw == "" {
+		return DefaultHTTPTimeout
+	}
+	if d, err := time.ParseDuration(raw); err == nil && d >= 0 {
+		return d
+	}
+	if secs, err := strconv.ParseFloat(raw, 64); err == nil && secs >= 0 {
+		return time.Duration(secs * float64(time.Second))
+	}
+	fmt.Fprintf(os.Stderr, "Warning: invalid http-timeout %q, using %s\n", raw, DefaultHTTPTimeout)
+	return DefaultHTTPTimeout
+}
+
 func newHTTPClient(config clientOptions) *http.Client {
 	return &http.Client{
 		Transport: newTransport(config.apiKey),
-		Timeout:   30 * time.Second,
+		Timeout:   httpTimeout(),
 	}
 }
 

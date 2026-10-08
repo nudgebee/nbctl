@@ -8,6 +8,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// MetricsListLabelsQuery lists the labels of a metric.
+const MetricsListLabelsQuery = `query MetricsLabelList($accountId: String!, $metricName: String!) {
+  metrics_list_labels(request: {account_id: $accountId, metric: $metricName}) {
+    label
+  }
+}`
+
 var metricsListLabelsCmd = &cobra.Command{
 	Use:   "list-labels",
 	Short: "List metric labels",
@@ -21,13 +28,7 @@ var metricsListLabelsCmd = &cobra.Command{
 
 		metric, _ := cmd.Flags().GetString("metric")
 
-		req := client.NewRequest(`
-			query MetricsLabelList($accountId: String!, $metricName: String!) {
-			  metrics_list_labels(request: {account_id: $accountId, metric: $metricName}) {
-				label
-			  }
-			}
-		`)
+		req := client.NewRequest(MetricsListLabelsQuery)
 
 		req.Var("accountId", accountId)
 		req.Var("metricName", metric)

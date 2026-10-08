@@ -17,10 +17,11 @@ func Reset() {
 	viper.Reset()
 }
 
+// IsConfigured reports whether the settings every API call needs are present.
+// username is not required: the API key authenticates on its own.
 func IsConfigured() bool {
 	return viper.GetString("endpoint") != "" &&
 		viper.GetString("api-key") != "" &&
-		viper.GetString("username") != "" &&
 		viper.GetString("account-id") != ""
 }
 

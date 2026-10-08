@@ -11,6 +11,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// LogsQueryQuery fetches log lines through the logs_list action.
+const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
+  logs_list(request: $request) {
+    logs {
+      timestamp
+      severity
+      message
+      labels
+    }
+    suggestion
+  }
+}`
+
 var logsQueryCmd = &cobra.Command{
 	Use:   "query",
 	Short: "Query logs",
@@ -44,27 +57,12 @@ var logsQueryCmd = &cobra.Command{
 			return fmt.Errorf("invalid end-time format: %w", err)
 		}
 
-		// Convert to Unix milliseconds
-		startTimeMs := startTime.UnixNano() / int64(time.Millisecond)
-		endTimeMs := endTime.UnixNano() / int64(time.Millisecond)
-
-		req := client.NewRequest(`
-			query FetchLogs($request: FetchLogRequest!) {
-				logs_list(request: $request) {
-					logs {
-						timestamp
-						severity
-						message
-						labels
-					}
-				}
-			}
-		`)
+		req := client.NewRequest(LogsQueryQuery)
 
 		requestVars := map[string]any{
 			"account_id": accountId,
-			"end_time":   endTimeMs,
-			"start_time": startTimeMs,
+			"end_time":   endTime.UnixMilli(),
+			"start_time": startTime.UnixMilli(),
 			"query":      queryStr,
 			"limit":      limit,
 			"offset":     offset,
@@ -73,12 +71,8 @@ var logsQueryCmd = &cobra.Command{
 
 		var respData struct {
 			LogsList struct {
-				Logs []struct {
-					Timestamp string          `json:"timestamp"`
-					Severity  string          `json:"severity"`
-					Message   string          `json:"message"`
-					Labels    json.RawMessage `json:"labels"`
-				} `json:"logs"`
+				Logs       json.RawMessage `json:"logs"`
+				Suggestion string          `json:"suggestion"`
 			} `json:"logs_list"`
 		}
 
@@ -86,13 +80,37 @@ var logsQueryCmd = &cobra.Command{
 			return err
 		}
 
-		if len(respData.LogsList.Logs) == 0 {
-			fmt.Println("No logs found.")
+		if respData.LogsList.Suggestion != "" {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Suggestion: %s\n", respData.LogsList.Suggestion)
+		}
+
+		raw := respData.LogsList.Logs
+		if len(raw) == 0 || string(raw) == "null" {
+			raw = json.RawMessage("[]")
+		}
+
+		// JSON output is the backend's log entries, unchanged.
+		if format.GetFormat().Get() == "json" {
+			return format.GetFormat().PrintRawJSON(raw)
+		}
+
+		var logs []struct {
+			Timestamp string          `json:"timestamp"`
+			Severity  string          `json:"severity"`
+			Message   string          `json:"message"`
+			Labels    json.RawMessage `json:"labels"`
+		}
+		if err := json.Unmarshal(raw, &logs); err != nil {
+			return fmt.Errorf("failed to decode logs: %w", err)
+		}
+
+		if len(logs) == 0 {
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No logs found.")
 			return nil
 		}
 
 		table := format.TabularData{
-			Data: respData.LogsList.Logs,
+			Data: logs,
 			Fields: []format.TableField{
 				{Header: "Timestamp", Field: "Timestamp"},
 				{Header: "Severity", Field: "Severity"},

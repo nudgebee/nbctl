@@ -26,15 +26,32 @@ func renderChart(payload []MetricsResult) {
 	}
 }
 
+// MetricsQueryQuery runs a metrics query (PromQL or the account's own language)
+// through the metrics_list action. results is passed through untouched.
+const MetricsQueryQuery = `query MetricsQuery($request: FetchMetricsRequest!) {
+  metrics_list(request: $request) {
+    results
+  }
+}`
+
 type MetricsQueryResponse struct {
 	MetricsQuery struct {
 		Results []MetricsResponse `json:"results"`
 	} `json:"metrics_list"`
 }
 
+// metricsQueryRawResponse keeps results as sent by the API, for -o json.
+type metricsQueryRawResponse struct {
+	MetricsQuery struct {
+		Results json.RawMessage `json:"results"`
+	} `json:"metrics_list"`
+}
+
 type MetricsResponse struct {
 	QueryKey string          `json:"query_key"`
 	Payload  []MetricsResult `json:"payload"`
+	Error    *string         `json:"error,omitempty"`
+	Note     string          `json:"note,omitempty"`
 }
 
 type MetricsResult struct {
@@ -90,50 +107,60 @@ var metricsQueryCmd = &cobra.Command{
 			return fmt.Errorf("invalid end-time format: %w", err)
 		}
 
-		// Convert to Unix milliseconds
-		startTimeMs := float64(startTime.UnixNano() / int64(time.Millisecond))
-		endTimeMs := float64(endTime.UnixNano() / int64(time.Millisecond))
+		step, _ := cmd.Flags().GetDuration("step")
+		if step < 0 {
+			return fmt.Errorf("invalid step: must not be negative")
+		}
 
-		req := client.NewRequest(`
-			query MetricsQuery(
-				$account_id: String!
-				$queries: jsonb!
-				$instant: Boolean!
-				$start_time: Float!
-				$end_time: Float!
-			) {
-				metrics_list(
-					request: {
-						account_id: $account_id
-						queries: $queries
-						instant: $instant
-						end_time: $end_time
-						start_time: $start_time
-					}
-				) {
-					results
-				}
-			}
-		`)
+		request := map[string]any{
+			"account_id": accountId,
+			"queries":    queries,
+			"instant":    instant,
+			"start_time": startTime.UnixMilli(),
+			"end_time":   endTime.UnixMilli(),
+		}
+		if step > 0 {
+			// step_interval is whole seconds; round a sub-second step up to 1s.
+			request["step_interval"] = max(1, int(step.Round(time.Second)/time.Second))
+		}
 
-		req.Var("account_id", accountId)
-		req.Var("queries", queries)
-		req.Var("instant", instant)
-		req.Var("start_time", startTimeMs)
-		req.Var("end_time", endTimeMs)
+		req := client.NewRequest(MetricsQueryQuery)
+		req.Var("request", request)
 
-		var respData MetricsQueryResponse
+		var respData metricsQueryRawResponse
 		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
 			return err
 		}
 
-		if len(respData.MetricsQuery.Results) == 0 {
+		raw := respData.MetricsQuery.Results
+		if len(raw) == 0 || string(raw) == "null" {
+			raw = json.RawMessage("[]")
+		}
+
+		var results []MetricsResponse
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return fmt.Errorf("failed to decode metrics results: %w", err)
+		}
+		for _, r := range results {
+			if r.Error != nil && *r.Error != "" {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: query %q failed: %s\n", r.QueryKey, *r.Error)
+			} else if r.Note != "" {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: %s\n", r.Note)
+			}
+		}
+
+		// JSON output is the backend's results, unchanged, so scripts can use it as is.
+		if format.GetFormat().Get() == "json" {
+			return format.GetFormat().PrintRawJSON(raw)
+		}
+
+		if len(results) == 0 {
 			format.GetFormat().Print("No Data")
 			return nil
 		}
 
 		var displayPayload []DisplayMetricsResult
-		for _, r := range respData.MetricsQuery.Results[0].Payload {
+		for _, r := range results[0].Payload {
 			metricJSON, err := json.Marshal(r.Metric)
 			if err != nil {
 				return fmt.Errorf("failed to marshal metric to JSON: %w", err)
@@ -165,7 +192,7 @@ var metricsQueryCmd = &cobra.Command{
 			},
 		}
 		if chart {
-			renderChart(respData.MetricsQuery.Results[0].Payload)
+			renderChart(results[0].Payload)
 		} else {
 			format.GetFormat().Print(table)
 		}
@@ -181,4 +208,5 @@ func init() {
 	metricsQueryCmd.Flags().String("account-id", "", "Account ID")
 	metricsQueryCmd.Flags().Bool("instant", false, "Instant query")
 	metricsQueryCmd.Flags().Bool("chart", false, "Display data as a chart")
+	metricsQueryCmd.Flags().Duration("step", 0, "Resolution step for range queries, e.g. 30s, 5m (default: chosen by the backend)")
 }

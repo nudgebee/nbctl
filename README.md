@@ -100,7 +100,7 @@ This command interactively guides you through setting up a new configuration pro
 
 *   **Nudgebee API Endpoint**: The URL of the Nudgebee API (e.g., `https://api.nudgebee.com`).
 *   **Nudgebee API Key**: Your personal API token (`sk-nb-…`), created under **Settings → API Tokens**. `nbctl` sends it directly as a Bearer token on every request. Tokens created before direct token auth was supported are rejected with a 401 and must be recreated.
-*   **Nudgebee Username**: Your Nudgebee account username (e.g., your email).
+*   **Nudgebee Username**: Your Nudgebee account username (e.g., your email). Optional: used by `nubi` and `mcp`, not needed to authenticate.
 *   **Default Account ID**: The ID of the Nudgebee account you wish to interact with by default.
 
 After collecting the information, `nbctl` will attempt to validate your credentials by making a test API call.
@@ -171,12 +171,17 @@ Add the following to your Claude Desktop configuration file (usually `~/Library/
 
 Once configured, restart Claude Desktop. You can then ask questions like "List my Nudgebee accounts" or "Show me high severity security recommendations".
 
+### Limiting the available commands
+
+Set `NUDGEBEE_ENABLED_COMMANDS` to a comma-separated list of top-level commands (e.g. `metrics,logs`) to remove every other command from `nbctl` (`help`, `version` and `completion` always stay). This is meant for embedding `nbctl` in a restricted environment; it is a convenience, not an access control.
+
 ### Persistent Flags
 
 The following flags can be used with any `nbctl` command:
 
 *   `--log-level <level>`: Sets the logging level. Accepted values are `debug`, `info` (default), `warn`, and `error`.
-*   `--verbose`: Enables verbose logging, including detailed GraphQL requests and responses. Useful for debugging API interactions.
+*   `--verbose`: Enables verbose logging, including detailed GraphQL requests and responses, to `nbctl_graphql.log` in the current directory. Credential headers (`Authorization`, cookies) are redacted. Useful for debugging API interactions.
+*   `--http-timeout <duration>`: Timeout for each API request, as a duration (`50s`, `2m`) or seconds. Default `30s`; `0` disables it. Also set by `NUDGEBEE_HTTP_TIMEOUT`.
 *   `--format <format>`: Specifies the output format for command results. Currently, `json` is supported in addition to the default human-readable `text` format.
 
     Example:
@@ -538,6 +543,8 @@ Queries logs from the Nudgebee API based on various filters.
     *   `--offset <int>`: Specifies an offset for pagination. Default is 0.
     *   `--only-message`: If set, only the log messages are displayed, without timestamp, severity, or labels.
 
+With `-o json`, the backend's log entries are printed unchanged (an array of `{timestamp, severity, message, labels}`). A backend suggestion for an empty result is printed on stderr.
+
 Example:
 
 ```bash
@@ -598,13 +605,17 @@ Queries metrics from the Nudgebee API based on a PromQL-like query string and va
     *   `--account-id <id>`: The account ID to query metrics from. If not provided, it attempts to read it from the configuration.
     *   `--start-time <RFC3339>`: Filters metrics starting from this time. Defaults to 1 hour ago.
     *   `--end-time <RFC3339>`: Filters metrics up to this time. Defaults to the current time.
-    *   `--metric-provider <provider>`: Filters metrics by a specific metric provider.
-    *   `--only-metric`: If set, only the metric names are displayed, without attributes.
+    *   `--step <duration>`: Resolution of a range query (e.g. `30s`, `5m`). Default: chosen by the backend.
+    *   `--instant`: Run an instant query instead of a range query.
+    *   `--chart`: Plot the series in the terminal.
+
+With `-o json`, the backend's `results` are printed unchanged (an array of `{query_key, query, payload: [{metric, timestamps, values}]}`), so large results can be redirected to a file and read by scripts. Failed queries and backend notes are reported on stderr.
 
 Example:
 
 ```bash
 nbctl metrics query --account-id 123e4567-e89b-12d3-a456-426614174000 --query "node_memory_usage_bytes" --start-time "2023-10-26T00:00:00Z"
+nbctl metrics query --query 'rate(container_cpu_usage_seconds_total[5m])' --start-time "2026-10-01T00:00:00Z" --end-time "2026-10-08T00:00:00Z" --step 5m -o json > cpu.json
 ```
 
 #### `nbctl nubi`
