@@ -63,10 +63,7 @@ func InitConfig() {
 			fmt.Fprintf(os.Stderr, "Error: profile '%s' not found\n", profile)
 			os.Exit(1)
 		}
-		profileSettings := viper.GetStringMapString(fmt.Sprintf("profiles.%s", profile))
-		for key, value := range profileSettings {
-			viper.Set(key, value)
-		}
+		applyProfile(profile)
 		return
 	}
 
@@ -88,9 +85,19 @@ func InitConfig() {
 	}
 
 	if currentProfile != "" {
-		profileSettings := viper.GetStringMapString(fmt.Sprintf("profiles.%s", currentProfile))
-		for key, value := range profileSettings {
-			viper.Set(key, value)
+		applyProfile(currentProfile)
+	}
+}
+
+// applyProfile copies a profile's settings into viper. A setting also given as
+// a NUDGEBEE_* environment variable keeps the env value, so an environment that
+// configures nbctl by env is not overridden by a config file in $HOME.
+func applyProfile(name string) {
+	for key, value := range viper.GetStringMapString(fmt.Sprintf("profiles.%s", name)) {
+		envName := "NUDGEBEE_" + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
+		if _, set := os.LookupEnv(envName); set {
+			continue
 		}
+		viper.Set(key, value)
 	}
 }

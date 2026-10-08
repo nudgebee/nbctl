@@ -96,6 +96,30 @@ current-profile: prof1
 		assert.Equal(t, "prof1-user", viper.GetString("username"))
 		assert.Equal(t, "prof1-account", viper.GetString("account-id"))
 	})
+
+	t.Run("env overrides profile", func(t *testing.T) {
+		tmpdir := t.TempDir()
+		configPath := filepath.Join(tmpdir, ".nudgebee")
+		require.NoError(t, os.MkdirAll(configPath, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(configPath, "config.yaml"), []byte(`
+profiles:
+  prof1:
+    endpoint: http://prof1.com
+    api-key: prof1-key
+    account-id: prof1-account
+current-profile: prof1
+`), 0644))
+		t.Setenv("HOME", tmpdir)
+		t.Setenv("NUDGEBEE_ENDPOINT", "http://env.com")
+		t.Setenv("NUDGEBEE_API_KEY", "env-key")
+
+		Reset()
+		InitConfig()
+
+		assert.Equal(t, "http://env.com", viper.GetString("endpoint"))
+		assert.Equal(t, "env-key", viper.GetString("api-key"))
+		assert.Equal(t, "prof1-account", viper.GetString("account-id"))
+	})
 }
 
 func TestIsConfigured(t *testing.T) {
