@@ -59,7 +59,7 @@ var logsQueryCmd = &cobra.Command{
 
 		index, _ := cmd.Flags().GetString("index")
 		queryType, _ := cmd.Flags().GetString("query-type")
-		if err := validateQueryType(queryType); err != nil {
+		if err := validateQueryType(queryType, logQueryTypes); err != nil {
 			return err
 		}
 		params, err := providerParams(cmd, map[string]string{"index": index, "query_type": queryType})

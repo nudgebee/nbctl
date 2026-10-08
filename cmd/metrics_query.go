@@ -119,7 +119,14 @@ var metricsQueryCmd = &cobra.Command{
 			"start_time": startTime.UnixMilli(),
 			"end_time":   endTime.UnixMilli(),
 		}
-		params, err := providerParams(cmd, nil)
+		index, _ := cmd.Flags().GetString("index")
+		queryType, _ := cmd.Flags().GetString("query-type")
+		if err := validateQueryType(queryType, metricQueryTypes); err != nil {
+			return err
+		}
+		// Elasticsearch metrics read the index from metric_name (metric_index is
+		// only read by the utilisation action).
+		params, err := providerParams(cmd, map[string]string{"metric_name": index, "query_type": queryType})
 		if err != nil {
 			return err
 		}
@@ -230,6 +237,8 @@ func init() {
 	metricsQueryCmd.Flags().String("account-id", "", "Account ID")
 	metricsQueryCmd.Flags().Bool("instant", false, "Instant query")
 	metricsQueryCmd.Flags().Bool("chart", false, "Display data as a chart")
+	metricsQueryCmd.Flags().String("index", "", "Index to query (Elasticsearch metrics; default: the account's metrics index)")
+	metricsQueryCmd.Flags().String("query-type", "", "Query language for Elasticsearch metrics: dsl or kql (default: Nudgebee where-clause JSON)")
 	addParamFlag(metricsQueryCmd)
 	metricsQueryCmd.Flags().Duration("step", 0, "Resolution step for range queries, e.g. 30s, 5m (default: chosen by the backend)")
 }

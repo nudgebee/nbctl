@@ -72,7 +72,8 @@ func runCapturing(t *testing.T, data any, args ...string) (string, []capturedReq
 //	logs_list:                 account_id, query, start_time, end_time, limit, offset
 //
 // plus, only when set: a nested `request` map of provider parameters on
-// metrics_list and logs_list (--param, --index, --query-type), and `index` in
+// metrics_list (--param, --index → metric_name, --query-type) and logs_list
+// (--param, --index → index, --query-type), and `index` in
 // the nested request of logs_list_labels / logs_list_label_values (--index,
 // through the *WithIndexQuery documents).
 //
@@ -350,6 +351,22 @@ func TestProviderParamsContract(t *testing.T) {
 		assert.NotContains(t, reqs[0].Variables["request"], "request")
 	})
 
+	t.Run("metrics query with index and query type", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": []any{}}},
+			append([]string{"metrics", "query", "--query", `{"query":{"match_all":{}}}`, "--index", "metrics-*", "--query-type", "dsl"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, MetricsQueryQuery, reqs[0].Query)
+		assert.Equal(t, map[string]any{"metric_name": "metrics-*", "query_type": "dsl"},
+			reqs[0].Variables["request"].(map[string]any)["request"])
+	})
+
+	t.Run("metrics query without provider params has no nested request", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": []any{}}},
+			append([]string{"metrics", "query", "--query", "up"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.NotContains(t, reqs[0].Variables["request"], "request")
+	})
+
 	t.Run("metrics query with params", func(t *testing.T) {
 		_, reqs := runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": []any{}}},
 			append([]string{"metrics", "query", "--query", "up", "--param", "metric_index=metrics-*", "--param", "query_type=dsl"}, window...)...)
@@ -385,6 +402,8 @@ func TestProviderParamsErrors(t *testing.T) {
 		{[]string{"logs", "query", "--query", "x", "--param", "=v"}, `invalid --param "=v"`},
 		{[]string{"logs", "query", "--query", "x", "--param", "a=1", "--param", "a=2"}, `--param "a" given more than once`},
 		{[]string{"logs", "query", "--query", "x", "--param", "index=a", "--index", "b"}, `"index" is set by both --param and its own flag`},
+		{[]string{"metrics", "query", "--query", "x", "--query-type", "ppl"}, `invalid --query-type "ppl": want one of dsl, kql`},
+		{[]string{"metrics", "query", "--query", "x", "--param", "metric_name=a", "--index", "b"}, `"metric_name" is set by both --param and its own flag`},
 	}
 	for _, tt := range tests {
 		t.Run(strings.Join(tt.args[3:], " "), func(t *testing.T) {

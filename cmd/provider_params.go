@@ -8,10 +8,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// logQueryTypes are the query languages --query-type accepts. Elasticsearch
-// reads them from the nested request map: dsl (default), kql (hosted
-// Elasticsearch only) and ppl (OpenSearch).
+// logQueryTypes are the query languages logs query --query-type accepts.
+// Elasticsearch reads them from the nested request map: dsl (default), kql
+// (hosted Elasticsearch only) and ppl (OpenSearch).
 var logQueryTypes = []string{"dsl", "kql", "ppl"}
+
+// metricQueryTypes are the query languages metrics query --query-type accepts.
+// Elasticsearch metrics take dsl or kql; without a type, --query must be
+// Nudgebee's where-clause JSON.
+var metricQueryTypes = []string{"dsl", "kql"}
 
 // addParamFlag adds a repeatable --param key=value flag for provider-specific
 // parameters (e.g. Elasticsearch index, CloudWatch log group).
@@ -60,14 +65,14 @@ func providerParams(cmd *cobra.Command, named map[string]string) (map[string]any
 	return params, nil
 }
 
-func validateQueryType(queryType string) error {
+func validateQueryType(queryType string, allowed []string) error {
 	if queryType == "" {
 		return nil
 	}
-	for _, t := range logQueryTypes {
+	for _, t := range allowed {
 		if queryType == t {
 			return nil
 		}
 	}
-	return fmt.Errorf("invalid --query-type %q: want one of %s", queryType, strings.Join(logQueryTypes, ", "))
+	return fmt.Errorf("invalid --query-type %q: want one of %s", queryType, strings.Join(allowed, ", "))
 }

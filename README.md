@@ -613,7 +613,9 @@ Queries metrics from the Nudgebee API based on a PromQL-like query string and va
     *   `--start-time <RFC3339>`: Filters metrics starting from this time. Defaults to 1 hour ago.
     *   `--end-time <RFC3339>`: Filters metrics up to this time. Defaults to the current time.
     *   `--step <duration>`: Resolution of a range query (e.g. `30s`, `5m`). Default: chosen by the backend.
-    *   `--param <key=value>` (repeatable): Provider-specific parameters, sent as strings in the request's nested `request` map (e.g. `metric_index=metrics-*` for Elasticsearch metrics).
+    *   `--index <name>`: Index to query (Elasticsearch metrics). Default: the account's metrics index.
+    *   `--query-type <dsl|kql>`: Query language for Elasticsearch metrics. Without it, `--query` must be Nudgebee's where-clause JSON.
+    *   `--param <key=value>` (repeatable): Other provider-specific parameters, sent as strings in the request's nested `request` map.
     *   `--instant`: Run an instant query instead of a range query.
     *   `--chart`: Plot the series in the terminal.
 
