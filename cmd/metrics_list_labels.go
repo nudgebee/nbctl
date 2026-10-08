@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/nudgebee/nbctl/pkg/client"
 	"github.com/nudgebee/nbctl/pkg/format"
@@ -49,9 +50,7 @@ var metricsListLabelsCmd = &cobra.Command{
 				{Header: "Label", Field: "Label"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.MetricsListLabels), fmt.Sprintf("No labels found for metric %q.", metric))
 	},
 }
 

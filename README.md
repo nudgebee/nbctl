@@ -543,7 +543,9 @@ Queries logs from the Nudgebee API based on various filters.
     *   `--offset <int>`: Specifies an offset for pagination. Default is 0.
     *   `--only-message`: If set, only the log messages are displayed, without timestamp, severity, or labels.
 
-With `-o json`, the backend's log entries are printed unchanged (an array of `{timestamp, severity, message, labels}`). A backend suggestion for an empty result is printed on stderr.
+With `-o json`, the backend's log entries are printed unchanged (an array of `{timestamp, severity, message, labels}`). When the result has exactly `--limit` lines, a warning on stderr says it is probably cut off and gives the `--offset` for the next page.
+
+The `metrics` and `logs` commands report an empty result on stderr (e.g. `No values found for log label "severity" ...`), so an empty stdout is never ambiguous; with `-o json` stdout is still `[]`.
 
 Example:
 

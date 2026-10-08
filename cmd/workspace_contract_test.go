@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/nudgebee/nbctl/pkg/testutil"
@@ -54,8 +56,18 @@ func runCapturing(t *testing.T, data any, args ...string) (string, []capturedReq
 	return out, reqs
 }
 
-// The workspace proxy in llm-server allowlists exactly these documents; keep
-// them in sync with its contract test when they change.
+// The workspace proxy in llm-server (nudgebee-enterprise#40619) allowlists
+// these documents and refuses any request field beyond these, per action:
+//
+//	metrics_list_names:        account_id
+//	metrics_list_labels:       account_id, metric
+//	metrics_list_label_values: account_id, label
+//	metrics_list:              account_id, queries{query}, instant, start_time, end_time, step_interval
+//	logs_list_labels:          account_id, request{query}
+//	logs_list_label_values:    account_id, label_name, request{query}
+//	logs_list:                 account_id, query, start_time, end_time, limit, offset
+//
+// Adding or renaming a field here needs the same change in the proxy.
 func TestWorkspaceCommandsGraphQLContract(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -222,4 +234,69 @@ func TestRestrictCommands(t *testing.T) {
 
 	restrictCommands(root, " metrics, logs ,")
 	assert.ElementsMatch(t, []string{"metrics", "logs", "version", "completion"}, names())
+}
+
+// runCapturingStderr is runCapturing that also returns what went to stderr.
+func runCapturingStderr(t *testing.T, data any, args ...string) (string, string) {
+	t.Helper()
+	var errBuf bytes.Buffer
+	rootCmd.SetErr(&errBuf)
+	defer rootCmd.SetErr(nil)
+	out, _ := runCapturing(t, data, args...)
+	return out, errBuf.String()
+}
+
+func TestEmptyResultsExplainOnStderr(t *testing.T) {
+	window := []string{"--start-time", "2026-10-01T00:00:00Z", "--end-time", "2026-10-01T01:00:00Z"}
+	tests := []struct {
+		name    string
+		args    []string
+		data    any
+		wantErr string
+	}{
+		{"metrics list-metrics", []string{"metrics", "list-metrics"},
+			map[string]any{"metrics_list_names": []any{}}, "No metrics found"},
+		{"metrics list-labels", []string{"metrics", "list-labels", "--metric", "up"},
+			map[string]any{"metrics_list_labels": nil}, `No labels found for metric "up"`},
+		{"metrics list-label-values", []string{"metrics", "list-label-values", "--label", "job"},
+			map[string]any{"metrics_list_label_values": []any{}}, `No values found for label "job"`},
+		{"logs list-labels", append([]string{"logs", "list-labels"}, window...),
+			map[string]any{"logs_list_labels": []any{}}, "No log labels found between 2026-10-01T00:00:00Z and 2026-10-01T01:00:00Z"},
+		{"logs list-label-values", append([]string{"logs", "list-label-values", "--label-name", "severity"}, window...),
+			map[string]any{"logs_list_label_values": []any{}}, `No values found for log label "severity"`},
+		{"logs query", append([]string{"logs", "query", "--query", "x"}, window...),
+			map[string]any{"logs_list": map[string]any{"logs": []any{}}}, "No logs found between"},
+		{"metrics query", append([]string{"metrics", "query", "--query", "up"}, window...),
+			map[string]any{"metrics_list": map[string]any{"results": []any{map[string]any{"query_key": "query", "payload": []any{}}}}}, "No data"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" text", func(t *testing.T) {
+			out, stderr := runCapturingStderr(t, tt.data, tt.args...)
+			assert.Empty(t, strings.TrimSpace(out))
+			assert.Contains(t, stderr, tt.wantErr)
+		})
+		t.Run(tt.name+" json", func(t *testing.T) {
+			out, stderr := runCapturingStderr(t, tt.data, append(tt.args, "-o", "json")...)
+			if tt.name == "metrics query" {
+				assert.JSONEq(t, `[{"query_key":"query","payload":[]}]`, out)
+			} else {
+				assert.JSONEq(t, `[]`, out)
+			}
+			assert.Contains(t, stderr, tt.wantErr)
+		})
+	}
+}
+
+func TestLogsQueryWarnsWhenLimitReached(t *testing.T) {
+	entry := map[string]any{"timestamp": "t", "severity": "info", "message": "m", "labels": map[string]any{}}
+	data := map[string]any{"logs_list": map[string]any{"logs": []any{entry, entry}}}
+
+	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "x", "--limit", "2", "--offset", "4", "-o", "json")
+	assert.Contains(t, stderr, "Returned 2 lines = --limit; results are probably cut off")
+	assert.Contains(t, stderr, "--offset 6")
+	var parsed []any
+	require.NoError(t, json.Unmarshal([]byte(out), &parsed), "stdout must stay valid JSON")
+
+	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "x", "--limit", "3")
+	assert.NotContains(t, stderr, "cut off")
 }

@@ -144,8 +144,11 @@ var metricsQueryCmd = &cobra.Command{
 		if err := json.Unmarshal(raw, &results); err != nil && !jsonOutput {
 			return fmt.Errorf("failed to decode metrics results: %w", err)
 		}
+		series, failed := 0, false
 		for _, r := range results {
+			series += len(r.Payload)
 			if r.Error != nil && *r.Error != "" {
+				failed = true
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: query %q failed: %s\n", r.QueryKey, *r.Error)
 			} else if r.Note != "" {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: %s\n", r.Note)
@@ -153,12 +156,15 @@ var metricsQueryCmd = &cobra.Command{
 		}
 
 		// JSON output is the backend's results, unchanged, so scripts can use it as is.
+		if series == 0 && !failed {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No data: the query returned no series between %s and %s.\n", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		}
+
 		if jsonOutput {
 			return format.GetFormat().PrintRawJSON(raw)
 		}
 
 		if len(results) == 0 {
-			format.GetFormat().Print("No Data")
 			return nil
 		}
 

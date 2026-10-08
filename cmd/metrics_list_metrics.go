@@ -46,9 +46,7 @@ var metricsListMetricsCmd = &cobra.Command{
 				{Header: "Metric", Field: "Metric"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.MetricsList), "No metrics found for this account.")
 	},
 }
 

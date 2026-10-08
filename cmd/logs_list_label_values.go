@@ -76,9 +76,7 @@ var logsListLabelValuesCmd = &cobra.Command{
 				{Header: "Value", Field: "Value"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.LogsListLabelValues), fmt.Sprintf("No values found for log label %q between %s and %s (it may be a field inside log lines rather than an indexed label).", labelName, startTime.Format(time.RFC3339), endTime.Format(time.RFC3339)))
 	},
 }
 

@@ -74,9 +74,7 @@ var logsListLabelsCmd = &cobra.Command{
 				{Header: "Label", Field: "Label"},
 			},
 		}
-		format.GetFormat().Print(table)
-
-		return nil
+		return printRows(cmd, table, len(respData.LogsListLabels), fmt.Sprintf("No log labels found between %s and %s.", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339)))
 	},
 }
 

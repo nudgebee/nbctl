@@ -89,23 +89,39 @@ var logsQueryCmd = &cobra.Command{
 			raw = json.RawMessage("[]")
 		}
 
-		// JSON output is the backend's log entries, unchanged.
-		if format.GetFormat().Get() == "json" {
-			return format.GetFormat().PrintRawJSON(raw)
-		}
-
 		var logs []struct {
 			Timestamp string          `json:"timestamp"`
 			Severity  string          `json:"severity"`
 			Message   string          `json:"message"`
 			Labels    json.RawMessage `json:"labels"`
 		}
-		if err := json.Unmarshal(raw, &logs); err != nil {
-			return fmt.Errorf("failed to decode logs: %w", err)
+		// JSON output passes entries through, so for JSON only count them.
+		jsonOutput := format.GetFormat().Get() == "json"
+		count := 0
+		if jsonOutput {
+			var entries []json.RawMessage
+			_ = json.Unmarshal(raw, &entries)
+			count = len(entries)
+		} else {
+			if err := json.Unmarshal(raw, &logs); err != nil {
+				return fmt.Errorf("failed to decode logs: %w", err)
+			}
+			count = len(logs)
 		}
 
-		if len(logs) == 0 {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No logs found.")
+		window := fmt.Sprintf("between %s and %s", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		switch {
+		case count == 0:
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No logs found %s.\n", window)
+		case limit > 0 && count >= limit:
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Returned %d lines = --limit; results are probably cut off. Narrow --start-time/--end-time or the query, or page with --offset %d.\n", count, offset+count)
+		}
+
+		// JSON output is the backend's log entries, unchanged.
+		if jsonOutput {
+			return format.GetFormat().PrintRawJSON(raw)
+		}
+		if count == 0 {
 			return nil
 		}
 
