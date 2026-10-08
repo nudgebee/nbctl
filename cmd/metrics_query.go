@@ -119,6 +119,13 @@ var metricsQueryCmd = &cobra.Command{
 			"start_time": startTime.UnixMilli(),
 			"end_time":   endTime.UnixMilli(),
 		}
+		params, err := providerParams(cmd, nil)
+		if err != nil {
+			return err
+		}
+		if params != nil {
+			request["request"] = params
+		}
 		if step > 0 {
 			// step_interval is whole seconds; round a sub-second step up to 1s.
 			request["step_interval"] = max(1, int(step.Round(time.Second)/time.Second))
@@ -223,5 +230,6 @@ func init() {
 	metricsQueryCmd.Flags().String("account-id", "", "Account ID")
 	metricsQueryCmd.Flags().Bool("instant", false, "Instant query")
 	metricsQueryCmd.Flags().Bool("chart", false, "Display data as a chart")
+	addParamFlag(metricsQueryCmd)
 	metricsQueryCmd.Flags().Duration("step", 0, "Resolution step for range queries, e.g. 30s, 5m (default: chosen by the backend)")
 }

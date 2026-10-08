@@ -57,6 +57,16 @@ var logsQueryCmd = &cobra.Command{
 			return fmt.Errorf("invalid end-time format: %w", err)
 		}
 
+		index, _ := cmd.Flags().GetString("index")
+		queryType, _ := cmd.Flags().GetString("query-type")
+		if err := validateQueryType(queryType); err != nil {
+			return err
+		}
+		params, err := providerParams(cmd, map[string]string{"index": index, "query_type": queryType})
+		if err != nil {
+			return err
+		}
+
 		req := client.NewRequest(LogsQueryQuery)
 
 		requestVars := map[string]any{
@@ -66,6 +76,9 @@ var logsQueryCmd = &cobra.Command{
 			"query":      queryStr,
 			"limit":      limit,
 			"offset":     offset,
+		}
+		if params != nil {
+			requestVars["request"] = params
 		}
 		req.Var("request", requestVars)
 
@@ -149,4 +162,7 @@ func init() {
 	logsQueryCmd.Flags().Int("limit", 100, "Limit")
 	logsQueryCmd.Flags().Int("offset", 0, "Offset")
 	logsQueryCmd.Flags().Bool("only-message", false, "Show only log messages")
+	logsQueryCmd.Flags().String("index", "", "Index to search (Elasticsearch/OpenSearch; required for in-cluster Elasticsearch)")
+	logsQueryCmd.Flags().String("query-type", "", "Query language for Elasticsearch: dsl (default), kql (hosted only) or ppl (OpenSearch)")
+	addParamFlag(logsQueryCmd)
 }

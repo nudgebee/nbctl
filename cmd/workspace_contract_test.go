@@ -28,7 +28,11 @@ func resetFlags(t *testing.T, args []string) {
 	c, _, err := rootCmd.Find(args)
 	require.NoError(t, err)
 	c.Flags().VisitAll(func(f *pflag.Flag) {
-		_ = f.Value.Set(f.DefValue)
+		if sv, ok := f.Value.(pflag.SliceValue); ok {
+			_ = sv.Replace(nil) // Set would append the default's text
+		} else {
+			_ = f.Value.Set(f.DefValue)
+		}
 		f.Changed = false
 	})
 }
@@ -66,6 +70,11 @@ func runCapturing(t *testing.T, data any, args ...string) (string, []capturedReq
 //	logs_list_labels:          account_id, request{query}
 //	logs_list_label_values:    account_id, label_name, request{query}
 //	logs_list:                 account_id, query, start_time, end_time, limit, offset
+//
+// plus, only when set: a nested `request` map of provider parameters on
+// metrics_list and logs_list (--param, --index, --query-type), and `index` in
+// the nested request of logs_list_labels / logs_list_label_values (--index,
+// through the *WithIndexQuery documents).
 //
 // Adding or renaming a field here needs the same change in the proxy.
 func TestWorkspaceCommandsGraphQLContract(t *testing.T) {
@@ -318,4 +327,71 @@ func TestLogsQueryWarnsWhenLimitReached(t *testing.T) {
 
 	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "x", "--limit", "3")
 	assert.NotContains(t, stderr, "cut off")
+}
+
+func TestProviderParamsContract(t *testing.T) {
+	window := []string{"--start-time", "2026-10-01T00:00:00Z", "--end-time", "2026-10-01T01:00:00Z"}
+	ns := "start=1790812800000000000&end=1790816400000000000"
+
+	t.Run("logs query with index, query type and params", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}},
+			append([]string{"logs", "query", "--query", `{"query":{"match_all":{}}}`, "--index", "logs-*",
+				"--query-type", "dsl", "--param", "region=us-east-1"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, LogsQueryQuery, reqs[0].Query)
+		assert.Equal(t, map[string]any{"index": "logs-*", "query_type": "dsl", "region": "us-east-1"},
+			reqs[0].Variables["request"].(map[string]any)["request"])
+	})
+
+	t.Run("logs query without provider params has no nested request", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}},
+			append([]string{"logs", "query", "--query", "x"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.NotContains(t, reqs[0].Variables["request"], "request")
+	})
+
+	t.Run("metrics query with params", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": []any{}}},
+			append([]string{"metrics", "query", "--query", "up", "--param", "metric_index=metrics-*", "--param", "query_type=dsl"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, map[string]any{"metric_index": "metrics-*", "query_type": "dsl"},
+			reqs[0].Variables["request"].(map[string]any)["request"])
+	})
+
+	t.Run("logs list-labels with index", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"logs_list_labels": []any{}},
+			append([]string{"logs", "list-labels", "--index", "logs-*"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, LogsListLabelsWithIndexQuery, reqs[0].Query)
+		assert.Equal(t, map[string]any{"accountId": "acc-1", "query": ns, "index": "logs-*"}, reqs[0].Variables)
+	})
+
+	t.Run("logs list-label-values with index", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"logs_list_label_values": []any{}},
+			append([]string{"logs", "list-label-values", "--label-name", "level", "--index", "logs-*"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, LogsListLabelValuesWithIndexQuery, reqs[0].Query)
+		assert.Equal(t, map[string]any{"accountId": "acc-1", "labelName": "level", "query": ns, "index": "logs-*"}, reqs[0].Variables)
+	})
+}
+
+func TestProviderParamsErrors(t *testing.T) {
+	tests := []struct {
+		args    []string
+		wantErr string
+	}{
+		{[]string{"logs", "query", "--query", "x", "--query-type", "sql"}, `invalid --query-type "sql"`},
+		{[]string{"logs", "query", "--query", "x", "--param", "noequals"}, `invalid --param "noequals"`},
+		{[]string{"logs", "query", "--query", "x", "--param", "=v"}, `invalid --param "=v"`},
+		{[]string{"logs", "query", "--query", "x", "--param", "a=1", "--param", "a=2"}, `--param "a" given more than once`},
+		{[]string{"logs", "query", "--query", "x", "--param", "index=a", "--index", "b"}, `"index" is set by both --param and its own flag`},
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.args[3:], " "), func(t *testing.T) {
+			resetFlags(t, tt.args)
+			out, err := testutil.RunWithSimpleGraphQL(map[string]any{}, rootCmd, tt.args)
+			require.Error(t, err, out)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
 }
