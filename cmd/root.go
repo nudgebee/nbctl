@@ -110,7 +110,7 @@ func init() {
 
 	// Add a persistent flag for the output format.
 	var formatVar string
-	rootCmd.PersistentFlags().StringVarP(&formatVar, "format", "o", "text", "Output format (json)")
+	rootCmd.PersistentFlags().StringVarP(&formatVar, "format", "o", "text", "Output format (json; raw for logs query)")
 	var outputVar string
 	rootCmd.PersistentFlags().StringVar(&outputVar, "output", "", "Output format alias (json)")
 	_ = rootCmd.PersistentFlags().MarkHidden("output")
@@ -131,6 +131,9 @@ func init() {
 			formatValue = outputVal
 		}
 		format.GetFormat().Set(formatValue)
+		if formatValue == "raw" && cmd.Annotations[rawOutputAnnotation] != "true" {
+			return fmt.Errorf("-o raw is only supported by: nbctl logs query")
+		}
 
 		// Initialize the logger.
 		applog.InitLogger()
@@ -145,6 +148,10 @@ func init() {
 		return nil
 	}
 }
+
+// rawOutputAnnotation marks a command that supports -o raw (the provider's
+// own response fragments, unchanged).
+const rawOutputAnnotation = "nbctl/raw-output"
 
 // enabledCommandsEnv limits nbctl to a comma-separated list of top-level
 // command groups (e.g. "metrics,logs"), for embedding nbctl where only some

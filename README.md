@@ -548,7 +548,15 @@ Queries logs from the Nudgebee API based on various filters.
 
 Write `--query` in the provider's own language: LogQL for Loki, Query DSL JSON / KQL / PPL for Elasticsearch, and so on. `logs list-labels` and `logs list-label-values` also take `--index`.
 
-With `-o json`, the backend's log entries are printed unchanged (an array of `{timestamp, severity, message, labels}`). When the result has exactly `--limit` lines, a warning on stderr says it is probably cut off and gives the `--offset` for the next page.
+`logs list-labels` shows each label's kind: `field` is a name the provider understands (usable in a native query), `alias` is a Nudgebee short name, with the provider field it maps to. `--fields-only` lists only provider fields.
+
+Output:
+
+*   text: the log lines as a table, then any count series.
+*   `-o json`: the backend's log entries, unchanged (an array of `{timestamp, severity, message, labels}`). When the query returned count series (e.g. an Elasticsearch aggregation), `{"logs": [...], "series": [...]}` instead; each series is `{metric, timestamps, values}` like `metrics query`.
+*   `-o raw`: the whole result as returned, including the provider's own fragments (`aggregations_raw`, `total_raw`). Only `logs query` supports it.
+
+When the result may be cut off, a warning on stderr says so and gives the `--offset` for the next page; when the provider reports a match count, it shows `Returned N of M matching lines` (`at least M` when the count is a lower bound).
 
 The `metrics` and `logs` commands report an empty result on stderr (e.g. `No values found for log label "severity" ...`), so an empty stdout is never ambiguous; with `-o json` stdout is still `[]`.
 
