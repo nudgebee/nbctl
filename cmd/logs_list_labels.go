@@ -100,7 +100,11 @@ Use --fields-only to list only the names a native query can use.`,
 			fields = append(fields, format.TableField{Header: "Kind", Field: "Kind"}, format.TableField{Header: "Field", Field: "Field"})
 		}
 		table := format.TabularData{Data: labels, Fields: fields}
-		return printRows(cmd, table, len(labels), fmt.Sprintf("No log labels found between %s and %s.", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339)))
+		emptyMsg := fmt.Sprintf("No log labels found between %s and %s.", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+		if fieldsOnly {
+			emptyMsg = "No provider fields found. The provider may not report which labels are its own fields; run without --fields-only to see all labels."
+		}
+		return printRows(cmd, table, len(labels), emptyMsg)
 	},
 }
 
@@ -113,8 +117,9 @@ func init() {
 	logsListLabelsCmd.Flags().Bool("fields-only", false, "List only names the provider itself understands (kind \"field\"), i.e. what a native query can use")
 }
 
-// logLabel is one logs_list_labels entry. Kind and Field are empty on an older
-// api-server.
+// logLabel is one logs_list_labels entry. Kind is "alias", "field" or empty:
+// empty means unknown (an older api-server, or a provider that does not say),
+// never "alias".
 type logLabel struct {
 	Label string `json:"label"`
 	Kind  string `json:"kind,omitempty"`

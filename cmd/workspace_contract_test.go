@@ -448,6 +448,12 @@ func TestLogsQueryLogResults(t *testing.T) {
 		assert.Contains(t, out, "[3,5]")
 	})
 
+	t.Run("series_note goes to stderr", func(t *testing.T) {
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "series": series, "truncated": false, "series_note": "a terms grouping left 3 groups out"}}
+		_, stderr := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
+		assert.Contains(t, stderr, "Note: a terms grouping left 3 groups out")
+	})
+
 	t.Run("raw sets include_raw and prints the whole result", func(t *testing.T) {
 		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "aggregations_raw": map[string]any{"pod": map[string]any{"buckets": []any{}}}, "total_raw": map[string]any{"value": 7, "relation": "eq"}}}
 		out, reqs := runCapturing(t, data, append([]string{"logs", "query", "--query", "x", "-o", "raw"}, window...)...)
@@ -518,6 +524,18 @@ func TestListLabelsKinds(t *testing.T) {
 	t.Run("fields-only keeps provider fields even if the api-server ignores the flag", func(t *testing.T) {
 		out, _ := runCapturingStderr(t, map[string]any{"logs_list_labels": labels}, "logs", "list-labels", "--fields-only", "-o", "json")
 		assert.JSONEq(t, `[{"label":"log","kind":"field"},{"label":"kubernetes.pod.name","kind":"field"}]`, out)
+	})
+
+	t.Run("fields-only with no provider fields explains itself", func(t *testing.T) {
+		out, stderr := runCapturingStderr(t, map[string]any{"logs_list_labels": []any{}}, "logs", "list-labels", "--fields-only", "-o", "json")
+		assert.JSONEq(t, `[]`, out)
+		assert.Contains(t, stderr, "No provider fields found")
+	})
+
+	t.Run("a label without kind is unknown, not alias", func(t *testing.T) {
+		mixed := []any{map[string]any{"label": "x"}, map[string]any{"label": "log", "kind": "field"}}
+		out, _ := runCapturingStderr(t, map[string]any{"logs_list_labels": mixed}, "logs", "list-labels", "--fields-only", "-o", "json")
+		assert.JSONEq(t, `[{"label":"log","kind":"field"}]`, out)
 	})
 
 	t.Run("older api-server: no kinds, warn and list all", func(t *testing.T) {

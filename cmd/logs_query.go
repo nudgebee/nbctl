@@ -12,7 +12,8 @@ import (
 )
 
 // LogsQueryQuery fetches log lines through the logs_list action, with the
-// result's counts and truncation. truncated, total, total_relation, series and
+// result's counts and truncation. truncated, total, total_relation, series,
+// series_note and
 // the *_raw fragments are absent on an older api-server, and the *_raw fields
 // are only filled when the request sets include_raw (-o raw).
 const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
@@ -28,6 +29,7 @@ const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
     total
     total_relation
     series
+    series_note
     aggregations_raw
     total_raw
   }
@@ -144,6 +146,7 @@ match count when the provider reports one.`,
 			Total         *int64          `json:"total"`
 			TotalRelation string          `json:"total_relation"`
 			Series        json.RawMessage `json:"series"`
+			SeriesNote    string          `json:"series_note"`
 		}
 		if len(respData.LogsList) > 0 {
 			if err := json.Unmarshal(respData.LogsList, &result); err != nil {
@@ -153,6 +156,11 @@ match count when the provider reports one.`,
 
 		if result.Suggestion != "" {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Suggestion: %s\n", result.Suggestion)
+		}
+		// Why counts are partial or missing from series (e.g. a terms grouping
+		// left groups out, or the counts are only in aggregations_raw).
+		if result.SeriesNote != "" {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: %s\n", result.SeriesNote)
 		}
 
 		raw := orEmptyArray(result.Logs)
