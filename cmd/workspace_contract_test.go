@@ -593,4 +593,10 @@ func TestListLabelsTypesFromAPIServer(t *testing.T) {
 
 	out, _ = runCapturingStderr(t, data, "logs", "list-labels", "--fields-only", "-o", "json")
 	assert.JSONEq(t, `[{"label":"kubernetes.pod_name","attributes":{"type":"keyword"},"data_type":"string","kind":"field"}]`, out)
+
+	// --fields-only text: every row is a field, so no Kind/Field columns.
+	out, _ = runCapturingStderr(t, data, "logs", "list-labels", "--fields-only")
+	assert.Regexp(t, `Label\s+Type`, out)
+	assert.NotContains(t, out, "Kind")
+	assert.Regexp(t, `kubernetes\.pod_name\s+keyword`, out)
 }

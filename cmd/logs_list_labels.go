@@ -95,9 +95,20 @@ keyword field.`,
 		}
 
 		labels := respData.LogsListLabels
+		hasKinds := hasLabelKinds(labels)
 		if fieldsOnly {
-			var ok bool
-			if labels, ok = onlyProviderFields(labels); !ok {
+			if hasKinds {
+				// The api-server already filters when fields_only is set; this
+				// guards one that ignores the flag. A label without a kind is
+				// unknown, never kept as a field.
+				fields := make([]logLabel, 0, len(labels))
+				for _, l := range labels {
+					if l.Kind == "field" {
+						fields = append(fields, l)
+					}
+				}
+				labels = fields
+			} else {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Warning: this api-server does not report label kinds, so --fields-only cannot tell aliases from provider fields; listing all labels.")
 			}
 		}
@@ -106,7 +117,8 @@ keyword field.`,
 		if format.GetFormat().Get() == "json" {
 			table = format.TabularData{Data: labels}
 		} else {
-			table = labelTable(labels)
+			// With --fields-only every row is a field, so Kind and Field add nothing.
+			table = labelTable(labels, hasKinds && !fieldsOnly)
 		}
 		emptyMsg := fmt.Sprintf("No log labels found between %s and %s.", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 		if fieldsOnly {
@@ -141,10 +153,10 @@ type labelRow struct {
 	Label, Kind, Field, Type string
 }
 
-// labelTable shows Kind and Field when the api-server reports kinds, and Type
-// when any label has one: the provider's own type (attributes.type, e.g. an
+// labelTable shows Kind and Field when showKinds is set, and Type when any
+// label has one: the provider's own type (attributes.type, e.g. an
 // Elasticsearch keyword vs text), else the normalized data_type.
-func labelTable(labels []logLabel) format.TabularData {
+func labelTable(labels []logLabel, showKinds bool) format.TabularData {
 	rows := make([]labelRow, len(labels))
 	hasType := false
 	for i, l := range labels {
@@ -160,7 +172,7 @@ func labelTable(labels []logLabel) format.TabularData {
 		rows[i] = labelRow{Label: l.Label, Kind: l.Kind, Field: l.Field, Type: typ}
 	}
 	fields := []format.TableField{{Header: "Label", Field: "Label"}}
-	if _, hasKinds := onlyProviderFields(labels); hasKinds {
+	if showKinds {
 		fields = append(fields, format.TableField{Header: "Kind", Field: "Kind"}, format.TableField{Header: "Field", Field: "Field"})
 	}
 	if hasType {
@@ -169,20 +181,14 @@ func labelTable(labels []logLabel) format.TabularData {
 	return format.TabularData{Data: rows, Fields: fields}
 }
 
-// onlyProviderFields keeps the kind "field" entries. The api-server already
-// filters when fields_only is set; this guards an api-server that ignores the
-// flag. ok is false when no entry has a kind, i.e. the api-server predates it.
-func onlyProviderFields(labels []logLabel) (fields []logLabel, ok bool) {
+// hasLabelKinds reports whether the api-server says which labels are aliases
+// and which are provider fields; an older one, or a provider that reports no
+// labels, leaves kind unset everywhere.
+func hasLabelKinds(labels []logLabel) bool {
 	for _, l := range labels {
 		if l.Kind != "" {
-			ok = true
-		}
-		if l.Kind == "field" {
-			fields = append(fields, l)
+			return true
 		}
 	}
-	if !ok {
-		return labels, false
-	}
-	return fields, true
+	return false
 }
