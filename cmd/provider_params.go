@@ -21,7 +21,7 @@ var metricQueryTypes = []string{"dsl", "kql"}
 // addParamFlag adds a repeatable --param key=value flag for provider-specific
 // parameters (e.g. Elasticsearch index, CloudWatch log group).
 func addParamFlag(c *cobra.Command) {
-	c.Flags().StringArray("param", nil, "Provider-specific parameter key=value, sent in the nested request map (repeatable)")
+	c.Flags().StringArray("param", nil, "Provider-specific parameter key=value, passed to the provider as a string (repeatable); providers ignore keys they don't use")
 }
 
 // providerParams builds the nested `request` map that providers read their own

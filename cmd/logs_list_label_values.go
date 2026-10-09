@@ -98,7 +98,7 @@ func init() {
 	logsListLabelValuesCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsListLabelValuesCmd.Flags().String("end-time", "", "End time (RFC3339)")
 	logsListLabelValuesCmd.Flags().String("label-name", "", "Label name")
-	logsListLabelValuesCmd.Flags().String("index", "", "Index to read values from (Elasticsearch/OpenSearch)")
+	logsListLabelValuesCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to read values from (other providers ignore it)")
 	if err := logsListLabelValuesCmd.MarkFlagRequired("label-name"); err != nil {
 		panic(err)
 	}

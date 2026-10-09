@@ -95,5 +95,5 @@ func init() {
 	logsListLabelsCmd.Flags().String("account-id", "", "Account ID")
 	logsListLabelsCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsListLabelsCmd.Flags().String("end-time", "", "End time (RFC3339)")
-	logsListLabelsCmd.Flags().String("index", "", "Index to read labels from (Elasticsearch/OpenSearch)")
+	logsListLabelsCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index whose fields to list (other providers ignore it)")
 }
