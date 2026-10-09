@@ -429,7 +429,7 @@ func TestLogsQueryLogResults(t *testing.T) {
 	series := []any{map[string]any{"metric": map[string]any{"pod": "api-1"}, "timestamps": []any{1790812800, 1790816400}, "values": []any{3, 5}}}
 
 	t.Run("json with series prints logs and series", func(t *testing.T) {
-		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "series": series, "truncated": false}}
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "series": series, "truncated": false}} // no total: none in the output
 		out, stderr := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
 		assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"pod":"api-1"},"timestamps":[1790812800,1790816400],"values":[3,5]}]}`, out)
 		assert.NotContains(t, stderr, "No logs found")
@@ -545,4 +545,52 @@ func TestListLabelsKinds(t *testing.T) {
 		assert.Contains(t, out, "message")
 		assert.NotContains(t, out, "Kind")
 	})
+}
+
+// Fixtures below are trimmed real responses from the api-server log-results
+// change (nudgebee/nudgebee-enterprise#40699) against dev Elasticsearch.
+
+func TestLogsQueryCountsOnlyFromAPIServer(t *testing.T) {
+	var data any
+	require.NoError(t, json.Unmarshal([]byte(`{"logs_list":{
+		"logs":[],"query":"{\"size\":0}","provider":"ES","truncated":false,"total":88044,"total_relation":"eq",
+		"series":[{"metric":{"kubernetes.pod_name":"services-server-5b7bc76d59-x8lxp"},"timestamps":[1791547200,1791550800,1791554400],"values":[617,1608,1316]}],
+		"series_note":"a terms grouping left some groups out (sum_other_doc_count > 0), so series does not hold every group; raise that terms aggregation's size"}}`), &data))
+
+	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
+	assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"kubernetes.pod_name":"services-server-5b7bc76d59-x8lxp"},"timestamps":[1791547200,1791550800,1791554400],"values":[617,1608,1316]}],"total":88044,"total_relation":"eq"}`, out)
+	assert.Contains(t, stderr, "Matched 88044 lines.")
+	assert.Contains(t, stderr, "Note: a terms grouping left some groups out")
+	assert.NotContains(t, stderr, "No logs found")
+	assert.NotContains(t, stderr, "cut off")
+}
+
+func TestLogsQueryLowerBoundTotalFromAPIServer(t *testing.T) {
+	entry := map[string]any{"timestamp": "2026-10-09T18:08:59.954Z", "severity": "INFO", "message": "m", "labels": map[string]any{}}
+	data := map[string]any{"logs_list": map[string]any{
+		"logs": []any{entry, entry}, "provider": "ES", "truncated": true, "total": 10000, "total_relation": "gte",
+	}}
+	_, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "--limit", "2", "-o", "json")
+	assert.Contains(t, stderr, "Returned 2 of at least 10000 matching lines.")
+	assert.Contains(t, stderr, `add "track_total_hits": true`)
+
+	// Only Elasticsearch gets the track_total_hits hint.
+	data["logs_list"].(map[string]any)["provider"] = "LOKI"
+	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "--limit", "2", "-o", "json")
+	assert.NotContains(t, stderr, "track_total_hits")
+}
+
+func TestListLabelsTypesFromAPIServer(t *testing.T) {
+	var data any
+	require.NoError(t, json.Unmarshal([]byte(`{"logs_list_labels":[
+		{"label":"pod","attributes":{"type":"string"},"data_type":"string","kind":"alias","field":"kubernetes.pod_name"},
+		{"label":"level","attributes":{"type":"string"},"data_type":"string","kind":"alias"},
+		{"label":"kubernetes.pod_name","attributes":{"type":"keyword"},"data_type":"string","kind":"field"}]}`), &data))
+
+	out, _ := runCapturingStderr(t, data, "logs", "list-labels")
+	assert.Regexp(t, `pod\s+alias\s+kubernetes\.pod_name\s+string`, out)
+	assert.Regexp(t, `kubernetes\.pod_name\s+field\s+keyword`, out)
+
+	out, _ = runCapturingStderr(t, data, "logs", "list-labels", "--fields-only", "-o", "json")
+	assert.JSONEq(t, `[{"label":"kubernetes.pod_name","attributes":{"type":"keyword"},"data_type":"string","kind":"field"}]`, out)
 }

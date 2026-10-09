@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -20,6 +21,8 @@ const LogsListLabelsQuery = `query FetchLogLabels($request: FetchLogLabelRequest
     label
     kind
     field
+    data_type
+    attributes
   }
 }`
 
@@ -31,7 +34,11 @@ var logsListLabelsCmd = &cobra.Command{
 Each label has a kind: "field" is a name the provider itself understands,
 so a native query (LogQL, Elasticsearch Query DSL, ...) can use it; "alias"
 is a Nudgebee short name, and Field shows the provider field it maps to.
-Use --fields-only to list only the names a native query can use.`,
+Use --fields-only to list only the names a native query can use.
+
+Type is the provider's own type when it reports one (Elasticsearch:
+keyword, text, long, ...); an Elasticsearch terms aggregation needs a
+keyword field.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
@@ -95,11 +102,12 @@ Use --fields-only to list only the names a native query can use.`,
 			}
 		}
 
-		fields := []format.TableField{{Header: "Label", Field: "Label"}}
-		if _, hasKinds := onlyProviderFields(labels); hasKinds {
-			fields = append(fields, format.TableField{Header: "Kind", Field: "Kind"}, format.TableField{Header: "Field", Field: "Field"})
+		var table format.TabularData
+		if format.GetFormat().Get() == "json" {
+			table = format.TabularData{Data: labels}
+		} else {
+			table = labelTable(labels)
 		}
-		table := format.TabularData{Data: labels, Fields: fields}
 		emptyMsg := fmt.Sprintf("No log labels found between %s and %s.", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 		if fieldsOnly {
 			emptyMsg = "No provider fields found. The provider may not report which labels are its own fields; run without --fields-only to see all labels."
@@ -121,9 +129,44 @@ func init() {
 // empty means unknown (an older api-server, or a provider that does not say),
 // never "alias".
 type logLabel struct {
-	Label string `json:"label"`
-	Kind  string `json:"kind,omitempty"`
-	Field string `json:"field,omitempty"`
+	Label      string          `json:"label"`
+	Kind       string          `json:"kind,omitempty"`
+	Field      string          `json:"field,omitempty"`
+	DataType   string          `json:"data_type,omitempty"`
+	Attributes json.RawMessage `json:"attributes,omitempty"`
+}
+
+// labelRow is a label as the text table shows it.
+type labelRow struct {
+	Label, Kind, Field, Type string
+}
+
+// labelTable shows Kind and Field when the api-server reports kinds, and Type
+// when any label has one: the provider's own type (attributes.type, e.g. an
+// Elasticsearch keyword vs text), else the normalized data_type.
+func labelTable(labels []logLabel) format.TabularData {
+	rows := make([]labelRow, len(labels))
+	hasType := false
+	for i, l := range labels {
+		var attrs struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(l.Attributes, &attrs)
+		typ := attrs.Type
+		if typ == "" {
+			typ = l.DataType
+		}
+		hasType = hasType || typ != ""
+		rows[i] = labelRow{Label: l.Label, Kind: l.Kind, Field: l.Field, Type: typ}
+	}
+	fields := []format.TableField{{Header: "Label", Field: "Label"}}
+	if _, hasKinds := onlyProviderFields(labels); hasKinds {
+		fields = append(fields, format.TableField{Header: "Kind", Field: "Kind"}, format.TableField{Header: "Field", Field: "Field"})
+	}
+	if hasType {
+		fields = append(fields, format.TableField{Header: "Type", Field: "Type"})
+	}
+	return format.TabularData{Data: rows, Fields: fields}
 }
 
 // onlyProviderFields keeps the kind "field" entries. The api-server already

@@ -24,6 +24,8 @@ const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
       message
       labels
     }
+    query
+    provider
     suggestion
     truncated
     total
@@ -51,12 +53,18 @@ providers ignore them.
 Output:
   text      log lines as a table, then count series if the query returned any
   -o json   the log entries as returned; when the query returned count series
-            (e.g. an Elasticsearch aggregation), {"logs": [...], "series": [...]}
-  -o raw    the whole result, including the provider's own fragments
-            (aggregations_raw, total_raw), unchanged
+            (e.g. an Elasticsearch aggregation), {"logs": [...], "series": [...],
+            "total": N, "total_relation": "eq"|"gte"}
+  -o raw    the whole result, including the executed query, the provider and
+            the provider's own fragments (aggregations_raw, total_raw), unchanged
 
-A warning on stderr says when the result may be cut off, with the total
-match count when the provider reports one.`,
+stderr says when the result may be cut off, how many lines matched when the
+provider reports it (e.g. a counts-only query), and why series may be
+incomplete. Elasticsearch counts past 10,000 only with "track_total_hits": true.
+
+Counts as series (Elasticsearch): zero or more nested terms aggregations,
+optionally ending in one date_histogram. Use real field names from
+"nbctl logs list-labels --fields-only"; terms needs a keyword field.`,
 	Example: `  # Loki
   nbctl logs query --query '{namespace="api"} |= "error"' --start-time 2026-10-01T00:00:00Z
 
@@ -70,8 +78,9 @@ match count when the provider reports one.`,
   nbctl logs query --query-type ppl --query 'source=logs-* | where level="error"'
 
   # Elasticsearch, error lines per pod per hour (counts come back as series)
-  nbctl logs query --index 'logs-*' -o json --query '{"size":0,"query":{"match":{"log":"error"}},
-    "aggs":{"pod":{"terms":{"field":"kubernetes.pod.name"},
+  nbctl logs query -o json > counts.json --query '{"size":0,"track_total_hits":true,
+    "query":{"match":{"log":"error"}},
+    "aggs":{"pod":{"terms":{"field":"kubernetes.pod_name","size":500},
     "aggs":{"hour":{"date_histogram":{"field":"@timestamp","fixed_interval":"1h"}}}}}}'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
@@ -147,6 +156,7 @@ match count when the provider reports one.`,
 			TotalRelation string          `json:"total_relation"`
 			Series        json.RawMessage `json:"series"`
 			SeriesNote    string          `json:"series_note"`
+			Provider      string          `json:"provider"`
 		}
 		if len(respData.LogsList) > 0 {
 			if err := json.Unmarshal(respData.LogsList, &result); err != nil {
@@ -189,10 +199,17 @@ match count when the provider reports one.`,
 		var seriesEntries []json.RawMessage
 		_ = json.Unmarshal(series, &seriesEntries)
 
-		if count == 0 && len(seriesEntries) == 0 {
+		switch {
+		case count == 0 && len(seriesEntries) == 0:
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No logs found between %s and %s.\n", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
-		} else if msg := truncationWarning(result.Truncated, result.Total, result.TotalRelation, count, limit, offset); msg != "" {
-			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), msg)
+		case count <= 0 && result.Total != nil:
+			// A counts-only query returns no lines; the match count lets a script
+			// check its series sums.
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Matched %s lines.%s\n", describeTotal(*result.Total, result.TotalRelation), exactCountHint(result.Provider, result.TotalRelation))
+		default:
+			if msg := truncationWarning(result.Truncated, result.Total, result.TotalRelation, count, limit, offset); msg != "" {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), msg+exactCountHint(result.Provider, result.TotalRelation))
+			}
 		}
 
 		switch {
@@ -204,7 +221,12 @@ match count when the provider reports one.`,
 			if len(seriesEntries) == 0 {
 				return format.GetFormat().PrintRawJSON(raw)
 			}
-			combined, err := json.Marshal(map[string]json.RawMessage{"logs": raw, "series": series})
+			out := map[string]any{"logs": raw, "series": series}
+			if result.Total != nil {
+				out["total"] = *result.Total
+				out["total_relation"] = result.TotalRelation
+			}
+			combined, err := json.Marshal(out)
 			if err != nil {
 				return err
 			}
@@ -251,13 +273,26 @@ func truncationWarning(truncated *bool, total *int64, relation string, count, li
 	}
 	next := fmt.Sprintf("Narrow --start-time/--end-time or the query, or page with --offset %d.", offset+count)
 	if total != nil {
-		of := fmt.Sprintf("%d", *total)
-		if relation == "gte" {
-			of = "at least " + of
-		}
-		return fmt.Sprintf("Returned %d of %s matching lines. %s", count, of, next)
+		return fmt.Sprintf("Returned %d of %s matching lines. %s", count, describeTotal(*total, relation), next)
 	}
 	return fmt.Sprintf("Returned %d lines; results may be cut off. %s", count, next)
+}
+
+// describeTotal renders a match count, "at least N" when it is a lower bound.
+func describeTotal(total int64, relation string) string {
+	if relation == "gte" {
+		return fmt.Sprintf("at least %d", total)
+	}
+	return fmt.Sprintf("%d", total)
+}
+
+// exactCountHint tells how to get an exact count when Elasticsearch reported
+// only a lower bound (it stops counting at 10,000 by default).
+func exactCountHint(provider, relation string) string {
+	if relation == "gte" && provider == "ES" {
+		return ` For an exact count, add "track_total_hits": true to the query body.`
+	}
+	return ""
 }
 
 func orEmptyArray(raw json.RawMessage) json.RawMessage {
