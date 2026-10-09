@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -170,7 +171,11 @@ optionally ending in one date_histogram. Use real field names from
 		// Why counts are partial or missing from series (e.g. a terms grouping
 		// left groups out, or the counts are only in aggregations_raw).
 		if result.SeriesNote != "" {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: %s\n", result.SeriesNote)
+			note := result.SeriesNote
+			if strings.Contains(note, "include_raw") && !rawOutput {
+				note += " (in nbctl: -o raw)"
+			}
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: %s\n", note)
 		}
 
 		raw := orEmptyArray(result.Logs)
@@ -199,8 +204,9 @@ optionally ending in one date_histogram. Use real field names from
 		var seriesEntries []json.RawMessage
 		_ = json.Unmarshal(series, &seriesEntries)
 
+		matched := result.Total != nil && *result.Total > 0
 		switch {
-		case count == 0 && len(seriesEntries) == 0:
+		case count == 0 && len(seriesEntries) == 0 && !matched:
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No logs found between %s and %s.\n", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 		case count <= 0 && result.Total != nil:
 			// A counts-only query returns no lines; the match count lets a script

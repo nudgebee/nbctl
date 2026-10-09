@@ -600,3 +600,27 @@ func TestListLabelsTypesFromAPIServer(t *testing.T) {
 	assert.NotContains(t, out, "Kind")
 	assert.Regexp(t, `kubernetes\.pod_name\s+keyword`, out)
 }
+
+func TestLogsQueryCountsThatDoNotFitSeries(t *testing.T) {
+	// Real shape from dev: a terms aggregation with a cardinality sub-aggregation
+	// matches lines but cannot be flattened into series.
+	data := map[string]any{"logs_list": map[string]any{
+		"logs": []any{}, "provider": "ES", "truncated": false, "total": 10000, "total_relation": "gte",
+		"series_note": "the provider's counts do not fit series (only nested terms groupings optionally ending in one date_histogram do); set include_raw to get them in aggregations_raw",
+	}}
+	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
+	assert.JSONEq(t, `[]`, out)
+	assert.NotContains(t, stderr, "No logs found")
+	assert.Contains(t, stderr, "set include_raw to get them in aggregations_raw (in nbctl: -o raw)")
+	assert.Contains(t, stderr, "Matched at least 10000 lines.")
+
+	// Already -o raw: no pointer back to itself.
+	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "raw")
+	assert.NotContains(t, stderr, "(in nbctl: -o raw)")
+
+	// Matched nothing: still "No logs found".
+	data["logs_list"].(map[string]any)["total"] = 0
+	data["logs_list"].(map[string]any)["total_relation"] = "eq"
+	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
+	assert.Contains(t, stderr, "No logs found")
+}
