@@ -17,6 +17,14 @@ const LogsListLabelValuesQuery = `query FetchLogLabelValues($accountId: String!,
   }
 }`
 
+// LogsListLabelValuesWithIndexQuery is LogsListLabelValuesQuery with an index,
+// for providers that read values from an index (Elasticsearch).
+const LogsListLabelValuesWithIndexQuery = `query FetchLogLabelValues($accountId: String!, $labelName: String!, $query: String!, $index: String!) {
+  logs_list_label_values(request: {account_id: $accountId, label_name: $labelName, request: {index: $index, query: $query}}) {
+    value
+  }
+}`
+
 var logsListLabelValuesCmd = &cobra.Command{
 	Use:   "list-label-values",
 	Short: "List log label values",
@@ -55,6 +63,10 @@ var logsListLabelValuesCmd = &cobra.Command{
 		query := fmt.Sprintf("start=%d&end=%d", startTime.UnixNano(), endTime.UnixNano())
 
 		req := client.NewRequest(LogsListLabelValuesQuery)
+		if index, _ := cmd.Flags().GetString("index"); index != "" {
+			req = client.NewRequest(LogsListLabelValuesWithIndexQuery)
+			req.Var("index", index)
+		}
 
 		req.Var("accountId", accountId)
 		req.Var("labelName", labelName)
@@ -86,6 +98,7 @@ func init() {
 	logsListLabelValuesCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsListLabelValuesCmd.Flags().String("end-time", "", "End time (RFC3339)")
 	logsListLabelValuesCmd.Flags().String("label-name", "", "Label name")
+	logsListLabelValuesCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to read values from (other providers ignore it)")
 	if err := logsListLabelValuesCmd.MarkFlagRequired("label-name"); err != nil {
 		panic(err)
 	}

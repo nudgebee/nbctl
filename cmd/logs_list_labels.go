@@ -17,6 +17,14 @@ const LogsListLabelsQuery = `query FetchLogLabels($accountId: String!, $query: S
   }
 }`
 
+// LogsListLabelsWithIndexQuery is LogsListLabelsQuery with an index, for
+// providers that read labels from an index mapping (Elasticsearch).
+const LogsListLabelsWithIndexQuery = `query FetchLogLabels($accountId: String!, $query: String!, $index: String!) {
+  logs_list_labels(request: {account_id: $accountId, request: {index: $index, query: $query}}) {
+    label
+  }
+}`
+
 var logsListLabelsCmd = &cobra.Command{
 	Use:   "list-labels",
 	Short: "List log labels",
@@ -54,6 +62,10 @@ var logsListLabelsCmd = &cobra.Command{
 		query := fmt.Sprintf("start=%d&end=%d", startTime.UnixNano(), endTime.UnixNano())
 
 		req := client.NewRequest(LogsListLabelsQuery)
+		if index, _ := cmd.Flags().GetString("index"); index != "" {
+			req = client.NewRequest(LogsListLabelsWithIndexQuery)
+			req.Var("index", index)
+		}
 
 		req.Var("accountId", accountId)
 		req.Var("query", query)
@@ -83,4 +95,5 @@ func init() {
 	logsListLabelsCmd.Flags().String("account-id", "", "Account ID")
 	logsListLabelsCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsListLabelsCmd.Flags().String("end-time", "", "End time (RFC3339)")
+	logsListLabelsCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index whose fields to list (other providers ignore it)")
 }

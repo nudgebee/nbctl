@@ -542,6 +542,11 @@ Queries logs from the Nudgebee API based on various filters.
     *   `--limit <int>`: Limits the number of log entries returned. Default is 100.
     *   `--offset <int>`: Specifies an offset for pagination. Default is 0.
     *   `--only-message`: If set, only the log messages are displayed, without timestamp, severity, or labels.
+    *   `--index <name>`: Index to search (Elasticsearch/OpenSearch). Required for in-cluster Elasticsearch, which has no default index; hosted Elasticsearch falls back to the account's default.
+    *   `--query-type <dsl|kql|ppl>`: Query language for Elasticsearch: `dsl` (Query DSL JSON, default), `kql` (hosted Elasticsearch only) or `ppl` (OpenSearch).
+    *   `--param <key=value>` (repeatable): Other provider-specific parameters, sent as strings in the request's nested `request` map (e.g. a CloudWatch log group).
+
+Write `--query` in the provider's own language: LogQL for Loki, Query DSL JSON / KQL / PPL for Elasticsearch, and so on. `logs list-labels` and `logs list-label-values` also take `--index`.
 
 With `-o json`, the backend's log entries are printed unchanged (an array of `{timestamp, severity, message, labels}`). When the result has exactly `--limit` lines, a warning on stderr says it is probably cut off and gives the `--offset` for the next page.
 
@@ -608,6 +613,9 @@ Queries metrics from the Nudgebee API based on a PromQL-like query string and va
     *   `--start-time <RFC3339>`: Filters metrics starting from this time. Defaults to 1 hour ago.
     *   `--end-time <RFC3339>`: Filters metrics up to this time. Defaults to the current time.
     *   `--step <duration>`: Resolution of a range query (e.g. `30s`, `5m`). Default: chosen by the backend.
+    *   `--index <name>`: Index to query (Elasticsearch metrics). Default: the account's metrics index.
+    *   `--query-type <dsl|kql>`: Query language for Elasticsearch metrics. Without it, `--query` must be Nudgebee's where-clause JSON.
+    *   `--param <key=value>` (repeatable): Other provider-specific parameters, sent as strings in the request's nested `request` map.
     *   `--instant`: Run an instant query instead of a range query.
     *   `--chart`: Plot the series in the terminal.
 

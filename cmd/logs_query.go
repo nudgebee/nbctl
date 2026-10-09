@@ -27,6 +27,25 @@ const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
 var logsQueryCmd = &cobra.Command{
 	Use:   "query",
 	Short: "Query logs",
+	Long: `Query logs in the account's log provider.
+
+--query is written in the provider's own language: LogQL for Loki,
+Query DSL JSON, KQL or PPL for Elasticsearch/OpenSearch (pick it with
+--query-type).
+
+--index and --query-type apply to Elasticsearch/OpenSearch only; other
+providers ignore them.`,
+	Example: `  # Loki
+  nbctl logs query --query '{namespace="api"} |= "error"' --start-time 2026-10-01T00:00:00Z
+
+  # Elasticsearch, Query DSL (in-cluster Elasticsearch needs --index)
+  nbctl logs query --index 'logs-*' --query '{"query":{"match":{"level":"error"}}}' -o json > logs.json
+
+  # Elasticsearch, KQL (hosted Elasticsearch)
+  nbctl logs query --index 'logs-*' --query-type kql --query 'level:error and service:api'
+
+  # OpenSearch, PPL
+  nbctl logs query --query-type ppl --query 'source=logs-* | where level="error"'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
@@ -57,6 +76,16 @@ var logsQueryCmd = &cobra.Command{
 			return fmt.Errorf("invalid end-time format: %w", err)
 		}
 
+		index, _ := cmd.Flags().GetString("index")
+		queryType, _ := cmd.Flags().GetString("query-type")
+		if err := validateQueryType(queryType, logQueryTypes); err != nil {
+			return err
+		}
+		params, err := providerParams(cmd, map[string]string{"index": index, "query_type": queryType})
+		if err != nil {
+			return err
+		}
+
 		req := client.NewRequest(LogsQueryQuery)
 
 		requestVars := map[string]any{
@@ -66,6 +95,9 @@ var logsQueryCmd = &cobra.Command{
 			"query":      queryStr,
 			"limit":      limit,
 			"offset":     offset,
+		}
+		if params != nil {
+			requestVars["request"] = params
 		}
 		req.Var("request", requestVars)
 
@@ -145,8 +177,11 @@ func init() {
 	logsQueryCmd.Flags().String("account-id", "", "Account ID")
 	logsQueryCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsQueryCmd.Flags().String("end-time", "", "End time (RFC3339)")
-	logsQueryCmd.Flags().String("query", "", "Log query")
+	logsQueryCmd.Flags().String("query", "", "Log query in the provider's language (LogQL for Loki; DSL, KQL or PPL for Elasticsearch)")
 	logsQueryCmd.Flags().Int("limit", 100, "Limit")
 	logsQueryCmd.Flags().Int("offset", 0, "Offset")
 	logsQueryCmd.Flags().Bool("only-message", false, "Show only log messages")
+	logsQueryCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to search (required for in-cluster Elasticsearch; hosted defaults to the account's log index)")
+	logsQueryCmd.Flags().String("query-type", "", "Elasticsearch/OpenSearch only: query language, dsl (default), kql (hosted Elasticsearch only) or ppl (OpenSearch)")
+	addParamFlag(logsQueryCmd)
 }
