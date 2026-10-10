@@ -67,15 +67,16 @@ func runCapturing(t *testing.T, data any, args ...string) (string, []capturedReq
 //	metrics_list_labels:       account_id, metric
 //	metrics_list_label_values: account_id, label
 //	metrics_list:              account_id, queries{query}, instant, start_time, end_time, step_interval
-//	logs_list_labels:          account_id, request{query}
+//	logs_list_labels:          account_id, request{query}  (as a $request variable)
 //	logs_list_label_values:    account_id, label_name, request{query}
 //	logs_list:                 account_id, query, start_time, end_time, limit, offset
 //
-// plus, only when set: a nested `request` map of provider parameters on
+// plus, only when set: include_raw on logs_list (-o raw), fields_only on
+// logs_list_labels (--fields-only), a nested `request` map of provider parameters on
 // metrics_list (--param, --index → metric_name, --query-type) and logs_list
 // (--param, --index → index, --query-type), and `index` in
-// the nested request of logs_list_labels / logs_list_label_values (--index,
-// through the *WithIndexQuery documents).
+// the nested request of logs_list_labels (--index) and logs_list_label_values
+// (--index, through LogsListLabelValuesWithIndexQuery).
 //
 // Adding or renaming a field here needs the same change in the proxy.
 func TestWorkspaceCommandsGraphQLContract(t *testing.T) {
@@ -136,7 +137,10 @@ func TestWorkspaceCommandsGraphQLContract(t *testing.T) {
 			data:  map[string]any{"logs_list_labels": []any{}},
 			query: LogsListLabelsQuery,
 			wantVars: func(t *testing.T, v map[string]any) {
-				assert.Equal(t, map[string]any{"accountId": "acc-1", "query": "start=1790812800000000000&end=1790816400000000000"}, v)
+				assert.Equal(t, map[string]any{"request": map[string]any{
+					"account_id": "acc-1",
+					"request":    map[string]any{"query": "start=1790812800000000000&end=1790816400000000000"},
+				}}, v)
 			},
 		},
 		{
@@ -321,7 +325,7 @@ func TestLogsQueryWarnsWhenLimitReached(t *testing.T) {
 	data := map[string]any{"logs_list": map[string]any{"logs": []any{entry, entry}}}
 
 	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "x", "--limit", "2", "--offset", "4", "-o", "json")
-	assert.Contains(t, stderr, "Returned 2 lines = --limit; results are probably cut off")
+	assert.Contains(t, stderr, "Returned 2 lines; results may be cut off")
 	assert.Contains(t, stderr, "--offset 6")
 	var parsed []any
 	require.NoError(t, json.Unmarshal([]byte(out), &parsed), "stdout must stay valid JSON")
@@ -375,12 +379,16 @@ func TestProviderParamsContract(t *testing.T) {
 			reqs[0].Variables["request"].(map[string]any)["request"])
 	})
 
-	t.Run("logs list-labels with index", func(t *testing.T) {
+	t.Run("logs list-labels with index and fields-only", func(t *testing.T) {
 		_, reqs := runCapturing(t, map[string]any{"logs_list_labels": []any{}},
-			append([]string{"logs", "list-labels", "--index", "logs-*"}, window...)...)
+			append([]string{"logs", "list-labels", "--index", "logs-*", "--fields-only"}, window...)...)
 		require.Len(t, reqs, 1)
-		assert.Equal(t, LogsListLabelsWithIndexQuery, reqs[0].Query)
-		assert.Equal(t, map[string]any{"accountId": "acc-1", "query": ns, "index": "logs-*"}, reqs[0].Variables)
+		assert.Equal(t, LogsListLabelsQuery, reqs[0].Query)
+		assert.Equal(t, map[string]any{"request": map[string]any{
+			"account_id":  "acc-1",
+			"fields_only": true,
+			"request":     map[string]any{"query": ns, "index": "logs-*"},
+		}}, reqs[0].Variables)
 	})
 
 	t.Run("logs list-label-values with index", func(t *testing.T) {
@@ -413,4 +421,206 @@ func TestProviderParamsErrors(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		})
 	}
+}
+
+func TestLogsQueryLogResults(t *testing.T) {
+	window := []string{"--start-time", "2026-10-01T00:00:00Z", "--end-time", "2026-10-01T01:00:00Z"}
+	entry := map[string]any{"timestamp": "t", "severity": "info", "message": "m", "labels": map[string]any{}}
+	series := []any{map[string]any{"metric": map[string]any{"pod": "api-1"}, "timestamps": []any{1790812800, 1790816400}, "values": []any{3, 5}}}
+
+	t.Run("json with series prints logs and series", func(t *testing.T) {
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "series": series, "truncated": false}} // no total: none in the output
+		out, stderr := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
+		assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"pod":"api-1"},"timestamps":[1790812800,1790816400],"values":[3,5]}]}`, out)
+		assert.NotContains(t, stderr, "No logs found")
+	})
+
+	t.Run("json without series stays an array", func(t *testing.T) {
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{entry}}}
+		out, _ := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
+		assert.JSONEq(t, `[{"timestamp":"t","severity":"info","message":"m","labels":{}}]`, out)
+	})
+
+	t.Run("text prints the series table", func(t *testing.T) {
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "series": series}}
+		out, _ := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x"}, window...)...)
+		assert.Contains(t, out, `{"pod":"api-1"}`)
+		assert.Contains(t, out, "[3,5]")
+	})
+
+	t.Run("series_note goes to stderr", func(t *testing.T) {
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "series": series, "truncated": false, "series_note": "a terms grouping left 3 groups out"}}
+		_, stderr := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
+		assert.Contains(t, stderr, "Note: a terms grouping left 3 groups out")
+	})
+
+	t.Run("raw sets include_raw and prints the whole result", func(t *testing.T) {
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "aggregations_raw": map[string]any{"pod": map[string]any{"buckets": []any{}}}, "total_raw": map[string]any{"value": 7, "relation": "eq"}}}
+		out, reqs := runCapturing(t, data, append([]string{"logs", "query", "--query", "x", "-o", "raw"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, true, reqs[0].Variables["request"].(map[string]any)["include_raw"])
+		assert.JSONEq(t, `{"logs":[],"aggregations_raw":{"pod":{"buckets":[]}},"total_raw":{"value":7,"relation":"eq"}}`, out)
+	})
+
+	t.Run("include_raw is not sent otherwise", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}},
+			append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.NotContains(t, reqs[0].Variables["request"], "include_raw")
+	})
+
+	t.Run("raw is refused by other commands", func(t *testing.T) {
+		resetFlags(t, []string{"metrics", "query"})
+		_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, rootCmd, []string{"metrics", "query", "--query", "up", "-o", "raw"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "-o raw is only supported by: nbctl logs query")
+	})
+}
+
+func TestTruncationWarning(t *testing.T) {
+	yes, no := true, false
+	total := int64(12345)
+	tests := []struct {
+		name      string
+		truncated *bool
+		total     *int64
+		relation  string
+		count     int
+		want      string
+	}{
+		{"truncated without total", &yes, nil, "", 100, "Returned 100 lines; results may be cut off. Narrow --start-time/--end-time or the query, or page with --offset 100."},
+		{"exact total", &yes, &total, "eq", 100, "Returned 100 of 12345 matching lines."},
+		{"lower-bound total", &yes, &total, "gte", 100, "Returned 100 of at least 12345 matching lines."},
+		{"not truncated, even at the limit", &no, nil, "", 100, ""},
+		{"older api-server, at the limit", nil, nil, "", 100, "results may be cut off"},
+		{"older api-server, under the limit", nil, nil, "", 99, ""},
+		{"older api-server, over the limit (Loki metric query points)", nil, nil, "", 1548, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncationWarning(tt.truncated, tt.total, tt.relation, tt.count, 100, 0)
+			if tt.want == "" {
+				assert.Empty(t, got)
+			} else {
+				assert.Contains(t, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestListLabelsKinds(t *testing.T) {
+	labels := []any{
+		map[string]any{"label": "message", "kind": "alias", "field": "log"},
+		map[string]any{"label": "log", "kind": "field"},
+		map[string]any{"label": "kubernetes.pod.name", "kind": "field"},
+	}
+
+	t.Run("text shows kind and field", func(t *testing.T) {
+		out, _ := runCapturingStderr(t, map[string]any{"logs_list_labels": labels}, "logs", "list-labels")
+		assert.Contains(t, out, "Kind")
+		assert.Regexp(t, `message\s+alias\s+log`, out)
+	})
+
+	t.Run("fields-only keeps provider fields even if the api-server ignores the flag", func(t *testing.T) {
+		out, _ := runCapturingStderr(t, map[string]any{"logs_list_labels": labels}, "logs", "list-labels", "--fields-only", "-o", "json")
+		assert.JSONEq(t, `[{"label":"log","kind":"field"},{"label":"kubernetes.pod.name","kind":"field"}]`, out)
+	})
+
+	t.Run("fields-only with no provider fields explains itself", func(t *testing.T) {
+		out, stderr := runCapturingStderr(t, map[string]any{"logs_list_labels": []any{}}, "logs", "list-labels", "--fields-only", "-o", "json")
+		assert.JSONEq(t, `[]`, out)
+		assert.Contains(t, stderr, "No provider fields found")
+	})
+
+	t.Run("a label without kind is unknown, not alias", func(t *testing.T) {
+		mixed := []any{map[string]any{"label": "x"}, map[string]any{"label": "log", "kind": "field"}}
+		out, _ := runCapturingStderr(t, map[string]any{"logs_list_labels": mixed}, "logs", "list-labels", "--fields-only", "-o", "json")
+		assert.JSONEq(t, `[{"label":"log","kind":"field"}]`, out)
+	})
+
+	t.Run("older api-server: no kinds, warn and list all", func(t *testing.T) {
+		old := []any{map[string]any{"label": "message"}, map[string]any{"label": "log"}}
+		out, stderr := runCapturingStderr(t, map[string]any{"logs_list_labels": old}, "logs", "list-labels", "--fields-only")
+		assert.Contains(t, stderr, "does not report label kinds")
+		assert.Contains(t, out, "message")
+		assert.NotContains(t, out, "Kind")
+	})
+}
+
+// Fixtures below are trimmed real responses from the api-server log-results
+// change (nudgebee/nudgebee-enterprise#40699) against dev Elasticsearch.
+
+func TestLogsQueryCountsOnlyFromAPIServer(t *testing.T) {
+	var data any
+	require.NoError(t, json.Unmarshal([]byte(`{"logs_list":{
+		"logs":[],"query":"{\"size\":0}","provider":"ES","truncated":false,"total":88044,"total_relation":"eq",
+		"series":[{"metric":{"kubernetes.pod_name":"services-server-5b7bc76d59-x8lxp"},"timestamps":[1791547200,1791550800,1791554400],"values":[617,1608,1316]}],
+		"series_note":"a terms grouping left some groups out (sum_other_doc_count > 0), so series does not hold every group; raise that terms aggregation's size"}}`), &data))
+
+	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
+	assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"kubernetes.pod_name":"services-server-5b7bc76d59-x8lxp"},"timestamps":[1791547200,1791550800,1791554400],"values":[617,1608,1316]}],"total":88044,"total_relation":"eq"}`, out)
+	assert.Contains(t, stderr, "Matched 88044 lines.")
+	assert.Contains(t, stderr, "Note: a terms grouping left some groups out")
+	assert.NotContains(t, stderr, "No logs found")
+	assert.NotContains(t, stderr, "cut off")
+}
+
+func TestLogsQueryLowerBoundTotalFromAPIServer(t *testing.T) {
+	entry := map[string]any{"timestamp": "2026-10-09T18:08:59.954Z", "severity": "INFO", "message": "m", "labels": map[string]any{}}
+	data := map[string]any{"logs_list": map[string]any{
+		"logs": []any{entry, entry}, "provider": "ES", "truncated": true, "total": 10000, "total_relation": "gte",
+	}}
+	_, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "--limit", "2", "-o", "json")
+	assert.Contains(t, stderr, "Returned 2 of at least 10000 matching lines.")
+	assert.Contains(t, stderr, `add "track_total_hits": true`)
+
+	// Only Elasticsearch gets the track_total_hits hint.
+	data["logs_list"].(map[string]any)["provider"] = "LOKI"
+	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "--limit", "2", "-o", "json")
+	assert.NotContains(t, stderr, "track_total_hits")
+}
+
+func TestListLabelsTypesFromAPIServer(t *testing.T) {
+	var data any
+	require.NoError(t, json.Unmarshal([]byte(`{"logs_list_labels":[
+		{"label":"pod","attributes":{"type":"string"},"data_type":"string","kind":"alias","field":"kubernetes.pod_name"},
+		{"label":"level","attributes":{"type":"string"},"data_type":"string","kind":"alias"},
+		{"label":"kubernetes.pod_name","attributes":{"type":"keyword"},"data_type":"string","kind":"field"}]}`), &data))
+
+	out, _ := runCapturingStderr(t, data, "logs", "list-labels")
+	assert.Regexp(t, `pod\s+alias\s+kubernetes\.pod_name\s+string`, out)
+	assert.Regexp(t, `kubernetes\.pod_name\s+field\s+keyword`, out)
+
+	out, _ = runCapturingStderr(t, data, "logs", "list-labels", "--fields-only", "-o", "json")
+	assert.JSONEq(t, `[{"label":"kubernetes.pod_name","attributes":{"type":"keyword"},"data_type":"string","kind":"field"}]`, out)
+
+	// --fields-only text: every row is a field, so no Kind/Field columns.
+	out, _ = runCapturingStderr(t, data, "logs", "list-labels", "--fields-only")
+	assert.Regexp(t, `Label\s+Type`, out)
+	assert.NotContains(t, out, "Kind")
+	assert.Regexp(t, `kubernetes\.pod_name\s+keyword`, out)
+}
+
+func TestLogsQueryCountsThatDoNotFitSeries(t *testing.T) {
+	// Real shape from dev: a terms aggregation with a cardinality sub-aggregation
+	// matches lines but cannot be flattened into series.
+	data := map[string]any{"logs_list": map[string]any{
+		"logs": []any{}, "provider": "ES", "truncated": false, "total": 10000, "total_relation": "gte",
+		"series_note": "the provider's counts do not fit series (only nested terms groupings optionally ending in one date_histogram do); set include_raw to get them in aggregations_raw",
+	}}
+	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
+	assert.JSONEq(t, `[]`, out)
+	assert.NotContains(t, stderr, "No logs found")
+	assert.Contains(t, stderr, "set include_raw to get them in aggregations_raw (in nbctl: -o raw)")
+	assert.Contains(t, stderr, "Matched at least 10000 lines.")
+
+	// Already -o raw: no pointer back to itself.
+	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "raw")
+	assert.NotContains(t, stderr, "(in nbctl: -o raw)")
+
+	// Matched nothing: still "No logs found".
+	data["logs_list"].(map[string]any)["total"] = 0
+	data["logs_list"].(map[string]any)["total_relation"] = "eq"
+	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
+	assert.Contains(t, stderr, "No logs found")
 }
