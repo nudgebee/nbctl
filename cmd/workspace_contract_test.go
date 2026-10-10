@@ -328,7 +328,7 @@ func TestLogsQueryWarnsWhenLimitReached(t *testing.T) {
 	data := map[string]any{"logs_list": map[string]any{"logs": []any{entry, entry}}}
 
 	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "x", "--limit", "2", "--offset", "4", "-o", "json")
-	assert.Contains(t, stderr, "Returned 2 lines; results may be cut off")
+	assert.Contains(t, stderr, "Returned 2 lines = --limit 2; results may be cut off")
 	assert.Contains(t, stderr, "--offset 6")
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &parsed), "stdout must stay valid JSON")
@@ -489,7 +489,7 @@ func TestTruncationWarning(t *testing.T) {
 		count     int
 		want      string
 	}{
-		{"truncated without total", &yes, nil, "", 100, "Returned 100 lines; results may be cut off. Narrow --start-time/--end-time or the query, or page with --offset 100."},
+		{"truncated without total", &yes, nil, "", 100, "Returned 100 lines = --limit 100; results may be cut off. Narrow --start-time/--end-time or the query, or page with --offset 100."},
 		{"exact total", &yes, &total, "eq", 100, "Returned 100 of 12345 matching lines."},
 		{"lower-bound total", &yes, &total, "gte", 100, "Returned 100 of at least 12345 matching lines."},
 		{"not truncated, even at the limit", &no, nil, "", 100, ""},
@@ -688,5 +688,21 @@ func TestQueryTypeFlagRemoved(t *testing.T) {
 		_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, rootCmd, args)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown flag: --query-type")
+	}
+}
+
+func TestLogsQueryAlwaysSendsAPositiveLimit(t *testing.T) {
+	// Default: 1000, sent explicitly.
+	_, reqs := runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}}, "logs", "query", "--query", "x")
+	require.Len(t, reqs, 1)
+	assert.Equal(t, float64(1000), reqs[0].Variables["request"].(map[string]any)["limit"])
+
+	// 0 or negative would leave the line count to each provider's default.
+	for _, bad := range []string{"0", "-5"} {
+		args := []string{"logs", "query", "--query", "x", "--limit", bad}
+		resetFlags(t, args)
+		_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, rootCmd, args)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must be at least 1")
 	}
 }

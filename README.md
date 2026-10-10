@@ -539,7 +539,7 @@ Queries logs from the Nudgebee API based on various filters.
     *   `--start-time <RFC3339>`: Filters logs starting from this time. Defaults to 1 hour ago.
     *   `--end-time <RFC3339>`: Filters logs up to this time. Defaults to the current time.
     *   `--query <string>`: The log query string (e.g., `level=error`, `app=my-app`).
-    *   `--limit <int>`: Limits the number of log entries returned. Default is 100.
+    *   `--limit <int>`: Maximum log entries to return (at least 1). Default is 1000. nbctl always sends it, so the result can say whether it was cut off.
     *   `--offset <int>`: Specifies an offset for pagination. Default is 0.
     *   `--only-message`: If set, only the log messages are displayed, without timestamp, severity, or labels.
     *   `--index <name>`: Index to search (Elasticsearch/OpenSearch). Required for in-cluster Elasticsearch, which has no default index; hosted Elasticsearch falls back to the account's default.

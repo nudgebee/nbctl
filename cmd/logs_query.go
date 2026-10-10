@@ -39,6 +39,10 @@ const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
   }
 }`
 
+// defaultLogsLimit matches llm-server's logs default, so nbctl and Nubi's
+// tools page the same way.
+const defaultLogsLimit = 1000
+
 var logsQueryCmd = &cobra.Command{
 	Use:         "query",
 	Short:       "Query logs",
@@ -89,6 +93,12 @@ optionally ending in one date_histogram. Use real field names from
 		endTimeStr, _ := cmd.Flags().GetString("end-time")
 		queryStr, _ := cmd.Flags().GetString("query")
 		limit, _ := cmd.Flags().GetInt("limit")
+		// Always send a positive limit: with none (or 0) the api-server falls back
+		// to each provider's own default (10 to 5,000 lines), and a cut-off
+		// result could not be told from a complete one.
+		if limit < 1 {
+			return fmt.Errorf("invalid --limit %d: must be at least 1", limit)
+		}
 		offset, _ := cmd.Flags().GetInt("offset")
 
 		if startTimeStr == "" {
@@ -283,7 +293,7 @@ func truncationWarning(truncated *bool, total *int64, relation string, count, li
 	if total != nil {
 		return fmt.Sprintf("Returned %d of %s matching lines. %s", count, describeTotal(*total, relation), next)
 	}
-	return fmt.Sprintf("Returned %d lines; results may be cut off. %s", count, next)
+	return fmt.Sprintf("Returned %d lines = --limit %d; results may be cut off. %s", count, limit, next)
 }
 
 // describeTotal renders a match count, "at least N" when it is a lower bound.
@@ -348,7 +358,7 @@ func init() {
 	logsQueryCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsQueryCmd.Flags().String("end-time", "", "End time (RFC3339)")
 	logsQueryCmd.Flags().String("query", "", "Log query in the provider's language (LogQL for Loki; DSL, KQL or PPL for Elasticsearch)")
-	logsQueryCmd.Flags().Int("limit", 100, "Limit")
+	logsQueryCmd.Flags().Int("limit", defaultLogsLimit, "Maximum log lines to return")
 	logsQueryCmd.Flags().Int("offset", 0, "Offset")
 	logsQueryCmd.Flags().Bool("only-message", false, "Show only log messages")
 	logsQueryCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to search (required for in-cluster Elasticsearch; hosted defaults to the account's log index)")
