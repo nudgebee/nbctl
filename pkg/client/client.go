@@ -325,7 +325,7 @@ func serverErrorMessage(body []byte) string {
 // "not_authenticated"); the API-key hint is more useful then.
 func isBareUnauthorized(msg string) bool {
 	m := strings.ToLower(strings.Trim(strings.TrimSpace(msg), ".!"))
-	return m == "401 unauthorized" || !strings.ContainsAny(m, " \t")
+	return m == "401 unauthorized" || len(strings.Fields(m)) <= 1
 }
 
 // unauthorizedError explains a 401 from the gateway. The most likely causes are
