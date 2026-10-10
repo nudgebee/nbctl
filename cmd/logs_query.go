@@ -46,24 +46,20 @@ var logsQueryCmd = &cobra.Command{
 	Long: `Query logs in the account's log provider.
 
 --query is written in the provider's own language: LogQL for Loki,
-Query DSL JSON, KQL or PPL for Elasticsearch/OpenSearch (pick it with
---query-type).
+Elasticsearch Query DSL JSON, and so on.
 
---index and --query-type apply to Elasticsearch/OpenSearch only; other
-providers ignore them.
+--index applies to Elasticsearch/OpenSearch only; other providers ignore it.
 
 Output:
   text      log lines as a table, then count series if the query returned any
-  -o json   the log entries as returned; when the query returned count series
-            (e.g. an Elasticsearch aggregation), or with --envelope, an object:
-            {"logs": [...], "series": [...], "partial": bool, "truncated": bool,
+  -o json   {"logs": [...], "series": [...], "truncated": bool, "partial": bool,
              "total": N, "total_relation": "eq"|"gte", "series_note": "...",
-             "suggestion": "..."} (keys the api-server did not send are left out)
+             "suggestion": "..."}; keys the api-server did not send are left
+            out. Check truncated and partial before trusting the result.
   -o raw    the whole result, including the executed query, the provider and
             the provider's own fragments (aggregations_raw, total_raw), unchanged
 
-Scripts that drop stderr should use --envelope and check truncated/partial.
-stderr says when the result may be cut off, how many lines matched when the
+stderr also says when the result may be cut off, how many lines matched when the
 provider reports it (e.g. a counts-only query), and why series may be
 incomplete. Elasticsearch counts past 10,000 only with "track_total_hits": true.
 
@@ -75,12 +71,6 @@ optionally ending in one date_histogram. Use real field names from
 
   # Elasticsearch, Query DSL (in-cluster Elasticsearch needs --index)
   nbctl logs query --index 'logs-*' --query '{"query":{"match":{"level":"error"}}}' -o json > logs.json
-
-  # Elasticsearch, KQL (hosted Elasticsearch)
-  nbctl logs query --index 'logs-*' --query-type kql --query 'level:error and service:api'
-
-  # OpenSearch, PPL
-  nbctl logs query --query-type ppl --query 'source=logs-* | where level="error"'
 
   # Elasticsearch, error lines per pod per hour (counts come back as series)
   nbctl logs query -o json > counts.json --query '{"size":0,"track_total_hits":true,
@@ -118,11 +108,7 @@ optionally ending in one date_histogram. Use real field names from
 		}
 
 		index, _ := cmd.Flags().GetString("index")
-		queryType, _ := cmd.Flags().GetString("query-type")
-		if err := validateQueryType(queryType, logQueryTypes); err != nil {
-			return err
-		}
-		params, err := providerParams(cmd, map[string]string{"index": index, "query_type": queryType})
+		params, err := providerParams(cmd, map[string]string{"index": index})
 		if err != nil {
 			return err
 		}
@@ -231,13 +217,9 @@ optionally ending in one date_histogram. Use real field names from
 			// The whole result as returned, provider fragments included.
 			return format.GetFormat().PrintRawJSON(orEmptyObject(respData.LogsList))
 		case !textOutput:
-			// The log entries as returned. With count series, or --envelope, an
-			// object that also carries whether the result is complete, so a
-			// script that drops stderr still sees it.
-			envelope, _ := cmd.Flags().GetBool("envelope")
-			if len(seriesEntries) == 0 && !envelope {
-				return format.GetFormat().PrintRawJSON(raw)
-			}
+			// One shape for every result: the entries and counts as returned,
+			// plus whether the result is complete, so a script that drops stderr
+			// still sees it.
 			out := map[string]any{"logs": raw, "series": series, "partial": result.Partial}
 			if result.Truncated != nil {
 				out["truncated"] = *result.Truncated
@@ -370,7 +352,5 @@ func init() {
 	logsQueryCmd.Flags().Int("offset", 0, "Offset")
 	logsQueryCmd.Flags().Bool("only-message", false, "Show only log messages")
 	logsQueryCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to search (required for in-cluster Elasticsearch; hosted defaults to the account's log index)")
-	logsQueryCmd.Flags().String("query-type", "", "Elasticsearch/OpenSearch only: query language, dsl (default), kql (hosted Elasticsearch only) or ppl (OpenSearch)")
 	addParamFlag(logsQueryCmd)
-	logsQueryCmd.Flags().Bool("envelope", false, "With -o json, always print an object with logs, series and whether the result is complete (truncated, total, partial, series_note), not the bare log array")
 }

@@ -73,17 +73,15 @@ var metricsQueryCmd = &cobra.Command{
 	Long: `Query metrics in the account's metrics provider.
 
 --query is written in the provider's own language: PromQL for Prometheus
-(and Prometheus-compatible stores), Query DSL JSON or KQL for
-Elasticsearch (pick it with --query-type).
+(and Prometheus-compatible stores), Query DSL JSON for Elasticsearch.
 
---index and --query-type apply to Elasticsearch only; other providers
-ignore them.`,
+--index applies to Elasticsearch only; other providers ignore it.`,
 	Example: `  # Prometheus, 5-minute resolution over a week, saved for a script
   nbctl metrics query --query 'sum(rate(container_cpu_usage_seconds_total[5m])) by (pod)' \
     --start-time 2026-10-01T00:00:00Z --end-time 2026-10-08T00:00:00Z --step 5m -o json > cpu.json
 
   # Elasticsearch, Query DSL
-  nbctl metrics query --index 'metrics-*' --query-type dsl --query '{"query":{"term":{"service":"api"}}}'`,
+  nbctl metrics query --index 'metrics-*' --param query_type=dsl --query '{"query":{"term":{"service":"api"}}}'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
@@ -135,13 +133,9 @@ ignore them.`,
 			"end_time":   endTime.UnixMilli(),
 		}
 		index, _ := cmd.Flags().GetString("index")
-		queryType, _ := cmd.Flags().GetString("query-type")
-		if err := validateQueryType(queryType, metricQueryTypes); err != nil {
-			return err
-		}
 		// Elasticsearch metrics read the index from metric_name (metric_index is
 		// only read by the utilisation action).
-		params, err := providerParams(cmd, map[string]string{"metric_name": index, "query_type": queryType})
+		params, err := providerParams(cmd, map[string]string{"metric_name": index})
 		if err != nil {
 			return err
 		}
@@ -266,7 +260,6 @@ func init() {
 	metricsQueryCmd.Flags().Bool("instant", false, "Instant query")
 	metricsQueryCmd.Flags().Bool("chart", false, "Display data as a chart")
 	metricsQueryCmd.Flags().String("index", "", "Elasticsearch only: metrics index to query (default: the account's metrics index)")
-	metricsQueryCmd.Flags().String("query-type", "", "Elasticsearch only: query language, dsl or kql (without it, --query must be Nudgebee where-clause JSON)")
 	addParamFlag(metricsQueryCmd)
 	metricsQueryCmd.Flags().Duration("step", 0, "Resolution of a range query, e.g. 30s, 5m (default: chosen by the backend from the window)")
 }
