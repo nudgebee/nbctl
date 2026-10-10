@@ -33,6 +33,7 @@ const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
     total_relation
     series
     series_note
+    partial
     aggregations_raw
     total_raw
   }
@@ -54,11 +55,14 @@ providers ignore them.
 Output:
   text      log lines as a table, then count series if the query returned any
   -o json   the log entries as returned; when the query returned count series
-            (e.g. an Elasticsearch aggregation), {"logs": [...], "series": [...],
-            "total": N, "total_relation": "eq"|"gte"}
+            (e.g. an Elasticsearch aggregation), or with --envelope, an object:
+            {"logs": [...], "series": [...], "partial": bool, "truncated": bool,
+             "total": N, "total_relation": "eq"|"gte", "series_note": "...",
+             "suggestion": "..."} (keys the api-server did not send are left out)
   -o raw    the whole result, including the executed query, the provider and
             the provider's own fragments (aggregations_raw, total_raw), unchanged
 
+Scripts that drop stderr should use --envelope and check truncated/partial.
 stderr says when the result may be cut off, how many lines matched when the
 provider reports it (e.g. a counts-only query), and why series may be
 incomplete. Elasticsearch counts past 10,000 only with "track_total_hits": true.
@@ -158,6 +162,7 @@ optionally ending in one date_histogram. Use real field names from
 			Series        json.RawMessage `json:"series"`
 			SeriesNote    string          `json:"series_note"`
 			Provider      string          `json:"provider"`
+			Partial       bool            `json:"partial"`
 		}
 		if len(respData.LogsList) > 0 {
 			if err := json.Unmarshal(respData.LogsList, &result); err != nil {
@@ -167,6 +172,9 @@ optionally ending in one date_histogram. Use real field names from
 
 		if result.Suggestion != "" {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Suggestion: %s\n", result.Suggestion)
+		}
+		if result.Partial {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Warning: partial result: the provider did not finish (e.g. a time budget ran out), so lines or counts are missing. Narrow --start-time/--end-time or the query.")
 		}
 		// Why counts are partial or missing from series (e.g. a terms grouping
 		// left groups out, or the counts are only in aggregations_raw).
@@ -223,14 +231,26 @@ optionally ending in one date_histogram. Use real field names from
 			// The whole result as returned, provider fragments included.
 			return format.GetFormat().PrintRawJSON(orEmptyObject(respData.LogsList))
 		case !textOutput:
-			// The log entries as returned; with count series, both, so neither is lost.
-			if len(seriesEntries) == 0 {
+			// The log entries as returned. With count series, or --envelope, an
+			// object that also carries whether the result is complete, so a
+			// script that drops stderr still sees it.
+			envelope, _ := cmd.Flags().GetBool("envelope")
+			if len(seriesEntries) == 0 && !envelope {
 				return format.GetFormat().PrintRawJSON(raw)
 			}
-			out := map[string]any{"logs": raw, "series": series}
+			out := map[string]any{"logs": raw, "series": series, "partial": result.Partial}
+			if result.Truncated != nil {
+				out["truncated"] = *result.Truncated
+			}
 			if result.Total != nil {
 				out["total"] = *result.Total
 				out["total_relation"] = result.TotalRelation
+			}
+			if result.SeriesNote != "" {
+				out["series_note"] = result.SeriesNote
+			}
+			if result.Suggestion != "" {
+				out["suggestion"] = result.Suggestion
 			}
 			combined, err := json.Marshal(out)
 			if err != nil {
@@ -352,4 +372,5 @@ func init() {
 	logsQueryCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to search (required for in-cluster Elasticsearch; hosted defaults to the account's log index)")
 	logsQueryCmd.Flags().String("query-type", "", "Elasticsearch/OpenSearch only: query language, dsl (default), kql (hosted Elasticsearch only) or ppl (OpenSearch)")
 	addParamFlag(logsQueryCmd)
+	logsQueryCmd.Flags().Bool("envelope", false, "With -o json, always print an object with logs, series and whether the result is complete (truncated, total, partial, series_note), not the bare log array")
 }

@@ -555,6 +555,7 @@ Output:
 *   text: the log lines as a table, then any count series.
 *   `-o json`: the backend's log entries, unchanged (an array of `{timestamp, severity, message, labels}`). When the query returned count series (e.g. an Elasticsearch aggregation), `{"logs": [...], "series": [...]}` instead; each series is `{metric, timestamps, values}` like `metrics query`.
 *   `-o raw`: the whole result as returned, including the provider's own fragments (`aggregations_raw`, `total_raw`). Only `logs query` supports it.
+*   `--envelope` (with `-o json`): always an object `{logs, series, truncated, total, total_relation, partial, series_note, suggestion}`, so a script that drops stderr still sees whether the result is complete. The series object (above) carries the same keys.
 
 When the result may be cut off, a warning on stderr says so and gives the `--offset` for the next page; when the provider reports a match count, it shows `Returned N of M matching lines` (`at least M` when the count is a lower bound).
 
@@ -627,7 +628,7 @@ Queries metrics from the Nudgebee API based on a PromQL-like query string and va
     *   `--instant`: Run an instant query instead of a range query.
     *   `--chart`: Plot the series in the terminal.
 
-With `-o json`, the backend's `results` are printed unchanged (an array of `{query_key, query, payload: [{metric, timestamps, values}]}`), so large results can be redirected to a file and read by scripts. Failed queries and backend notes are reported on stderr.
+If a query fails, the warning goes to stderr, the output is still printed, and nbctl exits non-zero. With `-o json`, the backend's `results` are printed unchanged (an array of `{query_key, query, payload: [{metric, timestamps, values}]}`), so large results can be redirected to a file and read by scripts. Failed queries and backend notes are reported on stderr.
 
 Example:
 

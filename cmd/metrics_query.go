@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/guptarohit/asciigraph"
@@ -173,11 +174,12 @@ ignore them.`,
 		if decodeErr != nil && !jsonOutput {
 			return fmt.Errorf("failed to decode metrics results: %w", decodeErr)
 		}
-		series, failed := 0, false
+		series, failed, failedKeys := 0, false, []string{}
 		for _, r := range results {
 			series += len(r.Payload)
 			if r.Error != nil && *r.Error != "" {
 				failed = true
+				failedKeys = append(failedKeys, r.QueryKey)
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: query %q failed: %s\n", r.QueryKey, *r.Error)
 			} else if r.Note != "" {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: %s\n", r.Note)
@@ -194,12 +196,24 @@ ignore them.`,
 		}
 
 		// JSON output is the backend's results, unchanged, so scripts can use it as is.
+		// A failed query is an error (non-zero exit) after its output is printed,
+		// so a script cannot mistake it for "no data".
+		queryErr := func(printErr error) error {
+			if printErr != nil {
+				return printErr
+			}
+			if failed {
+				return fmt.Errorf("metrics query failed: %s (see the warning above)", strings.Join(failedKeys, ", "))
+			}
+			return nil
+		}
+
 		if jsonOutput {
-			return format.GetFormat().PrintRawJSON(raw)
+			return queryErr(format.GetFormat().PrintRawJSON(raw))
 		}
 
 		if len(results) == 0 {
-			return nil
+			return queryErr(nil)
 		}
 
 		var displayPayload []DisplayMetricsResult
@@ -239,7 +253,7 @@ ignore them.`,
 		} else {
 			format.GetFormat().Print(table)
 		}
-		return nil
+		return queryErr(nil)
 	},
 }
 

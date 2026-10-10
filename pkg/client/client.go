@@ -288,6 +288,46 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.wrapped.RoundTrip(req2)
 }
 
+// serverErrorMessage extracts a human-readable message from an error body:
+// GraphQL {"errors":[{"message"}]}, {"message"} or {"error"}. It returns ""
+// when the body has none.
+func serverErrorMessage(body []byte) string {
+	var parsed struct {
+		Message string `json:"message"`
+		Error   any    `json:"error"`
+		Errors  []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if json.Unmarshal(body, &parsed) != nil {
+		return ""
+	}
+	var msgs []string
+	for _, e := range parsed.Errors {
+		if m := strings.TrimSpace(e.Message); m != "" {
+			msgs = append(msgs, m)
+		}
+	}
+	if len(msgs) > 0 {
+		return strings.Join(msgs, "; ")
+	}
+	if m := strings.TrimSpace(parsed.Message); m != "" {
+		return m
+	}
+	if m, ok := parsed.Error.(string); ok {
+		return strings.TrimSpace(m)
+	}
+	return ""
+}
+
+// isBareUnauthorized reports a message that only restates the status or is a
+// one-word code (the app gateway answers a bad API key with "Unauthorized" or
+// "not_authenticated"); the API-key hint is more useful then.
+func isBareUnauthorized(msg string) bool {
+	m := strings.ToLower(strings.Trim(strings.TrimSpace(msg), ".!"))
+	return m == "401 unauthorized" || !strings.ContainsAny(m, " \t")
+}
+
 // unauthorizedError explains a 401 from the gateway. The most likely causes are
 // a deleted/expired token, or a token created before direct-token auth existed
 // (those must be recreated).
@@ -380,6 +420,12 @@ func (c *Client) Run(ctx context.Context, req *Request, resp any) error {
 	}()
 
 	if httpResp.StatusCode == http.StatusUnauthorized {
+		body, _ := io.ReadAll(io.LimitReader(httpResp.Body, 64<<10))
+		if msg := serverErrorMessage(body); msg != "" && !isBareUnauthorized(msg) {
+			// The server says why (e.g. an expired workspace token); the generic
+			// API-key advice would point the wrong way.
+			return fmt.Errorf("authentication failed (401 Unauthorized): %s", msg)
+		}
 		return unauthorizedError(c.apiKey)
 	}
 
