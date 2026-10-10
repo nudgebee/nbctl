@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/guptarohit/asciigraph"
@@ -72,17 +73,15 @@ var metricsQueryCmd = &cobra.Command{
 	Long: `Query metrics in the account's metrics provider.
 
 --query is written in the provider's own language: PromQL for Prometheus
-(and Prometheus-compatible stores), Query DSL JSON or KQL for
-Elasticsearch (pick it with --query-type).
+(and Prometheus-compatible stores), Query DSL JSON for Elasticsearch.
 
---index and --query-type apply to Elasticsearch only; other providers
-ignore them.`,
+--index applies to Elasticsearch only; other providers ignore it.`,
 	Example: `  # Prometheus, 5-minute resolution over a week, saved for a script
   nbctl metrics query --query 'sum(rate(container_cpu_usage_seconds_total[5m])) by (pod)' \
     --start-time 2026-10-01T00:00:00Z --end-time 2026-10-08T00:00:00Z --step 5m -o json > cpu.json
 
   # Elasticsearch, Query DSL
-  nbctl metrics query --index 'metrics-*' --query-type dsl --query '{"query":{"term":{"service":"api"}}}'`,
+  nbctl metrics query --index 'metrics-*' --param query_type=dsl --query '{"query":{"term":{"service":"api"}}}'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		graphqlClient := client.NewClient()
 
@@ -134,13 +133,9 @@ ignore them.`,
 			"end_time":   endTime.UnixMilli(),
 		}
 		index, _ := cmd.Flags().GetString("index")
-		queryType, _ := cmd.Flags().GetString("query-type")
-		if err := validateQueryType(queryType, metricQueryTypes); err != nil {
-			return err
-		}
 		// Elasticsearch metrics read the index from metric_name (metric_index is
 		// only read by the utilisation action).
-		params, err := providerParams(cmd, map[string]string{"metric_name": index, "query_type": queryType})
+		params, err := providerParams(cmd, map[string]string{"metric_name": index})
 		if err != nil {
 			return err
 		}
@@ -173,11 +168,12 @@ ignore them.`,
 		if decodeErr != nil && !jsonOutput {
 			return fmt.Errorf("failed to decode metrics results: %w", decodeErr)
 		}
-		series, failed := 0, false
+		series, failed, failedKeys := 0, false, []string{}
 		for _, r := range results {
 			series += len(r.Payload)
 			if r.Error != nil && *r.Error != "" {
 				failed = true
+				failedKeys = append(failedKeys, r.QueryKey)
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: query %q failed: %s\n", r.QueryKey, *r.Error)
 			} else if r.Note != "" {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Note: %s\n", r.Note)
@@ -194,12 +190,24 @@ ignore them.`,
 		}
 
 		// JSON output is the backend's results, unchanged, so scripts can use it as is.
+		// A failed query is an error (non-zero exit) after its output is printed,
+		// so a script cannot mistake it for "no data".
+		queryErr := func(printErr error) error {
+			if printErr != nil {
+				return printErr
+			}
+			if failed {
+				return fmt.Errorf("metrics query failed: %s (see the warning above)", strings.Join(failedKeys, ", "))
+			}
+			return nil
+		}
+
 		if jsonOutput {
-			return format.GetFormat().PrintRawJSON(raw)
+			return queryErr(format.GetFormat().PrintRawJSON(raw))
 		}
 
 		if len(results) == 0 {
-			return nil
+			return queryErr(nil)
 		}
 
 		var displayPayload []DisplayMetricsResult
@@ -239,7 +247,7 @@ ignore them.`,
 		} else {
 			format.GetFormat().Print(table)
 		}
-		return nil
+		return queryErr(nil)
 	},
 }
 
@@ -252,7 +260,6 @@ func init() {
 	metricsQueryCmd.Flags().Bool("instant", false, "Instant query")
 	metricsQueryCmd.Flags().Bool("chart", false, "Display data as a chart")
 	metricsQueryCmd.Flags().String("index", "", "Elasticsearch only: metrics index to query (default: the account's metrics index)")
-	metricsQueryCmd.Flags().String("query-type", "", "Elasticsearch only: query language, dsl or kql (without it, --query must be Nudgebee where-clause JSON)")
 	addParamFlag(metricsQueryCmd)
 	metricsQueryCmd.Flags().Duration("step", 0, "Resolution of a range query, e.g. 30s, 5m (default: chosen by the backend from the window)")
 }

@@ -33,10 +33,15 @@ const LogsQueryQuery = `query FetchLogs($request: FetchLogRequest!) {
     total_relation
     series
     series_note
+    partial
     aggregations_raw
     total_raw
   }
 }`
+
+// defaultLogsLimit matches llm-server's logs default, so nbctl and Nubi's
+// tools page the same way.
+const defaultLogsLimit = 1000
 
 var logsQueryCmd = &cobra.Command{
 	Use:         "query",
@@ -45,21 +50,20 @@ var logsQueryCmd = &cobra.Command{
 	Long: `Query logs in the account's log provider.
 
 --query is written in the provider's own language: LogQL for Loki,
-Query DSL JSON, KQL or PPL for Elasticsearch/OpenSearch (pick it with
---query-type).
+Elasticsearch Query DSL JSON, and so on.
 
---index and --query-type apply to Elasticsearch/OpenSearch only; other
-providers ignore them.
+--index applies to Elasticsearch/OpenSearch only; other providers ignore it.
 
 Output:
   text      log lines as a table, then count series if the query returned any
-  -o json   the log entries as returned; when the query returned count series
-            (e.g. an Elasticsearch aggregation), {"logs": [...], "series": [...],
-            "total": N, "total_relation": "eq"|"gte"}
+  -o json   {"logs": [...], "series": [...], "truncated": bool, "partial": bool,
+             "total": N, "total_relation": "eq"|"gte", "series_note": "...",
+             "suggestion": "..."}; keys the api-server did not send are left
+            out. Check truncated and partial before trusting the result.
   -o raw    the whole result, including the executed query, the provider and
             the provider's own fragments (aggregations_raw, total_raw), unchanged
 
-stderr says when the result may be cut off, how many lines matched when the
+stderr also says when the result may be cut off, how many lines matched when the
 provider reports it (e.g. a counts-only query), and why series may be
 incomplete. Elasticsearch counts past 10,000 only with "track_total_hits": true.
 
@@ -71,12 +75,6 @@ optionally ending in one date_histogram. Use real field names from
 
   # Elasticsearch, Query DSL (in-cluster Elasticsearch needs --index)
   nbctl logs query --index 'logs-*' --query '{"query":{"match":{"level":"error"}}}' -o json > logs.json
-
-  # Elasticsearch, KQL (hosted Elasticsearch)
-  nbctl logs query --index 'logs-*' --query-type kql --query 'level:error and service:api'
-
-  # OpenSearch, PPL
-  nbctl logs query --query-type ppl --query 'source=logs-* | where level="error"'
 
   # Elasticsearch, error lines per pod per hour (counts come back as series)
   nbctl logs query -o json > counts.json --query '{"size":0,"track_total_hits":true,
@@ -95,6 +93,12 @@ optionally ending in one date_histogram. Use real field names from
 		endTimeStr, _ := cmd.Flags().GetString("end-time")
 		queryStr, _ := cmd.Flags().GetString("query")
 		limit, _ := cmd.Flags().GetInt("limit")
+		// Always send a positive limit: with none (or 0) the api-server falls back
+		// to each provider's own default (10 to 5,000 lines), and a cut-off
+		// result could not be told from a complete one.
+		if limit < 1 {
+			return fmt.Errorf("invalid --limit %d: must be at least 1", limit)
+		}
 		offset, _ := cmd.Flags().GetInt("offset")
 
 		if startTimeStr == "" {
@@ -114,11 +118,7 @@ optionally ending in one date_histogram. Use real field names from
 		}
 
 		index, _ := cmd.Flags().GetString("index")
-		queryType, _ := cmd.Flags().GetString("query-type")
-		if err := validateQueryType(queryType, logQueryTypes); err != nil {
-			return err
-		}
-		params, err := providerParams(cmd, map[string]string{"index": index, "query_type": queryType})
+		params, err := providerParams(cmd, map[string]string{"index": index})
 		if err != nil {
 			return err
 		}
@@ -158,6 +158,7 @@ optionally ending in one date_histogram. Use real field names from
 			Series        json.RawMessage `json:"series"`
 			SeriesNote    string          `json:"series_note"`
 			Provider      string          `json:"provider"`
+			Partial       bool            `json:"partial"`
 		}
 		if len(respData.LogsList) > 0 {
 			if err := json.Unmarshal(respData.LogsList, &result); err != nil {
@@ -167,6 +168,9 @@ optionally ending in one date_histogram. Use real field names from
 
 		if result.Suggestion != "" {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Suggestion: %s\n", result.Suggestion)
+		}
+		if result.Partial {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Warning: partial result: the provider did not finish (e.g. a time budget ran out), so lines or counts are missing. Narrow --start-time/--end-time or the query.")
 		}
 		// Why counts are partial or missing from series (e.g. a terms grouping
 		// left groups out, or the counts are only in aggregations_raw).
@@ -223,14 +227,22 @@ optionally ending in one date_histogram. Use real field names from
 			// The whole result as returned, provider fragments included.
 			return format.GetFormat().PrintRawJSON(orEmptyObject(respData.LogsList))
 		case !textOutput:
-			// The log entries as returned; with count series, both, so neither is lost.
-			if len(seriesEntries) == 0 {
-				return format.GetFormat().PrintRawJSON(raw)
+			// One shape for every result: the entries and counts as returned,
+			// plus whether the result is complete, so a script that drops stderr
+			// still sees it.
+			out := map[string]any{"logs": raw, "series": series, "partial": result.Partial}
+			if result.Truncated != nil {
+				out["truncated"] = *result.Truncated
 			}
-			out := map[string]any{"logs": raw, "series": series}
 			if result.Total != nil {
 				out["total"] = *result.Total
 				out["total_relation"] = result.TotalRelation
+			}
+			if result.SeriesNote != "" {
+				out["series_note"] = result.SeriesNote
+			}
+			if result.Suggestion != "" {
+				out["suggestion"] = result.Suggestion
 			}
 			combined, err := json.Marshal(out)
 			if err != nil {
@@ -281,7 +293,7 @@ func truncationWarning(truncated *bool, total *int64, relation string, count, li
 	if total != nil {
 		return fmt.Sprintf("Returned %d of %s matching lines. %s", count, describeTotal(*total, relation), next)
 	}
-	return fmt.Sprintf("Returned %d lines; results may be cut off. %s", count, next)
+	return fmt.Sprintf("Returned %d lines = --limit %d; results may be cut off. %s", count, limit, next)
 }
 
 // describeTotal renders a match count, "at least N" when it is a lower bound.
@@ -346,10 +358,9 @@ func init() {
 	logsQueryCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsQueryCmd.Flags().String("end-time", "", "End time (RFC3339)")
 	logsQueryCmd.Flags().String("query", "", "Log query in the provider's language (LogQL for Loki; DSL, KQL or PPL for Elasticsearch)")
-	logsQueryCmd.Flags().Int("limit", 100, "Limit")
+	logsQueryCmd.Flags().Int("limit", defaultLogsLimit, "Maximum log lines to return")
 	logsQueryCmd.Flags().Int("offset", 0, "Offset")
 	logsQueryCmd.Flags().Bool("only-message", false, "Show only log messages")
 	logsQueryCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to search (required for in-cluster Elasticsearch; hosted defaults to the account's log index)")
-	logsQueryCmd.Flags().String("query-type", "", "Elasticsearch/OpenSearch only: query language, dsl (default), kql (hosted Elasticsearch only) or ppl (OpenSearch)")
 	addParamFlag(logsQueryCmd)
 }

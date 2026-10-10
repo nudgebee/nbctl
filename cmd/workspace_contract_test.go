@@ -73,8 +73,8 @@ func runCapturing(t *testing.T, data any, args ...string) (string, []capturedReq
 //
 // plus, only when set: include_raw on logs_list (-o raw), fields_only on
 // logs_list_labels (--fields-only), a nested `request` map of provider parameters on
-// metrics_list (--param, --index → metric_name, --query-type) and logs_list
-// (--param, --index → index, --query-type), and `index` in
+// metrics_list (--param, --index → metric_name) and logs_list
+// (--param, --index → index), and `index` in
 // the nested request of logs_list_labels (--index) and logs_list_label_values
 // (--index, through LogsListLabelValuesWithIndexQuery).
 //
@@ -223,11 +223,11 @@ func TestLogsQueryJSONIsBackendLogs(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"logs_list":{"logs":`+logs+`}}`), &data))
 
 	out, _ := runCapturing(t, data, "logs", "query", "--query", `{app="api"}`, "-o", "json")
-	assert.JSONEq(t, logs, out)
+	assert.JSONEq(t, `{"logs":`+logs+`,"series":[],"partial":false}`, out)
 
 	out, _ = runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}},
 		"logs", "query", "--query", `{app="api"}`, "-o", "json")
-	assert.JSONEq(t, `[]`, out)
+	assert.JSONEq(t, `{"logs":[],"series":[],"partial":false}`, out)
 }
 
 func TestRestrictCommands(t *testing.T) {
@@ -291,9 +291,12 @@ func TestEmptyResultsExplainOnStderr(t *testing.T) {
 		})
 		t.Run(tt.name+" json", func(t *testing.T) {
 			out, stderr := runCapturingStderr(t, tt.data, append(tt.args, "-o", "json")...)
-			if tt.name == "metrics query" {
+			switch tt.name {
+			case "metrics query":
 				assert.JSONEq(t, `[{"query_key":"query","payload":[]}]`, out)
-			} else {
+			case "logs query":
+				assert.JSONEq(t, `{"logs":[],"series":[],"partial":false}`, out)
+			default:
 				assert.JSONEq(t, `[]`, out)
 			}
 			assert.Contains(t, stderr, tt.wantErr)
@@ -325,9 +328,9 @@ func TestLogsQueryWarnsWhenLimitReached(t *testing.T) {
 	data := map[string]any{"logs_list": map[string]any{"logs": []any{entry, entry}}}
 
 	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "x", "--limit", "2", "--offset", "4", "-o", "json")
-	assert.Contains(t, stderr, "Returned 2 lines; results may be cut off")
+	assert.Contains(t, stderr, "Returned 2 lines = --limit 2; results may be cut off")
 	assert.Contains(t, stderr, "--offset 6")
-	var parsed []any
+	var parsed map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &parsed), "stdout must stay valid JSON")
 
 	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "x", "--limit", "3")
@@ -341,7 +344,7 @@ func TestProviderParamsContract(t *testing.T) {
 	t.Run("logs query with index, query type and params", func(t *testing.T) {
 		_, reqs := runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}},
 			append([]string{"logs", "query", "--query", `{"query":{"match_all":{}}}`, "--index", "logs-*",
-				"--query-type", "dsl", "--param", "region=us-east-1"}, window...)...)
+				"--param", "query_type=dsl", "--param", "region=us-east-1"}, window...)...)
 		require.Len(t, reqs, 1)
 		assert.Equal(t, LogsQueryQuery, reqs[0].Query)
 		assert.Equal(t, map[string]any{"index": "logs-*", "query_type": "dsl", "region": "us-east-1"},
@@ -357,7 +360,7 @@ func TestProviderParamsContract(t *testing.T) {
 
 	t.Run("metrics query with index and query type", func(t *testing.T) {
 		_, reqs := runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": []any{}}},
-			append([]string{"metrics", "query", "--query", `{"query":{"match_all":{}}}`, "--index", "metrics-*", "--query-type", "dsl"}, window...)...)
+			append([]string{"metrics", "query", "--query", `{"query":{"match_all":{}}}`, "--index", "metrics-*", "--param", "query_type=dsl"}, window...)...)
 		require.Len(t, reqs, 1)
 		assert.Equal(t, MetricsQueryQuery, reqs[0].Query)
 		assert.Equal(t, map[string]any{"metric_name": "metrics-*", "query_type": "dsl"},
@@ -405,12 +408,10 @@ func TestProviderParamsErrors(t *testing.T) {
 		args    []string
 		wantErr string
 	}{
-		{[]string{"logs", "query", "--query", "x", "--query-type", "sql"}, `invalid --query-type "sql"`},
 		{[]string{"logs", "query", "--query", "x", "--param", "noequals"}, `invalid --param "noequals"`},
 		{[]string{"logs", "query", "--query", "x", "--param", "=v"}, `invalid --param "=v"`},
 		{[]string{"logs", "query", "--query", "x", "--param", "a=1", "--param", "a=2"}, `--param "a" given more than once`},
 		{[]string{"logs", "query", "--query", "x", "--param", "index=a", "--index", "b"}, `"index" is set by both --param and its own flag`},
-		{[]string{"metrics", "query", "--query", "x", "--query-type", "ppl"}, `invalid --query-type "ppl": want one of dsl, kql`},
 		{[]string{"metrics", "query", "--query", "x", "--param", "metric_name=a", "--index", "b"}, `"metric_name" is set by both --param and its own flag`},
 	}
 	for _, tt := range tests {
@@ -431,14 +432,14 @@ func TestLogsQueryLogResults(t *testing.T) {
 	t.Run("json with series prints logs and series", func(t *testing.T) {
 		data := map[string]any{"logs_list": map[string]any{"logs": []any{}, "series": series, "truncated": false}} // no total: none in the output
 		out, stderr := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
-		assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"pod":"api-1"},"timestamps":[1790812800,1790816400],"values":[3,5]}]}`, out)
+		assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"pod":"api-1"},"timestamps":[1790812800,1790816400],"values":[3,5]}],"truncated":false,"partial":false}`, out)
 		assert.NotContains(t, stderr, "No logs found")
 	})
 
-	t.Run("json without series stays an array", func(t *testing.T) {
-		data := map[string]any{"logs_list": map[string]any{"logs": []any{entry}}}
+	t.Run("json without series is the same object", func(t *testing.T) {
+		data := map[string]any{"logs_list": map[string]any{"logs": []any{entry}, "truncated": false}}
 		out, _ := runCapturingStderr(t, data, append([]string{"logs", "query", "--query", "x", "-o", "json"}, window...)...)
-		assert.JSONEq(t, `[{"timestamp":"t","severity":"info","message":"m","labels":{}}]`, out)
+		assert.JSONEq(t, `{"logs":[{"timestamp":"t","severity":"info","message":"m","labels":{}}],"series":[],"truncated":false,"partial":false}`, out)
 	})
 
 	t.Run("text prints the series table", func(t *testing.T) {
@@ -488,7 +489,7 @@ func TestTruncationWarning(t *testing.T) {
 		count     int
 		want      string
 	}{
-		{"truncated without total", &yes, nil, "", 100, "Returned 100 lines; results may be cut off. Narrow --start-time/--end-time or the query, or page with --offset 100."},
+		{"truncated without total", &yes, nil, "", 100, "Returned 100 lines = --limit 100; results may be cut off. Narrow --start-time/--end-time or the query, or page with --offset 100."},
 		{"exact total", &yes, &total, "eq", 100, "Returned 100 of 12345 matching lines."},
 		{"lower-bound total", &yes, &total, "gte", 100, "Returned 100 of at least 12345 matching lines."},
 		{"not truncated, even at the limit", &no, nil, "", 100, ""},
@@ -558,7 +559,7 @@ func TestLogsQueryCountsOnlyFromAPIServer(t *testing.T) {
 		"series_note":"a terms grouping left some groups out (sum_other_doc_count > 0), so series does not hold every group; raise that terms aggregation's size"}}`), &data))
 
 	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
-	assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"kubernetes.pod_name":"services-server-5b7bc76d59-x8lxp"},"timestamps":[1791547200,1791550800,1791554400],"values":[617,1608,1316]}],"total":88044,"total_relation":"eq"}`, out)
+	assert.JSONEq(t, `{"logs":[],"series":[{"metric":{"kubernetes.pod_name":"services-server-5b7bc76d59-x8lxp"},"timestamps":[1791547200,1791550800,1791554400],"values":[617,1608,1316]}],"total":88044,"total_relation":"eq","truncated":false,"partial":false,"series_note":"a terms grouping left some groups out (sum_other_doc_count > 0), so series does not hold every group; raise that terms aggregation's size"}`, out)
 	assert.Contains(t, stderr, "Matched 88044 lines.")
 	assert.Contains(t, stderr, "Note: a terms grouping left some groups out")
 	assert.NotContains(t, stderr, "No logs found")
@@ -609,7 +610,7 @@ func TestLogsQueryCountsThatDoNotFitSeries(t *testing.T) {
 		"series_note": "the provider's counts do not fit series (only nested terms groupings optionally ending in one date_histogram do); set include_raw to get them in aggregations_raw",
 	}}
 	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
-	assert.JSONEq(t, `[]`, out)
+	assert.JSONEq(t, `{"logs":[],"series":[],"truncated":false,"partial":false,"total":10000,"total_relation":"gte","series_note":"the provider's counts do not fit series (only nested terms groupings optionally ending in one date_histogram do); set include_raw to get them in aggregations_raw"}`, out)
 	assert.NotContains(t, stderr, "No logs found")
 	assert.Contains(t, stderr, "set include_raw to get them in aggregations_raw (in nbctl: -o raw)")
 	assert.Contains(t, stderr, "Matched at least 10000 lines.")
@@ -623,4 +624,85 @@ func TestLogsQueryCountsThatDoNotFitSeries(t *testing.T) {
 	data["logs_list"].(map[string]any)["total_relation"] = "eq"
 	_, stderr = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
 	assert.Contains(t, stderr, "No logs found")
+}
+
+func TestLogsQueryJSONCarriesCompleteness(t *testing.T) {
+	entry := map[string]any{"timestamp": "t", "severity": "info", "message": "m", "labels": map[string]any{}}
+	data := map[string]any{"logs_list": map[string]any{
+		"logs": []any{entry, entry}, "provider": "ES", "truncated": true, "total": 10000, "total_relation": "gte", "partial": true,
+	}}
+
+	out, stderr := runCapturingStderr(t, data, "logs", "query", "--query", "{}", "--limit", "2", "-o", "json")
+	var env map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &env))
+	assert.Len(t, env["logs"], 2)
+	assert.Equal(t, []any{}, env["series"])
+	assert.Equal(t, true, env["truncated"])
+	assert.Equal(t, true, env["partial"])
+	assert.Equal(t, float64(10000), env["total"])
+	assert.Equal(t, "gte", env["total_relation"])
+	assert.Contains(t, stderr, "Warning: partial result")
+	assert.Contains(t, stderr, "Returned 2 of at least 10000")
+
+	// The series object carries the same completeness keys.
+	data = map[string]any{"logs_list": map[string]any{
+		"logs": []any{}, "truncated": false, "total": 5, "total_relation": "eq", "series_note": "a terms grouping left some groups out",
+		"series": []any{map[string]any{"metric": map[string]any{"pod": "a"}, "timestamps": []any{1}, "values": []any{5}}},
+	}}
+	out, _ = runCapturingStderr(t, data, "logs", "query", "--query", "{}", "-o", "json")
+	require.NoError(t, json.Unmarshal([]byte(out), &env))
+	assert.Equal(t, false, env["truncated"])
+	assert.Equal(t, false, env["partial"])
+	assert.Equal(t, "a terms grouping left some groups out", env["series_note"])
+}
+
+func TestMetricsQueryFailedQueryExitsNonZero(t *testing.T) {
+	data := map[string]any{"metrics_list": map[string]any{"results": []any{
+		map[string]any{"query_key": "query", "payload": []any{}, "error": "HTTP 422: parse error"},
+	}}}
+	for _, format := range [][]string{{"-o", "json"}, {}} {
+		args := append([]string{"metrics", "query", "--query", "sum(up"}, format...)
+		resetFlags(t, args)
+		out, err := testutil.RunWithSimpleGraphQL(data, rootCmd, args)
+		require.Error(t, err, "format %v", format)
+		assert.Contains(t, err.Error(), "metrics query failed: query")
+		if len(format) > 0 {
+			assert.Contains(t, out, `"error": "HTTP 422: parse error"`, "JSON output is still printed")
+		}
+	}
+
+	// A successful query still exits 0.
+	_, reqs := runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": []any{
+		map[string]any{"query_key": "query", "payload": []any{}},
+	}}}, "metrics", "query", "--query", "up", "-o", "json")
+	require.Len(t, reqs, 1)
+}
+
+func TestQueryTypeFlagRemoved(t *testing.T) {
+	// --query-type was folded into --param query_type=… to keep the flag set small.
+	for _, args := range [][]string{
+		{"logs", "query", "--query", "x", "--query-type", "kql"},
+		{"metrics", "query", "--query", "x", "--query-type", "dsl"},
+	} {
+		resetFlags(t, args[:2])
+		_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, rootCmd, args)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown flag: --query-type")
+	}
+}
+
+func TestLogsQueryAlwaysSendsAPositiveLimit(t *testing.T) {
+	// Default: 1000, sent explicitly.
+	_, reqs := runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}}, "logs", "query", "--query", "x")
+	require.Len(t, reqs, 1)
+	assert.Equal(t, float64(1000), reqs[0].Variables["request"].(map[string]any)["limit"])
+
+	// 0 or negative would leave the line count to each provider's default.
+	for _, bad := range []string{"0", "-5"} {
+		args := []string{"logs", "query", "--query", "x", "--limit", bad}
+		resetFlags(t, args)
+		_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, rootCmd, args)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must be at least 1")
+	}
 }

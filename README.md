@@ -539,26 +539,25 @@ Queries logs from the Nudgebee API based on various filters.
     *   `--start-time <RFC3339>`: Filters logs starting from this time. Defaults to 1 hour ago.
     *   `--end-time <RFC3339>`: Filters logs up to this time. Defaults to the current time.
     *   `--query <string>`: The log query string (e.g., `level=error`, `app=my-app`).
-    *   `--limit <int>`: Limits the number of log entries returned. Default is 100.
+    *   `--limit <int>`: Maximum log entries to return (at least 1). Default is 1000. nbctl always sends it, so the result can say whether it was cut off.
     *   `--offset <int>`: Specifies an offset for pagination. Default is 0.
     *   `--only-message`: If set, only the log messages are displayed, without timestamp, severity, or labels.
     *   `--index <name>`: Index to search (Elasticsearch/OpenSearch). Required for in-cluster Elasticsearch, which has no default index; hosted Elasticsearch falls back to the account's default.
-    *   `--query-type <dsl|kql|ppl>`: Query language for Elasticsearch: `dsl` (Query DSL JSON, default), `kql` (hosted Elasticsearch only) or `ppl` (OpenSearch).
-    *   `--param <key=value>` (repeatable): Other provider-specific parameters, sent as strings in the request's nested `request` map (e.g. a CloudWatch log group).
+    *   `--param <key=value>` (repeatable): Other provider-specific parameters, sent as strings in the request's nested `request` map (e.g. `query_type=kql` for KQL on hosted Elasticsearch, `query_type=ppl` on OpenSearch; Query DSL is the default).
 
-Write `--query` in the provider's own language: LogQL for Loki, Query DSL JSON / KQL / PPL for Elasticsearch, and so on. `logs list-labels` and `logs list-label-values` also take `--index`.
+Write `--query` in the provider's own language: LogQL for Loki, Query DSL JSON for Elasticsearch, and so on. `logs list-labels` and `logs list-label-values` also take `--index`.
 
 `logs list-labels` shows each label's kind: `field` is a name the provider understands (usable in a native query), `alias` is a Nudgebee short name, with the provider field it maps to. `--fields-only` lists only provider fields.
 
 Output:
 
 *   text: the log lines as a table, then any count series.
-*   `-o json`: the backend's log entries, unchanged (an array of `{timestamp, severity, message, labels}`). When the query returned count series (e.g. an Elasticsearch aggregation), `{"logs": [...], "series": [...]}` instead; each series is `{metric, timestamps, values}` like `metrics query`.
+*   `-o json`: an object `{logs, series, truncated, partial, total, total_relation, series_note, suggestion}`. `logs` are the backend's entries, unchanged (`{timestamp, severity, message, labels}`); `series` are count series (e.g. an Elasticsearch aggregation), each `{metric, timestamps, values}` like `metrics query`. Keys the api-server did not send are left out. Check `truncated` and `partial` before trusting a result.
 *   `-o raw`: the whole result as returned, including the provider's own fragments (`aggregations_raw`, `total_raw`). Only `logs query` supports it.
 
 When the result may be cut off, a warning on stderr says so and gives the `--offset` for the next page; when the provider reports a match count, it shows `Returned N of M matching lines` (`at least M` when the count is a lower bound).
 
-The `metrics` and `logs` commands report an empty result on stderr (e.g. `No values found for log label "severity" ...`), so an empty stdout is never ambiguous; with `-o json` stdout is still `[]`.
+The `metrics` and `logs` commands report an empty result on stderr (e.g. `No values found for log label "severity" ...`), so an empty stdout is never ambiguous; with `-o json` the list commands still print `[]`.
 
 Example:
 
@@ -622,12 +621,11 @@ Queries metrics from the Nudgebee API based on a PromQL-like query string and va
     *   `--end-time <RFC3339>`: Filters metrics up to this time. Defaults to the current time.
     *   `--step <duration>`: Resolution of a range query (e.g. `30s`, `5m`). Default: chosen by the backend.
     *   `--index <name>`: Index to query (Elasticsearch metrics). Default: the account's metrics index.
-    *   `--query-type <dsl|kql>`: Query language for Elasticsearch metrics. Without it, `--query` must be Nudgebee's where-clause JSON.
-    *   `--param <key=value>` (repeatable): Other provider-specific parameters, sent as strings in the request's nested `request` map.
+    *   `--param <key=value>` (repeatable): Other provider-specific parameters, sent as strings in the request's nested `request` map (e.g. `query_type=dsl` for Query DSL on Elasticsearch metrics, whose default is Nudgebee's where-clause JSON).
     *   `--instant`: Run an instant query instead of a range query.
     *   `--chart`: Plot the series in the terminal.
 
-With `-o json`, the backend's `results` are printed unchanged (an array of `{query_key, query, payload: [{metric, timestamps, values}]}`), so large results can be redirected to a file and read by scripts. Failed queries and backend notes are reported on stderr.
+If a query fails, the warning goes to stderr, the output is still printed, and nbctl exits non-zero. With `-o json`, the backend's `results` are printed unchanged (an array of `{query_key, query, payload: [{metric, timestamps, values}]}`), so large results can be redirected to a file and read by scripts. Failed queries and backend notes are reported on stderr.
 
 Example:
 
