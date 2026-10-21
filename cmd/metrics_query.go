@@ -135,7 +135,8 @@ var metricsQueryCmd = &cobra.Command{
 		index, _ := cmd.Flags().GetString("index")
 		// Elasticsearch metrics read the index from metric_name (metric_index is
 		// only read by the utilisation action).
-		params, err := providerParams(cmd, map[string]string{"metric_name": index})
+		queryType, _ := cmd.Flags().GetString("query-type")
+		params, err := providerParams(cmd, map[string]string{"metric_name": index, "query_type": queryType})
 		if err != nil {
 			return err
 		}
@@ -261,5 +262,6 @@ func init() {
 	metricsQueryCmd.Flags().Bool("chart", false, "Display data as a chart")
 	metricsQueryCmd.Flags().String("index", "", "Elasticsearch only: metrics index to query (default: the account's metrics index)")
 	addParamFlag(metricsQueryCmd)
+	addDeprecatedQueryTypeFlag(metricsQueryCmd)
 	metricsQueryCmd.Flags().Duration("step", 0, "Resolution of a range query, e.g. 30s, 5m (default: chosen by the backend from the window)")
 }

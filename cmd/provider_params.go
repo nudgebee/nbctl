@@ -14,6 +14,14 @@ func addParamFlag(c *cobra.Command) {
 	c.Flags().StringArray("param", nil, "Provider-specific parameter key=value, passed to the provider as a string (repeatable); providers ignore keys they don't use")
 }
 
+// addDeprecatedQueryTypeFlag keeps --query-type working as a hidden alias for
+// --param query_type=<value>. Scripts and agents that learned the old flag keep
+// running; cobra prints a deprecation note on stderr and leaves it out of --help.
+func addDeprecatedQueryTypeFlag(c *cobra.Command) {
+	c.Flags().String("query-type", "", "Deprecated: use --param query_type=<value>")
+	_ = c.Flags().MarkDeprecated("query-type", "use --param query_type=<dsl|kql|ppl>")
+}
+
 // providerParams builds the nested `request` map that providers read their own
 // parameters from. It combines --param key=value pairs with named flags
 // (key → value; empty values are skipped). Values are strings. It returns nil

@@ -382,6 +382,20 @@ func TestProviderParamsContract(t *testing.T) {
 			reqs[0].Variables["request"].(map[string]any)["request"])
 	})
 
+	// --query-type was removed from --help but still works: agents and scripts
+	// learned it (about 1 in 12 nbctl calls on dev used it before this change).
+	t.Run("deprecated --query-type still reaches the provider", func(t *testing.T) {
+		_, reqs := runCapturing(t, map[string]any{"logs_list": map[string]any{"logs": []any{}}},
+			append([]string{"logs", "query", "--query", "level:error", "--query-type", "kql"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, map[string]any{"query_type": "kql"}, reqs[0].Variables["request"].(map[string]any)["request"])
+
+		_, reqs = runCapturing(t, map[string]any{"metrics_list": map[string]any{"results": []any{}}},
+			append([]string{"metrics", "query", "--query", `{"query":{"match_all":{}}}`, "--query-type", "dsl"}, window...)...)
+		require.Len(t, reqs, 1)
+		assert.Equal(t, map[string]any{"query_type": "dsl"}, reqs[0].Variables["request"].(map[string]any)["request"])
+	})
+
 	t.Run("logs list-labels with index and fields-only", func(t *testing.T) {
 		_, reqs := runCapturing(t, map[string]any{"logs_list_labels": []any{}},
 			append([]string{"logs", "list-labels", "--index", "logs-*", "--fields-only"}, window...)...)
@@ -678,16 +692,14 @@ func TestMetricsQueryFailedQueryExitsNonZero(t *testing.T) {
 	require.Len(t, reqs, 1)
 }
 
-func TestQueryTypeFlagRemoved(t *testing.T) {
-	// --query-type was folded into --param query_type=… to keep the flag set small.
-	for _, args := range [][]string{
-		{"logs", "query", "--query", "x", "--query-type", "kql"},
-		{"metrics", "query", "--query", "x", "--query-type", "dsl"},
-	} {
-		resetFlags(t, args[:2])
-		_, err := testutil.RunWithSimpleGraphQL(map[string]any{}, rootCmd, args)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unknown flag: --query-type")
+func TestQueryTypeFlagHiddenFromHelp(t *testing.T) {
+	// --query-type is folded into --param query_type=… to keep the flag set small.
+	// It still works (see the contract test) but no longer shows in --help.
+	for _, c := range []*cobra.Command{logsQueryCmd, metricsQueryCmd} {
+		f := c.Flags().Lookup("query-type")
+		require.NotNil(t, f, c.CommandPath())
+		assert.NotEmpty(t, f.Deprecated, c.CommandPath())
+		assert.NotContains(t, c.UsageString(), "--query-type", c.CommandPath())
 	}
 }
 
@@ -705,4 +717,19 @@ func TestLogsQueryAlwaysSendsAPositiveLimit(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "must be at least 1")
 	}
+}
+
+// An unknown flag names the command's real flags, so a caller that guessed one
+// can correct it from the error alone. Seen on dev: Nubi passed --metric to
+// metrics list-label-values, and got back only "unknown flag: --metric".
+func TestUnknownFlagListsValidFlags(t *testing.T) {
+	args := []string{"metrics", "list-label-values", "--label", "job", "--metric", "up"}
+	resetFlags(t, args)
+	_, err := testutil.RunWithMockServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		map[string]any{"api-key": "sk-nb-test", "account-id": "acc-1"}, rootCmd, args)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown flag: --metric")
+	assert.Contains(t, err.Error(), "flags for nbctl metrics list-label-values: --account-id, --label")
+	assert.NotContains(t, err.Error(), "--help,", "help is not listed as a flag")
+	assert.NotContains(t, err.Error(), "--profile", "inherited global flags are left out")
 }

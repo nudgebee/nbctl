@@ -118,7 +118,8 @@ optionally ending in one date_histogram. Use real field names from
 		}
 
 		index, _ := cmd.Flags().GetString("index")
-		params, err := providerParams(cmd, map[string]string{"index": index})
+		queryType, _ := cmd.Flags().GetString("query-type")
+		params, err := providerParams(cmd, map[string]string{"index": index, "query_type": queryType})
 		if err != nil {
 			return err
 		}
@@ -363,4 +364,5 @@ func init() {
 	logsQueryCmd.Flags().Bool("only-message", false, "Show only log messages")
 	logsQueryCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to search (required for in-cluster Elasticsearch; hosted defaults to the account's log index)")
 	addParamFlag(logsQueryCmd)
+	addDeprecatedQueryTypeFlag(logsQueryCmd)
 }
