@@ -69,16 +69,21 @@ incomplete. Elasticsearch counts past 10,000 only with "track_total_hits": true.
 
 Counts as series (Elasticsearch): zero or more nested terms aggregations,
 optionally ending in one date_histogram. Use real field names from
-"nbctl logs list-labels --fields-only"; terms needs a keyword field.`,
+"nbctl logs list-labels --fields-only"; terms needs a keyword field.
+
+Check a field's Type before searching it: match on a keyword field compares
+the whole value, so {"match":{"log":"error"}} silently finds nothing there.
+A case-insensitive wildcard works on keyword and text fields alike.`,
 	Example: `  # Loki
   nbctl logs query --query '{namespace="api"} |= "error"' --start-time 2026-10-01T00:00:00Z
 
   # Elasticsearch, Query DSL (in-cluster Elasticsearch needs --index)
-  nbctl logs query --index 'logs-*' --query '{"query":{"match":{"level":"error"}}}' -o json > logs.json
+  nbctl logs query --index 'logs-*' -o json > logs.json \
+    --query '{"query":{"wildcard":{"log":{"value":"*error*","case_insensitive":true}}}}'
 
   # Elasticsearch, error lines per pod per hour (counts come back as series)
   nbctl logs query -o json > counts.json --query '{"size":0,"track_total_hits":true,
-    "query":{"match":{"log":"error"}},
+    "query":{"wildcard":{"log":{"value":"*error*","case_insensitive":true}}},
     "aggs":{"pod":{"terms":{"field":"kubernetes.pod_name","size":500},
     "aggs":{"hour":{"date_histogram":{"field":"@timestamp","fixed_interval":"1h"}}}}}}'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
