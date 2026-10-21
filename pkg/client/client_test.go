@@ -67,6 +67,45 @@ func TestUnauthorizedReturnsHint(t *testing.T) {
 	})
 }
 
+func TestUnauthorizedUsesServerMessage(t *testing.T) {
+	for _, body := range []string{
+		`{"errors":[{"message":"workspace execution token expired; rerun the command"}]}`,
+		`{"message":"workspace execution token expired; rerun the command"}`,
+		`{"error":"workspace execution token expired; rerun the command"}`,
+	} {
+		apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(body))
+		}))
+		err := NewClient(WithEndpoint(apiSrv.URL), WithApiKey("tok")).Run(context.Background(), NewRequest(`query { ok }`), nil)
+		apiSrv.Close()
+		if err == nil || err.Error() != "authentication failed (401 Unauthorized): workspace execution token expired; rerun the command" {
+			t.Fatalf("body %s: expected the server's message, got %v", body, err)
+		}
+	}
+
+	// A one-word code (the app gateway's not_authenticated): the API-key hint.
+	codeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errors":[{"message":"not_authenticated"}]}`))
+	}))
+	err := NewClient(WithEndpoint(codeSrv.URL), WithApiKey("sk-nb-x")).Run(context.Background(), NewRequest(`query { ok }`), nil)
+	codeSrv.Close()
+	if err == nil || !strings.Contains(err.Error(), "Create a new token") {
+		t.Fatalf("expected the API-key hint for a bare code, got %v", err)
+	}
+
+	// No body: the API-key hint.
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer apiSrv.Close()
+	err = NewClient(WithEndpoint(apiSrv.URL), WithApiKey("sk-nb-x")).Run(context.Background(), NewRequest(`query { ok }`), nil)
+	if err == nil || !strings.Contains(err.Error(), "Create a new token") {
+		t.Fatalf("expected the API-key hint, got %v", err)
+	}
+}
+
 func TestMissingApiKey(t *testing.T) {
 	viper.Set("api-key", "")
 	defer viper.Set("api-key", nil)

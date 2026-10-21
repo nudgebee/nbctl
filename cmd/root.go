@@ -10,6 +10,7 @@ import (
 	"github.com/nudgebee/nbctl/pkg/format"
 	applog "github.com/nudgebee/nbctl/pkg/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -98,6 +99,7 @@ Powershell:
 var Version string = "dev"
 
 func init() {
+	rootCmd.SetFlagErrorFunc(flagErrorWithValidFlags)
 	rootCmd.AddCommand(completionCmd)
 	rootCmd.AddCommand(versionCmd)
 	// Add a persistent flag for log level. We don't wire levels into std log here,
@@ -179,6 +181,22 @@ func restrictCommands(root *cobra.Command, enabled string) {
 			root.RemoveCommand(c)
 		}
 	}
+}
+
+// flagErrorWithValidFlags adds the command's own flags to a flag error, so a
+// caller that guessed a flag (an agent, a script) can correct it from the error
+// alone instead of running --help. Subcommands inherit it from the root.
+func flagErrorWithValidFlags(c *cobra.Command, err error) error {
+	var names []string
+	c.NonInheritedFlags().VisitAll(func(f *pflag.Flag) {
+		if !f.Hidden && f.Deprecated == "" && f.Name != "help" {
+			names = append(names, "--"+f.Name)
+		}
+	})
+	if len(names) == 0 {
+		return err
+	}
+	return fmt.Errorf("%w\nflags for %s: %s (see %s --help)", err, c.CommandPath(), strings.Join(names, ", "), c.CommandPath())
 }
 
 func Execute() {

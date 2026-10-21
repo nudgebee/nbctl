@@ -8,20 +8,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// logQueryTypes are the query languages logs query --query-type accepts.
-// Elasticsearch reads them from the nested request map: dsl (default), kql
-// (hosted Elasticsearch only) and ppl (OpenSearch).
-var logQueryTypes = []string{"dsl", "kql", "ppl"}
-
-// metricQueryTypes are the query languages metrics query --query-type accepts.
-// Elasticsearch metrics take dsl or kql; without a type, --query must be
-// Nudgebee's where-clause JSON.
-var metricQueryTypes = []string{"dsl", "kql"}
-
 // addParamFlag adds a repeatable --param key=value flag for provider-specific
-// parameters (e.g. Elasticsearch index, CloudWatch log group).
+// parameters (e.g. Elasticsearch query_type=kql, a CloudWatch log group).
 func addParamFlag(c *cobra.Command) {
 	c.Flags().StringArray("param", nil, "Provider-specific parameter key=value, passed to the provider as a string (repeatable); providers ignore keys they don't use")
+}
+
+// addDeprecatedQueryTypeFlag keeps --query-type working as a hidden alias for
+// --param query_type=<value>. Scripts and agents that learned the old flag keep
+// running; cobra prints a deprecation note on stderr and leaves it out of --help.
+func addDeprecatedQueryTypeFlag(c *cobra.Command) {
+	c.Flags().String("query-type", "", "Deprecated: use --param query_type=<value>")
+	_ = c.Flags().MarkDeprecated("query-type", "use --param query_type=<dsl|kql|ppl>")
 }
 
 // providerParams builds the nested `request` map that providers read their own
@@ -63,16 +61,4 @@ func providerParams(cmd *cobra.Command, named map[string]string) (map[string]any
 		return nil, nil
 	}
 	return params, nil
-}
-
-func validateQueryType(queryType string, allowed []string) error {
-	if queryType == "" {
-		return nil
-	}
-	for _, t := range allowed {
-		if queryType == t {
-			return nil
-		}
-	}
-	return fmt.Errorf("invalid --query-type %q: want one of %s", queryType, strings.Join(allowed, ", "))
 }
