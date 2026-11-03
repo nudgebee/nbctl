@@ -508,11 +508,13 @@ Lists all possible values for a given log label within a specified time range an
     *   `--account-id <id>`: Filters by a specific account ID. If not provided, it attempts to read it from the configuration.
     *   `--start-time <RFC3339>`: Filters logs starting from this time. Defaults to 1 hour ago.
     *   `--end-time <RFC3339>`: Filters logs up to this time. Defaults to the current time.
+    *   `--match <label=value>` (repeatable): Only values from streams that also carry this label. Supported where the provider can scope (Loki, ClickHouse, SolarWinds, Splunk Enterprise); on others the values are listed unscoped, with a warning on stderr.
 
 Example:
 
 ```bash
 nbctl logs list-label-values --label-name "app" --account-id 123e4567-e89b-12d3-a456-426614174000
+nbctl logs list-label-values --label-name "pod" --match namespace=demo
 ```
 
 ##### `nbctl logs list-labels`
@@ -574,13 +576,16 @@ Queries metrics from the Nudgebee API.
 Lists all possible values for a given metric label within a specified account.
 
 *   **Flags**:
-    *   `--label <name>` (required): The name of the metric label for which to retrieve values.
+    *   `--label <name>` (required): The name of the metric label for which to retrieve values. `__name__` lists metric names.
     *   `--account-id <id>`: Filters by a specific account ID. If not provided, it attempts to read it from the configuration.
+    *   `--match <matcher>` (repeatable): Only values from series that also carry this label: `label=value`, `label!=value` or `label=~regex`. Prometheus-compatible providers only; on others the values are listed unscoped, with a warning on stderr.
+    *   `--start-time <RFC3339>`, `--end-time <RFC3339>`: Only values seen in this window (with `--match`).
 
 Example:
 
 ```bash
 nbctl metrics list-label-values --label "instance" --account-id 123e4567-e89b-12d3-a456-426614174000
+nbctl metrics list-label-values --label __name__ --match namespace=demo   # metric names in namespace demo
 ```
 
 ##### `nbctl metrics list-labels`

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nudgebee/nbctl/pkg/client"
@@ -21,6 +22,14 @@ const LogsListLabelValuesQuery = `query FetchLogLabelValues($accountId: String!,
 // for providers that read values from an index (Elasticsearch).
 const LogsListLabelValuesWithIndexQuery = `query FetchLogLabelValues($accountId: String!, $labelName: String!, $query: String!, $index: String!) {
   logs_list_label_values(request: {account_id: $accountId, label_name: $labelName, request: {index: $index, query: $query}}) {
+    value
+  }
+}`
+
+// LogsListLabelValuesScopedQuery lists a label's values only from streams that
+// carry the --match labels.
+const LogsListLabelValuesScopedQuery = `query FetchLogLabelValues($request: FetchLogLabelValuesRequest!) {
+  logs_list_label_values(request: $request) {
     value
   }
 }`
@@ -62,15 +71,46 @@ var logsListLabelValuesCmd = &cobra.Command{
 
 		query := fmt.Sprintf("start=%d&end=%d", startTime.UnixNano(), endTime.UnixNano())
 
-		req := client.NewRequest(LogsListLabelValuesQuery)
-		if index, _ := cmd.Flags().GetString("index"); index != "" {
-			req = client.NewRequest(LogsListLabelValuesWithIndexQuery)
-			req.Var("index", index)
+		matchArgs, _ := cmd.Flags().GetStringArray("match")
+		matchers, err := parseLabelMatchers(matchArgs)
+		if err != nil {
+			return err
+		}
+		index, _ := cmd.Flags().GetString("index")
+
+		unscopedRequest := func() *client.Request {
+			req := client.NewRequest(LogsListLabelValuesQuery)
+			if index != "" {
+				req = client.NewRequest(LogsListLabelValuesWithIndexQuery)
+				req.Var("index", index)
+			}
+			req.Var("accountId", accountId)
+			req.Var("labelName", labelName)
+			req.Var("query", query)
+			return req
 		}
 
-		req.Var("accountId", accountId)
-		req.Var("labelName", labelName)
-		req.Var("query", query)
+		req := unscopedRequest()
+		if len(matchers) > 0 {
+			filters := map[string]string{}
+			for _, m := range matchers {
+				if m.Operator != "_eq" {
+					return fmt.Errorf("--match %s%s%s: logs take label=value only", m.Label, map[string]string{"_neq": "!=", "_regex": "=~"}[m.Operator], m.Value)
+				}
+				if _, dup := filters[m.Label]; dup {
+					return fmt.Errorf("--match %s: a label can be matched once for logs", m.Label)
+				}
+				filters[m.Label] = m.Value
+			}
+			params := map[string]any{"query": query}
+			if index != "" {
+				params["index"] = index
+			}
+			req = client.NewRequest(LogsListLabelValuesScopedQuery)
+			req.Var("request", map[string]any{
+				"account_id": accountId, "label_name": labelName, "request": params, "current_filters": filters,
+			})
+		}
 
 		var respData struct {
 			LogsListLabelValues []struct {
@@ -78,7 +118,12 @@ var logsListLabelValuesCmd = &cobra.Command{
 			} `json:"logs_list_label_values"`
 		}
 
-		if err := graphqlClient.Run(context.Background(), req, &respData); err != nil {
+		err = graphqlClient.Run(context.Background(), req, &respData)
+		if err != nil && len(matchers) > 0 && strings.Contains(err.Error(), matchRefusedLogs) {
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), matchRefusedWarning)
+			err = graphqlClient.Run(context.Background(), unscopedRequest(), &respData)
+		}
+		if err != nil {
 			return err
 		}
 
@@ -98,6 +143,7 @@ func init() {
 	logsListLabelValuesCmd.Flags().String("start-time", "", "Start time (RFC3339)")
 	logsListLabelValuesCmd.Flags().String("end-time", "", "End time (RFC3339)")
 	logsListLabelValuesCmd.Flags().String("label-name", "", "Label name")
+	logsListLabelValuesCmd.Flags().StringArray("match", nil, "Only values from log streams that also carry this label: label=value (repeatable), e.g. --label-name pod --match namespace=demo")
 	logsListLabelValuesCmd.Flags().String("index", "", "Elasticsearch/OpenSearch only: index to read values from (other providers ignore it)")
 	if err := logsListLabelValuesCmd.MarkFlagRequired("label-name"); err != nil {
 		panic(err)
