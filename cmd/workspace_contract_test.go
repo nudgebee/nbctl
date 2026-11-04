@@ -65,10 +65,12 @@ func runCapturing(t *testing.T, data any, args ...string) (string, []capturedReq
 //
 //	metrics_list_names:        account_id
 //	metrics_list_labels:       account_id, metric
-//	metrics_list_label_values: account_id, label
+//	metrics_list_label_values: account_id, label; with --match or a window (as a
+//	                           $request variable): start_time, end_time, request{label_matchers}
 //	metrics_list:              account_id, queries{query}, instant, start_time, end_time, step_interval
 //	logs_list_labels:          account_id, request{query}  (as a $request variable)
-//	logs_list_label_values:    account_id, label_name, request{query}
+//	logs_list_label_values:    account_id, label_name, request{query}; with --match
+//	                           (as a $request variable): current_filters
 //	logs_list:                 account_id, query, start_time, end_time, limit, offset
 //
 // plus, only when set: include_raw on logs_list (-o raw), fields_only on
@@ -115,6 +117,25 @@ func TestWorkspaceCommandsGraphQLContract(t *testing.T) {
 			},
 		},
 		{
+			name: "metrics list-label-values --match",
+			args: []string{"metrics", "list-label-values", "--label", "__name__", "--match", "namespace=demo", "--match", "pod=~api-.*",
+				"--start-time", "2026-10-01T00:00:00Z", "--end-time", "2026-10-01T01:00:00Z"},
+			data:  map[string]any{"metrics_list_label_values": []any{}},
+			query: MetricsListLabelValuesScopedQuery,
+			wantVars: func(t *testing.T, v map[string]any) {
+				assert.Equal(t, map[string]any{"request": map[string]any{
+					"account_id": "acc-1",
+					"label":      "__name__",
+					"start_time": float64(1790812800000),
+					"end_time":   float64(1790816400000),
+					"request": map[string]any{"label_matchers": []any{
+						map[string]any{"label": "namespace", "operator": "_eq", "value": "demo"},
+						map[string]any{"label": "pod", "operator": "_regex", "value": "api-.*"},
+					}},
+				}}, v)
+			},
+		},
+		{
 			name: "metrics query",
 			args: []string{"metrics", "query", "--query", "up", "--step", "5m",
 				"--start-time", "2026-10-01T00:00:00Z", "--end-time", "2026-10-01T01:00:00Z"},
@@ -151,6 +172,21 @@ func TestWorkspaceCommandsGraphQLContract(t *testing.T) {
 			query: LogsListLabelValuesQuery,
 			wantVars: func(t *testing.T, v map[string]any) {
 				assert.Equal(t, map[string]any{"accountId": "acc-1", "labelName": "app", "query": "start=1790812800000000000&end=1790816400000000000"}, v)
+			},
+		},
+		{
+			name: "logs list-label-values --match",
+			args: []string{"logs", "list-label-values", "--label-name", "pod", "--match", "namespace=demo",
+				"--start-time", "2026-10-01T00:00:00Z", "--end-time", "2026-10-01T01:00:00Z"},
+			data:  map[string]any{"logs_list_label_values": []any{}},
+			query: LogsListLabelValuesScopedQuery,
+			wantVars: func(t *testing.T, v map[string]any) {
+				assert.Equal(t, map[string]any{"request": map[string]any{
+					"account_id":      "acc-1",
+					"label_name":      "pod",
+					"request":         map[string]any{"query": "start=1790812800000000000&end=1790816400000000000"},
+					"current_filters": map[string]any{"namespace": "demo"},
+				}}, v)
 			},
 		},
 		{
@@ -729,7 +765,108 @@ func TestUnknownFlagListsValidFlags(t *testing.T) {
 		map[string]any{"api-key": "sk-nb-test", "account-id": "acc-1"}, rootCmd, args)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown flag: --metric")
-	assert.Contains(t, err.Error(), "flags for nbctl metrics list-label-values: --account-id, --label")
+	assert.Contains(t, err.Error(), "flags for nbctl metrics list-label-values: --account-id, --end-time, --label, --match, --start-time")
 	assert.NotContains(t, err.Error(), "--help,", "help is not listed as a flag")
 	assert.NotContains(t, err.Error(), "--profile", "inherited global flags are left out")
+}
+
+// A {selector} or a comma-joined list in --match is refused before any request.
+func TestParseLabelMatchersRefusesSelectorSyntax(t *testing.T) {
+	for _, bad := range []string{`{namespace="demo"}`, `namespace="demo",pod="x"`, "namespace", "=demo", "namespace="} {
+		_, err := parseLabelMatchers([]string{bad})
+		assert.Error(t, err, bad)
+	}
+	got, err := parseLabelMatchers([]string{"container!=POD", "msg=a!=b"})
+	require.NoError(t, err)
+	assert.Equal(t, []labelMatcher{{Label: "container", Operator: "_neq", Value: "POD"}, {Label: "msg", Operator: "_eq", Value: "a!=b"}}, got)
+}
+
+// A provider that cannot scope refuses --match. The command still lists the values,
+// unscoped, and warns: an error would cost the caller a retry.
+func TestMatchRefusalFallsBackToUnscopedValues(t *testing.T) {
+	tests := []struct {
+		name, field, refusal, unscoped string
+		args                           []string
+	}{
+		{
+			name: "metrics", field: "metrics_list_label_values", unscoped: MetricsListLabelValuesQuery,
+			refusal: "metrics_list_label_values failed: observability: label_matchers are not supported by this account's metrics provider; list the label's values without them",
+			args:    []string{"metrics", "list-label-values", "--label", "service", "--match", "namespace=demo"},
+		},
+		{
+			name: "logs", field: "logs_list_label_values", unscoped: LogsListLabelValuesQuery,
+			refusal: "logs_list_label_values failed: observability: current_filters are not supported by this account's log provider; list the label's values without them",
+			args:    []string{"logs", "list-label-values", "--label-name", "pod", "--match", "namespace=demo"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetFlags(t, tt.args)
+			var queries []string
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var c capturedRequest
+				_ = json.NewDecoder(r.Body).Decode(&c)
+				queries = append(queries, c.Query)
+				w.Header().Set("Content-Type", "application/json")
+				if len(queries) == 1 {
+					_ = json.NewEncoder(w).Encode(map[string]any{"errors": []any{map[string]any{"message": tt.refusal}}})
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{tt.field: []any{map[string]any{"value": "api"}}}})
+			})
+
+			var stderr bytes.Buffer
+			rootCmd.SetErr(&stderr)
+			t.Cleanup(func() { rootCmd.SetErr(nil) })
+			out, err := testutil.RunWithMockServer(handler, map[string]any{"api-key": "sk-nb-test", "account-id": "acc-1"}, rootCmd, tt.args)
+
+			require.NoError(t, err)
+			require.Len(t, queries, 2)
+			assert.Equal(t, tt.unscoped, queries[1])
+			assert.Contains(t, out, "api")
+			assert.Contains(t, out+stderr.String(), matchRefusedWarning)
+		})
+	}
+}
+
+// Any other failure stays a failure: it says nothing about scoping.
+func TestMatchOtherErrorIsNotRetried(t *testing.T) {
+	args := []string{"metrics", "list-label-values", "--label", "service", "--match", "namespace=demo"}
+	resetFlags(t, args)
+	calls := 0
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"errors": []any{map[string]any{"message": "prometheus error: bad selector"}}})
+	})
+	_, err := testutil.RunWithMockServer(handler, map[string]any{"api-key": "sk-nb-test", "account-id": "acc-1"}, rootCmd, args)
+	require.Error(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+// Equal bounds are two flags, not one.
+func TestMetricsLabelValuesKeepsBothEqualBounds(t *testing.T) {
+	_, reqs := runCapturing(t, map[string]any{"metrics_list_label_values": []any{}},
+		"metrics", "list-label-values", "--label", "job", "--match", "namespace=demo", "--start-time", "2026-10-01T00:00:00Z", "--end-time", "2026-10-01T00:00:00Z")
+	require.Len(t, reqs, 1)
+	request, _ := reqs[0].Variables["request"].(map[string]any)
+	assert.Equal(t, request["start_time"], request["end_time"])
+	assert.NotNil(t, request["start_time"])
+}
+
+// A window without --match has nothing to scope, so the plain document goes out and
+// the caller is told.
+func TestMetricsLabelValuesWindowWithoutMatchWarns(t *testing.T) {
+	_, stderr := runCapturingStderr(t, map[string]any{"metrics_list_label_values": []any{map[string]any{"value": "api"}}},
+		"metrics", "list-label-values", "--label", "job", "--start-time", "2026-10-01T00:00:00Z")
+	assert.Contains(t, stderr, "apply only with --match")
+}
+
+func TestLogsMatchRefusesRepeatedLabel(t *testing.T) {
+	args := []string{"logs", "list-label-values", "--label-name", "pod", "--match", "ns=a", "--match", "ns=b"}
+	resetFlags(t, args)
+	_, err := testutil.RunWithMockServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		map[string]any{"api-key": "sk-nb-test", "account-id": "acc-1"}, rootCmd, args)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "matched once")
 }
