@@ -141,7 +141,10 @@ func init() {
 		applog.InitLogger()
 
 		// Check if the command or its parent is one that doesn't require configuration.
-		if cmd.Name() != "help" && cmd.Name() != "version" && cmd.Parent().Name() != "configure" && cmd.Name() != "configure" {
+		// A command annotated configOptionalAnnotation checks for itself when it
+		// needs credentials (support bundle --offline needs none).
+		if cmd.Name() != "help" && cmd.Name() != "version" && cmd.Parent().Name() != "configure" && cmd.Name() != "configure" &&
+			cmd.Annotations[configOptionalAnnotation] != "true" {
 			if !config.IsConfigured() {
 				return fmt.Errorf("nbctl is not configured. Please run 'nbctl configure' to set up your credentials")
 			}
@@ -154,6 +157,9 @@ func init() {
 // rawOutputAnnotation marks a command that supports -o raw (the provider's
 // own response fragments, unchanged).
 const rawOutputAnnotation = "nbctl/raw-output"
+
+// configOptionalAnnotation marks a command that can run before `nbctl configure`.
+const configOptionalAnnotation = "nbctl/config-optional"
 
 // enabledCommandsEnv limits nbctl to a comma-separated list of top-level
 // command groups (e.g. "metrics,logs"), for embedding nbctl where only some

@@ -1,0 +1,38 @@
+# Redaction rules for diagnostics bundles.
+#
+# This file is the single source of these rules. nbctl carries a verbatim copy
+# for its offline bundle; change both together.
+#
+# One rule per line, fields separated by a TAB:
+#   key<TAB><regex>                  a secret-bearing key name; the value after
+#                                    "key=", "key:" or "key": is replaced
+#   value<TAB><regex><TAB><replace>  replace every match; $1.. refer to groups
+# Regexes are Go RE2 syntax. Blank lines and lines starting with # are ignored.
+
+key	password
+key	passwd
+key	secret
+key	token
+key	api[_-]?key
+key	access[_-]?key
+key	private[_-]?key
+key	license
+key	dsn
+key	authorization
+key	credentials?
+key	cookie
+value	(?i)(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}	$1 [REDACTED]
+value	eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}	[REDACTED_JWT]
+value	([A-Za-z][A-Za-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@	$1[REDACTED]@
+value	\b(AKIA|ASIA)[0-9A-Z]{16}\b	[REDACTED_AWS_KEY]
+value	\bsk-[A-Za-z0-9_-]{16,}	[REDACTED_API_KEY]
+value	(?i)((?:set-)?cookie:[ \t]*)[^\r\n]+	$1[REDACTED]
+value	https://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_-]+	[REDACTED_WEBHOOK]
+value	\bxox[abposr]-[A-Za-z0-9-]{10,}	[REDACTED_SLACK_TOKEN]
+value	\bgh[pousr]_[A-Za-z0-9]{20,}	[REDACTED_GITHUB_TOKEN]
+value	\bgithub_pat_[A-Za-z0-9_]{20,}	[REDACTED_GITHUB_TOKEN]
+value	\bglpat-[A-Za-z0-9_-]{20,}	[REDACTED_GITLAB_TOKEN]
+value	\bAIza[0-9A-Za-z_-]{35}	[REDACTED_GOOGLE_KEY]
+value	\bGOCSPX-[A-Za-z0-9_-]{20,}	[REDACTED_GOOGLE_SECRET]
+value	-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----	[REDACTED_PRIVATE_KEY]
+value	(?m)^[ \t]*[A-Za-z0-9+/]{40,}={0,2}[ \t]*$	[REDACTED_BASE64]
