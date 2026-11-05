@@ -86,7 +86,7 @@ your kubeconfig. Use that when the server itself is down.`,
 					return fmt.Errorf("unknown section %q (valid: %v)", s, onlineSections)
 				}
 			}
-			manifest, sections, key, err = collectOnline(requested, caseID)
+			manifest, sections, key, err = collectOnline(cmd.Context(), requested, caseID)
 		}
 		if err != nil {
 			return err
@@ -117,7 +117,10 @@ your kubeconfig. Use that when the server itself is down.`,
 }
 
 // collectOnline asks the server to build the bundle (diagnostics_generate_bundle).
-func collectOnline(sections []string, caseID string) (json.RawMessage, map[string]json.RawMessage, string, error) {
+func collectOnline(ctx context.Context, sections []string, caseID string) (json.RawMessage, map[string]json.RawMessage, string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// Generation reads every pod's logs; give it longer than the default
 	// request timeout unless the user set one.
 	if viper.GetString("http-timeout") == "" {
@@ -141,7 +144,7 @@ func collectOnline(sections []string, caseID string) (json.RawMessage, map[strin
 			SupportPublicKey string                     `json:"support_public_key"`
 		} `json:"diagnostics_generate_bundle"`
 	}
-	if err := client.NewClient().Run(context.Background(), req, &resp); err != nil {
+	if err := client.NewClient().Run(ctx, req, &resp); err != nil {
 		return nil, nil, "", fmt.Errorf("the server could not build the bundle (if it is down, use --offline): %w", err)
 	}
 	if len(resp.Bundle.Manifest) == 0 {

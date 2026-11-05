@@ -143,7 +143,7 @@ func init() {
 		// Check if the command or its parent is one that doesn't require configuration.
 		// A command annotated configOptionalAnnotation checks for itself when it
 		// needs credentials (support bundle --offline needs none).
-		if cmd.Name() != "help" && cmd.Name() != "version" && cmd.Parent().Name() != "configure" && cmd.Name() != "configure" &&
+		if cmd.Name() != "help" && cmd.Name() != "version" && (cmd.Parent() == nil || cmd.Parent().Name() != "configure") && cmd.Name() != "configure" &&
 			cmd.Annotations[configOptionalAnnotation] != "true" {
 			if !config.IsConfigured() {
 				return fmt.Errorf("nbctl is not configured. Please run 'nbctl configure' to set up your credentials")
