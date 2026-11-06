@@ -31,7 +31,7 @@ var offlineLogLimits = diagnostics.LogLimits{
 // the bundle is then written unencrypted, with a warning.
 const DefaultSupportPublicKey = ""
 
-var onlineSections = []string{"pods", "logs", "broker", "agents", "database"}
+var onlineSections = []string{"pods", "logs", "broker", "agents", "agent_logs", "database"}
 
 type supportBundleResult struct {
 	Path      string `json:"path"`
@@ -210,7 +210,7 @@ func init() {
 	f.Bool("offline", false, "Collect pods, events and logs with kubectl instead of asking the server (use when the server is down)")
 	f.String("namespace", "nudgebee", "Namespace of the Nudgebee install (--offline)")
 	f.String("context", "", "kubeconfig context to use (--offline; default: current context)")
-	f.StringSlice("sections", nil, "Sections to collect: pods,logs,broker,agents,database (default: all; server mode)")
+	f.StringSlice("sections", nil, "Sections to collect: pods,logs,broker,agents,agent_logs,database (default: all; server mode)")
 	f.String("case-id", "", "Support ticket number to record in the bundle")
 	f.String("output-dir", ".", "Directory to write the bundle to")
 	f.String("recipient", "", "age public key to encrypt to (default: the server's configured support key)")

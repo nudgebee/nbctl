@@ -833,12 +833,12 @@ Collect information from a self-hosted install to send to Nudgebee support.
 
 Writes a diagnostics bundle (`nudgebee-diagnostics-<time>.tar.gz.age`) to the current directory: pod status and crash reasons, error and warning log lines from the last 6 hours (secrets masked), broker queues, agent connections and migration state. The file is encrypted to the support key (the one the server is configured with, or `--recipient`), so only Nudgebee support can open it; with no key it is written unencrypted, with a warning. Review it before you send it: masking cannot recognise every kind of customer data in a log line.
 
-By default the server builds the bundle, the same as Admin > Diagnostics in the app. When the server itself is down, use `--offline`: nbctl then reads pods, events and logs through your local `kubectl` and kubeconfig, needs no `nbctl configure`, and leaves out the sections only the server can collect (broker, agents, database).
+By default the server builds the bundle, the same as Admin > Diagnostics in the app. When the server itself is down, use `--offline`: nbctl then reads pods, events and logs through your local `kubectl` and kubeconfig, needs no `nbctl configure`, and leaves out the sections only the server can collect (broker, agents, agent_logs, database).
 
 *   `--offline`: Collect with kubectl instead of asking the server.
 *   `--namespace <ns>`: Namespace of the Nudgebee install (`--offline`; default `nudgebee`).
 *   `--context <name>`: kubeconfig context (`--offline`; default: the current context).
-*   `--sections <list>`: Any of `pods,logs,broker,agents,database` (server mode; default: all).
+*   `--sections <list>`: Any of `pods,logs,broker,agents,agent_logs,database` (server mode; default: all).
 *   `--case-id <id>`: Support ticket number to record in the bundle.
 *   `--output-dir <dir>`: Where to write the file (default `.`).
 *   `--recipient <age1...>`: Encrypt to this age public key instead of the configured support key. Without any key the file is written unencrypted, with a warning.
