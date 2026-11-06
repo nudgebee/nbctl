@@ -32,3 +32,18 @@ jobs:
         run: make lint
       - name: Run tests
         run: make test
+
+      # The offline support bundle must mask exactly what the server's does.
+      - name: Redaction rules match the server's
+        run: |
+          url=https://raw.githubusercontent.com/nudgebee/nudgebee/main/api-server/services/diagnostics/redact_patterns.txt
+          code=$(curl -sS -o server_patterns.txt -w '%{http_code}' "$url")
+          if [ "$code" = 404 ]; then
+            echo "::notice::server redaction rules not published yet; skipping the comparison"
+            exit 0
+          fi
+          [ "$code" = 200 ] || { echo "::error::could not fetch $url (HTTP $code)"; exit 1; }
+          diff -u server_patterns.txt pkg/diagnostics/redact_patterns.txt || {
+            echo "::error::pkg/diagnostics/redact_patterns.txt differs from the server's copy; update it to match"
+            exit 1
+          }

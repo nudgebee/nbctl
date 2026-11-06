@@ -825,6 +825,31 @@ Example:
 nbctl slo get a5f07f40-d2f0-4edf-91c7-96ddb0b25ae8 --report
 ```
 
+#### `nbctl support`
+
+Collect information from a self-hosted install to send to Nudgebee support.
+
+##### `nbctl support bundle`
+
+Writes a diagnostics bundle (`nudgebee-diagnostics-<time>.tar.gz.age`) to the current directory: pod status and crash reasons, error and warning log lines from the last 6 hours (secrets masked), broker queues, agent connections and migration state. The file is encrypted to the support key (the one the server is configured with, or `--recipient`), so only Nudgebee support can open it; with no key it is written unencrypted, with a warning. Review it before you send it: masking cannot recognise every kind of customer data in a log line.
+
+By default the server builds the bundle, the same as Admin > Diagnostics in the app. When the server itself is down, use `--offline`: nbctl then reads pods, events and logs through your local `kubectl` and kubeconfig, needs no `nbctl configure`, and leaves out the sections only the server can collect (broker, agents, agent_logs, database).
+
+*   `--offline`: Collect with kubectl instead of asking the server.
+*   `--namespace <ns>`: Namespace of the Nudgebee install (`--offline`; default `nudgebee`).
+*   `--context <name>`: kubeconfig context (`--offline`; default: the current context).
+*   `--sections <list>`: Any of `pods,logs,broker,agents,agent_logs,database` (server mode; default: all).
+*   `--case-id <id>`: Support ticket number to record in the bundle.
+*   `--output-dir <dir>`: Where to write the file (default `.`).
+*   `--recipient <age1...>`: Encrypt to this age public key instead of the configured support key. Without any key the file is written unencrypted, with a warning.
+
+```bash
+nbctl support bundle --case-id 1234
+nbctl support bundle --offline --namespace nudgebee --context my-cluster
+```
+
+This command is not exposed through `nbctl mcp`.
+
 #### `nbctl tickets`
 
 List ticket integration configurations and create tickets in external systems (Jira, ServiceNow, PagerDuty, GitHub, GitLab, Zenduty).

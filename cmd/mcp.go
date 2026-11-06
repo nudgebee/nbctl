@@ -131,7 +131,9 @@ var mcpCmd = &cobra.Command{
 
 func registerCommands(cmd *cobra.Command, server *mcp.Server, logger *log.Logger) {
 	for _, c := range cmd.Commands() {
-		if c.Name() == "mcp" || c.Name() == "nubi" || c.Name() == "completion" || c.Name() == "configure" || c.Name() == "help" || c.Name() == "version" {
+		// support writes files and runs kubectl on the local machine; it is
+		// for a person to run, not a tool for a model.
+		if c.Name() == "mcp" || c.Name() == "nubi" || c.Name() == "completion" || c.Name() == "configure" || c.Name() == "help" || c.Name() == "version" || c.Name() == "support" {
 			continue
 		}
 
